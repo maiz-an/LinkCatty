@@ -4,7 +4,7 @@ title LinkCaty Downloader
 setlocal enabledelayedexpansion
 
 :: -------------------------------------------------------------------
-:: Update Check
+:: Update Check (reads version.txt from sources folder)
 :: -------------------------------------------------------------------
 echo Checking for updates...
 set "REMOTE_VERSION_FILE=https://raw.githubusercontent.com/maiz-an/LinkCatty/refs/heads/main/sources/version.txt"
@@ -51,7 +51,7 @@ echo ═════════════════════════
 echo.
 
 :: -------------------------------------------------------------------
-:: Extract Portable Python (silent, no progress bars)
+:: Extract Portable Python into sources/portable_python
 :: -------------------------------------------------------------------
 set "PORTABLE_DIR=%~dp0sources\portable_python"
 if not exist "%PORTABLE_DIR%\*" (
@@ -61,16 +61,15 @@ if not exist "%PORTABLE_DIR%\*" (
         pause
         exit /b 1
     )
-    :: Create target directory
     mkdir "%PORTABLE_DIR%" 2>nul
-    :: Use .NET ZipFile (silent) instead of Expand-Archive
+    :: Silent extraction using .NET
     powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%~dp0sources\PortablePython.zip', '%PORTABLE_DIR%') }" >nul 2>&1
     if errorlevel 1 (
-        echo ❌ Extraction failed. The zip may be corrupted.
+        echo ❌ Extraction failed.
         pause
         exit /b 1
     )
-    :: If the zip contains a single root folder, move its contents up
+    :: If zip contains a single subfolder, move contents up
     pushd "%PORTABLE_DIR%"
     for /d %%d in (*) do (
         if exist "%%d\python.exe" (
@@ -83,7 +82,7 @@ if not exist "%PORTABLE_DIR%\*" (
 )
 
 :: -------------------------------------------------------------------
-:: Locate python.exe (recursive)
+:: Locate python.exe recursively
 :: -------------------------------------------------------------------
 set "PYTHON_EXE="
 for /r "%PORTABLE_DIR%" %%f in (python.exe) do if exist "%%f" set "PYTHON_EXE=%%f" & goto :found_python
@@ -91,47 +90,35 @@ for /r "%PORTABLE_DIR%" %%f in (python.exe) do if exist "%%f" set "PYTHON_EXE=%%
 
 if not defined PYTHON_EXE (
     echo ❌ Python not found in extracted folder.
-    echo.
-    echo Contents of %PORTABLE_DIR%:
-    if exist "%PORTABLE_DIR%" (
-        dir /s /b "%PORTABLE_DIR%"
-    ) else (
-        echo Directory does not exist.
-    )
     pause
     exit /b 1
 )
 
-echo ✅ Found Python at: %PYTHON_EXE%
-
 :: -------------------------------------------------------------------
-:: Add Scripts/bin folder to PATH
+:: Add Scripts/bin to PATH
 :: -------------------------------------------------------------------
 set "SCRIPT_DIR=%PORTABLE_DIR%\Scripts"
 if not exist "%SCRIPT_DIR%" set "SCRIPT_DIR=%PORTABLE_DIR%\bin"
-if exist "%SCRIPT_DIR%" (
-    set "PATH=%SCRIPT_DIR%;%PATH%"
-)
+if exist "%SCRIPT_DIR%" set "PATH=%SCRIPT_DIR%;%PATH%"
 
 :: -------------------------------------------------------------------
-:: FFmpeg (Windows)
+:: FFmpeg for Windows
 :: -------------------------------------------------------------------
 set "FFMPEG_DIR=%~dp0sources\FFmpeg\windows\ffmpeg\bin"
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
-    echo ✅ FFmpeg found.
     set "PATH=%FFMPEG_DIR%;%PATH%"
 ) else (
     echo ⚠️ FFmpeg not found - video merging may fail.
 )
 
 :: -------------------------------------------------------------------
-:: Launch LinkCaty
+:: Launch LinkCaty.py (inside sources folder)
 :: -------------------------------------------------------------------
 echo.
 echo 🚀 Launching LinkCaty...
 echo.
 
-"%PYTHON_EXE%" "%~dp0LinkCaty.py"
+"%PYTHON_EXE%" "%~dp0sources\LinkCaty.py"
 set EXIT_CODE=%errorlevel%
 
 if %EXIT_CODE% neq 0 (

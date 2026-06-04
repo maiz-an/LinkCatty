@@ -1,25 +1,33 @@
 #!/bin/bash
+# LinkCaty Launcher for Linux/macOS
+
 echo "Checking for updates..."
 REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/refs/heads/main/sources/version.txt"
 LOCAL_VERSION_FILE="./sources/version.txt"
-UPDATE_AVAILABLE=0
 
 if [ -f "$LOCAL_VERSION_FILE" ]; then
     LOCAL_VER=$(cat "$LOCAL_VERSION_FILE")
-    REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL")
-    if [ -n "$REMOTE_VER" ] && [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
-        UPDATE_AVAILABLE=1
-    fi
+else
+    LOCAL_VER="0.0.0"
 fi
 
-if [ $UPDATE_AVAILABLE -eq 1 ]; then
+REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL")
+
+if [ -z "$REMOTE_VER" ]; then
+    echo "Warning: Could not check for updates."
+    REMOTE_VER="$LOCAL_VER"
+fi
+
+if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     echo ""
     echo "════════════════════════════════════════════════════════════════"
     echo "                     UPDATE AVAILABLE!"
     echo "════════════════════════════════════════════════════════════════"
-    echo "Current version: $LOCAL_VER"
-    echo "Latest version:  $REMOTE_VER"
-    echo "Download from: https://github.com/maiz-an/LinkCatty"
+    echo "Current Version: $LOCAL_VER"
+    echo "Latest Version:  $REMOTE_VER"
+    echo ""
+    echo "Please download the latest version from:"
+    echo "https://github.com/maiz-an/LinkCatty"
     echo ""
     read -p "Press Enter to exit..."
     exit 0
@@ -32,18 +40,26 @@ echo "════════════════════════�
 echo ""
 
 PORTABLE_DIR="./sources/portable_python"
-if [ ! -f "$PORTABLE_DIR/bin/python3" ] && [ ! -f "$PORTABLE_DIR/bin/python" ]; then
+if [ ! -d "$PORTABLE_DIR" ] || [ -z "$(ls -A "$PORTABLE_DIR")" ]; then
     echo "📦 Extracting Portable Python..."
     if [ ! -f "./sources/PortablePython.zip" ]; then
-        echo "❌ sources/PortablePython.zip not found!"
+        echo "❌ Error: sources/PortablePython.zip not found!"
         read -p "Press Enter to exit..."
         exit 1
     fi
-    unzip -q "./sources/PortablePython.zip" -d "./sources"
-    echo "✅ Portable Python extracted."
+    mkdir -p "$PORTABLE_DIR"
+    unzip -q "./sources/PortablePython.zip" -d "$PORTABLE_DIR"
+    # If a single subfolder exists, move contents up
+    SUBDIR=$(find "$PORTABLE_DIR" -maxdepth 1 -type d | tail -n +2 | head -n1)
+    if [ -n "$SUBDIR" ] && [ -f "$SUBDIR/python.exe" -o -f "$SUBDIR/bin/python" ]; then
+        mv "$SUBDIR"/* "$PORTABLE_DIR/" 2>/dev/null
+        rmdir "$SUBDIR" 2>/dev/null
+    fi
+    echo "✅ Portable Python ready."
 fi
 
-# Find python
+# Find python executable
+PYTHON_EXE=""
 if [ -f "$PORTABLE_DIR/bin/python3" ]; then
     PYTHON_EXE="$PORTABLE_DIR/bin/python3"
 elif [ -f "$PORTABLE_DIR/bin/python" ]; then
@@ -51,14 +67,25 @@ elif [ -f "$PORTABLE_DIR/bin/python" ]; then
 elif [ -f "$PORTABLE_DIR/python.exe" ]; then
     PYTHON_EXE="$PORTABLE_DIR/python.exe"
 else
-    echo "❌ Python not found."
+    # Recursive search
+    PYTHON_EXE=$(find "$PORTABLE_DIR" -name "python3" -o -name "python" -o -name "python.exe" | head -n1)
+fi
+
+if [ -z "$PYTHON_EXE" ]; then
+    echo "❌ Python not found in extracted folder."
     read -p "Press Enter to exit..."
     exit 1
 fi
 
-export PATH="$PORTABLE_DIR/bin:$PORTABLE_DIR/Scripts:$PATH"
+# Add to PATH
+if [ -d "$PORTABLE_DIR/bin" ]; then
+    export PATH="$PORTABLE_DIR/bin:$PATH"
+fi
+if [ -d "$PORTABLE_DIR/Scripts" ]; then
+    export PATH="$PORTABLE_DIR/Scripts:$PATH"
+fi
 
-# FFmpeg for macOS/Linux (auto download if missing)
+# FFmpeg for macOS/Linux
 UNAME=$(uname)
 if [ "$UNAME" = "Darwin" ]; then
     FFMPEG_DIR="./sources/FFmpeg/macos"
@@ -91,13 +118,17 @@ elif [ "$UNAME" = "Linux" ]; then
     export PATH="$FFMPEG_DIR:$PATH"
 fi
 
+# Launch
 echo ""
 echo "🚀 Launching LinkCaty..."
 echo ""
-$PYTHON_EXE LinkCaty.py
+
+$PYTHON_EXE "./sources/LinkCaty.py"
 EXIT_CODE=$?
+
 if [ $EXIT_CODE -ne 0 ]; then
-    echo "❌ Exit code: $EXIT_CODE"
+    echo ""
+    echo "❌ Application exited with error code $EXIT_CODE"
 fi
 read -p "Press Enter to exit..."
 exit $EXIT_CODE
