@@ -1,5 +1,4 @@
-import os
-import re
+import sys
 import time
 from pathlib import Path
 from yt_dlp import YoutubeDL
@@ -7,17 +6,11 @@ from yt_dlp import YoutubeDL
 from utils.config import load_config
 from utils.ui import start_spinner, stop_spinner, clear_screen
 from utils.logger import log_download
+from utils.ffmpeg import get_ffmpeg_path
 
 # ----------------------------------------------------------------------
 # Helper functions
 # ----------------------------------------------------------------------
-def get_ffmpeg_path():
-    """Try to find bundled or system FFmpeg (optional)."""
-    # For simplicity, we rely on system FFmpeg or none.
-    # You can implement bundled detection as in original.
-    import shutil
-    return shutil.which('ffmpeg')
-
 def format_duration(seconds):
     if not seconds:
         return "Unknown"
@@ -66,9 +59,8 @@ def download_content(url, mode, config):
     """Main download function for single video/playlist."""
     download_dir = config['download_dir']
     yt_cfg = config['youtube']
-
-    # Base options
     quiet = yt_cfg.get('quiet_mode', True)
+
     opts = {
         'outtmpl': str(Path(download_dir) / '%(title)s.%(ext)s'),
         'progress_hooks': [progress_hook],
@@ -76,6 +68,8 @@ def download_content(url, mode, config):
         'no_warnings': quiet,
         'noprogress': not quiet,
     }
+
+    # Add FFmpeg if available
     ffmpeg = get_ffmpeg_path()
     if ffmpeg:
         opts['ffmpeg_location'] = ffmpeg
@@ -90,7 +84,7 @@ def download_content(url, mode, config):
             'preferredcodec': 'mp3',
             'preferredquality': yt_cfg['audio_quality'].replace('k', ''),
         }]
-    elif mode == "3":  # Manual format
+    elif mode == "3":  # Manual format selection
         print("\n📋 Fetching available formats...")
         with YoutubeDL({'quiet': True, 'listformats': True}) as ydl:
             ydl.extract_info(url, download=False)
@@ -153,7 +147,7 @@ def run(config):
     mode = input("Select (1-4): ").strip()
     if mode == "4":
         return
-    if mode not in ("1","2","3"):
+    if mode not in ("1", "2", "3"):
         print("Invalid choice.")
         input("Press Enter...")
         return

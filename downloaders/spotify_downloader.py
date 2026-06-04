@@ -1,14 +1,14 @@
 import re
 import time
-import os
 from pathlib import Path
 import yt_dlp
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
-from utils.config import load_config, save_config
+from utils.config import load_config
 from utils.ui import clear_screen, start_spinner, stop_spinner
 from utils.logger import log_download
+from utils.ffmpeg import get_ffmpeg_path
 
 # ----------------------------------------------------------------------
 # Helper functions
@@ -69,7 +69,9 @@ class SpotifyDownloader:
             'no_warnings': True,
             'ignoreerrors': True,
         }
-        # Optional: add ffmpeg location if bundled
+        ffmpeg = get_ffmpeg_path()
+        if ffmpeg:
+            opts['ffmpeg_location'] = ffmpeg
         return opts
 
     def search_youtube(self, track):

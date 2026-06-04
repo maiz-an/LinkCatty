@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from .ffmpeg import get_ffmpeg_path
 
 BASE_DIR = Path(__file__).parent.parent
 CONFIG_FILE = BASE_DIR / "settings.json"
@@ -27,27 +28,32 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
+    """Load configuration from file, merge with defaults, and add ffmpeg_path."""
+    config = DEFAULT_CONFIG.copy()
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 user_config = json.load(f)
-                # Merge with defaults (add missing keys)
-                for section, defaults in DEFAULT_CONFIG.items():
-                    if section not in user_config:
-                        user_config[section] = defaults
+                # Recursively merge user config into defaults
+                for section, values in user_config.items():
+                    if section in config:
+                        if isinstance(values, dict):
+                            config[section].update(values)
+                        else:
+                            config[section] = values
                     else:
-                        if isinstance(defaults, dict):
-                            for key, val in defaults.items():
-                                if key not in user_config[section]:
-                                    user_config[section][key] = val
-                return user_config
+                        config[section] = values
         except Exception:
             pass
-    return DEFAULT_CONFIG.copy()
+    # Add ffmpeg path dynamically (not stored in file)
+    config['ffmpeg_path'] = get_ffmpeg_path()
+    return config
 
 def save_config(config):
+    """Save configuration to file (excluding runtime ffmpeg_path)."""
+    to_save = {k: v for k, v in config.items() if k != 'ffmpeg_path'}
     try:
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4, ensure_ascii=False)
+            json.dump(to_save, f, indent=4, ensure_ascii=False)
     except Exception as e:
         print(f"⚠️ Could not save config: {e}")
