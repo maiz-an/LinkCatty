@@ -3,14 +3,13 @@ import time
 from pathlib import Path
 from yt_dlp import YoutubeDL
 
-from utils.config import load_config
-from utils.ui import start_spinner, stop_spinner, clear_screen
+from utils.ui import (
+    clear_screen, print_error, print_success, print_info, print_warning,
+    start_spinner, stop_spinner, progress_bar
+)
 from utils.logger import log_download
 from utils.ffmpeg import get_ffmpeg_path
 
-# ----------------------------------------------------------------------
-# Helper functions
-# ----------------------------------------------------------------------
 def format_duration(seconds):
     if not seconds:
         return "Unknown"
@@ -19,7 +18,6 @@ def format_duration(seconds):
     return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 def get_url_info(url):
-    """Extract video/playlist info without downloading."""
     try:
         with YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -41,22 +39,23 @@ def get_url_info(url):
                     'upload_date': info.get('upload_date', 'Unknown')
                 }
     except Exception as e:
-        print(f"❌ Error fetching info: {e}")
+        print_error(f"Could not fetch info: {e}", "Check your internet connection and URL")
         return None
 
 def progress_hook(d):
-    """Display download progress."""
     if d['status'] == 'downloading':
-        percent = d.get('_percent_str', '0%').strip()
-        speed = d.get('_speed_str', 'N/A').strip()
-        eta = d.get('_eta_str', 'N/A').strip()
-        sys.stdout.write(f"\r⏳ Downloading... {percent} | Speed: {speed} | ETA: {eta}")
-        sys.stdout.flush()
+        total = d.get('total_bytes', d.get('total_bytes_estimate', 1))
+        downloaded = d.get('downloaded_bytes', 0)
+        speed = d.get('speed', 0)
+        speed_str = f"{speed/1024/1024:.1f} MB/s" if speed else "N/A"
+        eta = d.get('eta', 0)
+        eta_str = f"{eta}s" if eta else "N/A"
+        progress_bar(downloaded, total, prefix="Downloading", suffix=f"{speed_str} | ETA: {eta_str}")
     elif d['status'] == 'finished':
-        print("\n✅ Download finished, now converting...")
+        print("\n" + " " * 80, end="\r")
+        print_success("Download finished, now converting...")
 
 def download_content(url, mode, config):
-    """Main download function for single video/playlist."""
     download_dir = config['download_dir']
     yt_cfg = config['youtube']
     quiet = yt_cfg.get('quiet_mode', True)
@@ -66,63 +65,58 @@ def download_content(url, mode, config):
         'progress_hooks': [progress_hook],
         'quiet': quiet,
         'no_warnings': quiet,
-        'noprogress': not quiet,
+        'noprogress': True,  # use our custom hook only
     }
-
-    # Add FFmpeg if available
     ffmpeg = get_ffmpeg_path()
     if ffmpeg:
         opts['ffmpeg_location'] = ffmpeg
 
-    if mode == "1":  # Video best quality
+    if mode == "1":
         opts['format'] = 'bestvideo+bestaudio/best'
         opts['merge_output_format'] = 'mp4'
-    elif mode == "2":  # MP3
+    elif mode == "2":
         opts['format'] = 'bestaudio/best'
         opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': yt_cfg['audio_quality'].replace('k', ''),
         }]
-    elif mode == "3":  # Manual format selection
-        print("\n📋 Fetching available formats...")
+    elif mode == "3":
+        print_info("Fetching available formats...")
         with YoutubeDL({'quiet': True, 'listformats': True}) as ydl:
             ydl.extract_info(url, download=False)
         fmt = input("🎯 Enter format ID: ").strip()
         if not fmt:
-            print("❌ No format ID.")
+            print_error("No format ID provided", "Please enter a valid format ID")
             return
         opts['format'] = fmt
 
-    # Get info for display
     info = get_url_info(url)
     if info:
         if info['type'] == 'playlist':
-            print(f"\n📂 Playlist: {info['title']} ({info['video_count']} videos)")
+            print_info(f"Playlist: {info['title']} ({info['video_count']} videos)")
             confirm = input(f"Download all as {'MP3' if mode=='2' else 'video'}? (y/n): ").lower()
             if confirm != 'y':
                 return
-            # Create subfolder for playlist
             playlist_folder = Path(download_dir) / info['title']
             playlist_folder.mkdir(exist_ok=True)
             opts['outtmpl'] = str(playlist_folder / '%(title)s.%(ext)s')
         else:
-            print(f"\n📹 {info['title']} ({info['uploader']})")
+            print_info(f"Video: {info['title']} by {info['uploader']}")
             confirm = input("Download? (y/n): ").lower()
             if confirm != 'y':
                 return
 
-    # Download
     try:
-        start_spinner("⏳ Starting download")
+        start_spinner("Preparing download")
         with YoutubeDL(opts) as ydl:
             ydl.download([url])
         stop_spinner()
-        print("\n✅ Download completed!")
+        print_success("Download completed!")
         log_download("YouTube", info.get('title', url), mode=mode, status="Success")
     except Exception as e:
         stop_spinner()
-        print(f"\n❌ Download error: {e}")
+        print_error(f"Download failed: {e}", "Check your internet connection and try again")
         if yt_cfg.get('auto_retry', True):
             retry = input("Retry? (y/n): ").lower()
             if retry == 'y':
@@ -130,11 +124,7 @@ def download_content(url, mode, config):
         else:
             log_download("YouTube", info.get('title', url), mode=mode, status="Failed", error=str(e))
 
-# ----------------------------------------------------------------------
-# Main entry point from LinkCaty
-# ----------------------------------------------------------------------
 def run(config):
-    """Called from main menu."""
     clear_screen()
     print("\n" + "═" * 55)
     print("            🎬 YouTube Downloader")
@@ -148,7 +138,7 @@ def run(config):
     if mode == "4":
         return
     if mode not in ("1", "2", "3"):
-        print("Invalid choice.")
+        print_error("Invalid choice", "Please enter 1, 2, 3, or 4")
         input("Press Enter...")
         return
 
@@ -159,7 +149,7 @@ def run(config):
         if "youtube.com" in url or "youtu.be" in url:
             download_content(url, mode, config)
         else:
-            print("❌ Not a valid YouTube URL.")
+            print_error("Not a valid YouTube URL", "URL should contain youtube.com or youtu.be")
         again = input("\nDownload another? (y/n): ").lower()
         if again != 'y':
             break
