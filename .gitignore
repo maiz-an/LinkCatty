@@ -1,3 +1,4 @@
 utils/__pycache__
 downloaders/__pycache__
 sources/PortablePython
+prepare_portable.py
