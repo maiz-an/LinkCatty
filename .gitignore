@@ -1,4 +1,4 @@
-utils/__pycache__
-downloaders/__pycache__
+sources/utils/__pycache__
+sources/downloaders/__pycache__
 sources/PortablePython
 prepare_portable.py
