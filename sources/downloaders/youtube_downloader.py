@@ -4,7 +4,7 @@ from pathlib import Path
 from yt_dlp import YoutubeDL
 
 from utils.ui import (
-    clear_screen, print_error, print_success, print_info, print_warning,
+    clear_screen, print_banner, print_error, print_success, print_info, print_warning,
     start_spinner, stop_spinner, progress_bar
 )
 from utils.logger import log_download
@@ -126,14 +126,16 @@ def download_content(url, mode, config):
 
 def run(config):
     clear_screen()
-    print("\n" + "═" * 55)
-    print("            🎬 YouTube Downloader")
-    print("═" * 55)
+    print_banner()            
+    print("                   🎬 YouTube Downloader")
+    print("=" * 61)
+    print(f"")
     print("1. Download video (best quality)")
     print("2. Download audio (MP3)")
     print("3. Manual format selection")
     print("4. Back to main menu")
-    print("═" * 55)
+    print(f"")
+    print("=" * 61)
     mode = input("Select (1-4): ").strip()
     if mode == "4":
         return

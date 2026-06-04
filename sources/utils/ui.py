@@ -25,7 +25,7 @@ def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_banner():
-    """Print the LinkCaty logo with colors."""
+    """Print the LinkCatty logo with colors."""
     logo = f"""
 =============================================================
 
@@ -40,11 +40,11 @@ def print_main_menu():
     print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
     print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
     print(f"")
-    print(f"{CYAN}{BOLD}1.{RESET}{BOLD} 📹 YouTube Downloader")
-    print(f"{CYAN}{BOLD}2.{RESET}{BOLD} 🎵 Spotify Downloader")
-    print(f"{CYAN}{BOLD}3.{RESET}{BOLD} 🛠️ Other (coming soon)")
-    print(f"{CYAN}{BOLD}4.{RESET}{BOLD} ⚙️ Settings")
-    print(f"{CYAN}{BOLD}5.{RESET}{BOLD} ❌ Exit")
+    print(f"{CYAN}{BOLD}1.{RESET}{BOLD} 📹YouTube Downloader")
+    print(f"{CYAN}{BOLD}2.{RESET}{BOLD} 🎵Spotify Downloader")
+    print(f"{CYAN}{BOLD}3.{RESET}{BOLD} 🛠️Other (coming soon)")
+    print(f"{CYAN}{BOLD}4.{RESET}{BOLD} ⚙️Settings")
+    print(f"{CYAN}{BOLD}5.{RESET}{BOLD} ❌Exit")
     print(f"")
     print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
 

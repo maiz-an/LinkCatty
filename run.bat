@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title LinkCaty Downloader
+title LinkCatty Downloader
 setlocal enabledelayedexpansion
 
 :: -------------------------------------------------------------------
@@ -46,7 +46,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
 
 echo.
 echo ════════════════════════════════════════════════════════════════
-echo                    LinkCaty Setup
+echo                    LinkCatty Setup
 echo ════════════════════════════════════════════════════════════════
 echo.
 
@@ -112,13 +112,13 @@ if exist "%FFMPEG_DIR%\ffmpeg.exe" (
 )
 
 :: -------------------------------------------------------------------
-:: Launch LinkCaty.py (inside sources folder)
+:: Launch LinkCatty.py (inside sources folder)
 :: -------------------------------------------------------------------
 echo.
-echo 🚀 Launching LinkCaty...
+echo 🚀 Launching LinkCatty...
 echo.
 
-"%PYTHON_EXE%" "%~dp0sources\LinkCaty.py"
+"%PYTHON_EXE%" "%~dp0sources\LinkCatty.py"
 set EXIT_CODE=%errorlevel%
 
 if %EXIT_CODE% neq 0 (

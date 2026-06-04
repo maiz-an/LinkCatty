@@ -1,5 +1,5 @@
 #!/bin/bash
-# LinkCaty Launcher for Linux/macOS
+# LinkCatty Launcher for Linux/macOS
 
 echo "Checking for updates..."
 REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/refs/heads/main/sources/version.txt"
@@ -35,7 +35,7 @@ fi
 
 echo ""
 echo "════════════════════════════════════════════════════════════════"
-echo "                    LinkCaty Setup"
+echo "                    LinkCatty Setup"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
@@ -120,10 +120,10 @@ fi
 
 # Launch
 echo ""
-echo "🚀 Launching LinkCaty..."
+echo "🚀 Launching LinkCatty..."
 echo ""
 
-$PYTHON_EXE "./sources/LinkCaty.py"
+$PYTHON_EXE "./sources/LinkCatty.py"
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then

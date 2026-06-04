@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LinkCaty - Unified Downloader for YouTube, Spotify and more.
+LinkCatty - Unified Downloader for YouTube, Spotify and more.
 Now located inside the 'sources' folder.
 """
 import sys
@@ -132,7 +132,7 @@ def main():
         elif choice == "4":
             settings_menu(config)
         elif choice == "5":
-            print("\n👋 Thanks for using LinkCaty! Goodbye.")
+            print("\n👋 Thanks for using LinkCatty! Goodbye.")
             break
         else:
             print("❌ Invalid choice. Please enter 1-5.")
