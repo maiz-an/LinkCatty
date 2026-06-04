@@ -25,6 +25,44 @@ if not exist "portable_python\python.exe" (
     echo ✅ Portable Python extracted.
 )
 
+:: ----- Ensure pip is available in portable Python -----
+set PYTHON_EXE=portable_python\python.exe
+if not exist "%PYTHON_EXE%" (
+    echo ❌ python.exe not found in portable_python folder.
+    pause
+    exit /b 1
+)
+
+:: Check if pip is present
+%PYTHON_EXE% -m pip --version >nul 2>&1
+if errorlevel 1 (
+    echo 📦 Installing pip...
+    curl -sS https://bootstrap.pypa.io/get-pip.py -o portable_python\get-pip.py
+    if errorlevel 1 (
+        echo ❌ Failed to download get-pip.py. Please check your internet connection.
+        pause
+        exit /b 1
+    )
+    %PYTHON_EXE% portable_python\get-pip.py --quiet
+    del portable_python\get-pip.py
+    echo ✅ pip installed.
+)
+
+:: ----- Install required Python packages from requirements.txt -----
+echo 📦 Installing required packages from sources\requirements.txt...
+if not exist "sources\requirements.txt" (
+    echo ⚠️ sources\requirements.txt not found. Creating default.
+    echo yt-dlp > sources\requirements.txt
+    echo spotipy >> sources\requirements.txt
+)
+%PYTHON_EXE% -m pip install -r sources\requirements.txt --quiet --upgrade
+if errorlevel 1 (
+    echo ❌ Failed to install required packages. Please check your internet connection.
+    pause
+    exit /b 1
+)
+echo ✅ Packages ready.
+
 :: ----- Set FFmpeg path (already provided) -----
 set FFMPEG_DIR=%CD%\sources\FFmpeg\windows\ffmpeg\bin
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
@@ -40,7 +78,7 @@ echo.
 echo 🚀 Launching LinkCaty...
 echo.
 
-"portable_python\python.exe" LinkCaty.py
+%PYTHON_EXE% LinkCaty.py
 set EXIT_CODE=%errorlevel%
 
 if %EXIT_CODE% neq 0 (

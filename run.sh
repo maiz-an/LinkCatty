@@ -23,6 +23,43 @@ if [ ! -f "portable_python/bin/python3" ]; then
     echo "✅ Portable Python extracted."
 fi
 
+PYTHON_EXE="portable_python/bin/python3"
+if [ ! -f "$PYTHON_EXE" ]; then
+    echo "❌ python3 not found in portable_python folder."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+# ----- Ensure pip is available -----
+$PYTHON_EXE -m pip --version >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "📦 Installing pip..."
+    curl -sS https://bootstrap.pypa.io/get-pip.py -o portable_python/get-pip.py
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to download get-pip.py. Please check your internet connection."
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
+    $PYTHON_EXE portable_python/get-pip.py --quiet
+    rm portable_python/get-pip.py
+    echo "✅ pip installed."
+fi
+
+# ----- Install required packages from requirements.txt -----
+echo "📦 Installing required packages from sources/requirements.txt..."
+if [ ! -f "sources/requirements.txt" ]; then
+    echo "⚠️ sources/requirements.txt not found. Creating default."
+    echo "yt-dlp" > sources/requirements.txt
+    echo "spotipy" >> sources/requirements.txt
+fi
+$PYTHON_EXE -m pip install -r sources/requirements.txt --quiet --upgrade
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to install required packages. Please check your internet connection."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+echo "✅ Packages ready."
+
 # ----- Determine OS and setup FFmpeg -----
 UNAME=$(uname)
 if [ "$UNAME" = "Darwin" ]; then
@@ -44,7 +81,6 @@ if [ -n "$PLATFORM" ]; then
         echo "📥 FFmpeg not found. Downloading for $PLATFORM..."
         mkdir -p "$FFMPEG_DIR"
         if [ "$PLATFORM" = "macos" ]; then
-            # Download from evermeet.cx
             curl -L -o "$FFMPEG_DIR/ffmpeg.zip" "https://evermeet.cx/ffmpeg/ffmpeg-7.0.1.zip"
             if [ $? -eq 0 ]; then
                 unzip -q "$FFMPEG_DIR/ffmpeg.zip" -d "$FFMPEG_DIR"
@@ -55,12 +91,10 @@ if [ -n "$PLATFORM" ]; then
                 echo "⚠️ FFmpeg download failed. Audio conversion may not work."
             fi
         elif [ "$PLATFORM" = "linux" ]; then
-            # Download static build from johnvansickle.com
             curl -L -o "$FFMPEG_DIR/ffmpeg.tar.xz" "https://johnvansickle.com/ffmpeg/releases/ffmpeg-git-amd64-static.tar.xz"
             if [ $? -eq 0 ]; then
                 tar -xf "$FFMPEG_DIR/ffmpeg.tar.xz" -C "$FFMPEG_DIR"
                 rm "$FFMPEG_DIR/ffmpeg.tar.xz"
-                # Find the actual binary inside extracted folder
                 EXTRACTED_DIR=$(find "$FFMPEG_DIR" -maxdepth 1 -type d -name "ffmpeg-*" | head -n1)
                 if [ -n "$EXTRACTED_DIR" ]; then
                     mv "$EXTRACTED_DIR/ffmpeg" "$FFMPEG_BIN"
@@ -77,16 +111,15 @@ if [ -n "$PLATFORM" ]; then
     else
         echo "✅ FFmpeg found at $FFMPEG_BIN"
     fi
-    # Add to PATH for this session
     export PATH="$FFMPEG_DIR:$PATH"
 fi
 
-# ----- Run the application using portable Python -----
+# ----- Run the application -----
 echo ""
 echo "🚀 Launching LinkCaty..."
 echo ""
 
-./portable_python/bin/python3 LinkCaty.py
+$PYTHON_EXE LinkCaty.py
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then
