@@ -27,26 +27,26 @@ def clear_screen():
 def print_banner():
     """Print the LinkCaty logo with colors."""
     logo = f"""
-{CYAN}{BOLD}██     ▄▄ ▄▄  ▄▄ ▄▄ ▄▄ ▄█████  ▄▄▄ ▄▄▄▄▄▄ ▄▄▄▄▄▄ ▄▄ ▄▄ 
-██     ██ ███▄██ ██▄█▀ ██     ██▀██  ██     ██   ▀███▀ 
-██████ ██ ██ ▀██ ██ ██ ▀█████ ██▀██  ██     ██     █{RESET}
-    """
+=============================================================
+
+{CYAN}{BOLD}    ██     ▄▄ ▄▄  ▄▄ ▄▄ ▄▄ ▄█████  ▄▄▄ ▄▄▄▄▄▄ ▄▄▄▄▄▄ ▄▄ ▄▄ 
+    ██     ██ ███▄██ ██▄█▀ ██     ██▀██  ██     ██   ▀███▀ 
+    ██████ ██ ██ ▀██ ██ ██ ▀█████ ██▀██  ██     ██     █{RESET}
+
+============================================================="""
     print(logo)
-    print(f"{BOLD}{CYAN}╔{'═' * 50}╗{RESET}")
-    print(f"{BOLD}{CYAN}║{' ' * 12}🚀 LinkCaty Universal Downloader{' ' * 12}║{RESET}")
-    print(f"{BOLD}{CYAN}║{' ' * 14}YouTube · Spotify · More{' ' * 16}║{RESET}")
-    print(f"{BOLD}{CYAN}╚{'═' * 50}╝{RESET}\n")
 
 def print_main_menu():
-    print(f"{BOLD}{YELLOW}{'═' * 55}{RESET}")
-    print(f"{BOLD}{WHITE}            🎯 MAIN MENU{RESET}")
-    print(f"{BOLD}{YELLOW}{'═' * 55}{RESET}")
-    print(f"{GREEN}1.{RESET} 📹 YouTube Downloader")
-    print(f"{GREEN}2.{RESET} 🎵 Spotify Downloader")
-    print(f"{GREEN}3.{RESET} 🛠️  Other (coming soon)")
-    print(f"{GREEN}4.{RESET} ⚙️  Settings")
-    print(f"{GREEN}5.{RESET} ❌ Exit")
-    print(f"{BOLD}{YELLOW}{'═' * 55}{RESET}")
+    print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
+    print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
+    print(f"")
+    print(f"{CYAN}{BOLD}1.{RESET}{BOLD} 📹 YouTube Downloader")
+    print(f"{CYAN}{BOLD}2.{RESET}{BOLD} 🎵 Spotify Downloader")
+    print(f"{CYAN}{BOLD}3.{RESET}{BOLD} 🛠️ Other (coming soon)")
+    print(f"{CYAN}{BOLD}4.{RESET}{BOLD} ⚙️ Settings")
+    print(f"{CYAN}{BOLD}5.{RESET}{BOLD} ❌ Exit")
+    print(f"")
+    print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
 
 def print_error(message, suggestion=None):
     """Print a formatted error message with optional suggestion."""
