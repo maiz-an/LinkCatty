@@ -41,7 +41,7 @@ curl -s -L -o "$TEMP_DIR/sources/utils/ui.py" "https://raw.githubusercontent.com
 curl -s -L -o "$TEMP_DIR/sources/utils/__init__.py" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/__init__.py"
 curl -s -L -o "$TEMP_DIR/sources/requirements.txt" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
 curl -s -L -o "$TEMP_DIR/sources/version.txt" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-curl -s -L -o "$TEMP_DIR/sources/PortablePython.zip" "https://github.com/maiz-an/LinkCatty/releases/download/v1.0/PortablePython.zip"
+curl -s -L -o "$TEMP_DIR/sources/PortablePython.zip" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/PortablePython.zip"
 
 # Detect OS and architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"

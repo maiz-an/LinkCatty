@@ -108,7 +108,7 @@ if exist "%TEMP_DIR%\sources\version.txt" echo   OK
 
 :: Download PortablePython.zip
 echo [13/16] Downloading sources\PortablePython.zip...
-powershell -command "& {Invoke-WebRequest -Uri 'https://github.com/maiz-an/LinkCatty/releases/download/v1.0/PortablePython.zip' -OutFile '%TEMP_DIR%\sources\PortablePython.zip'}" >nul 2>&1
+powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/PortablePython.zip' -OutFile '%TEMP_DIR%\sources\PortablePython.zip'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\PortablePython.zip" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\PortablePython.zip" echo   OK
 
