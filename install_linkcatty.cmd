@@ -3,9 +3,9 @@ chcp 65001 >nul 2>&1
 title LinkCatty Installer
 setlocal enabledelayedexpansion
 
+cls
 set "INSTALL_DIR=%LOCALAPPDATA%\LinkCatty"
 set "TEMP_DIR=%TEMP%\LinkCatty_temp"
-
 echo.
 echo ============================================================
 echo                    LinkCatty Installer
