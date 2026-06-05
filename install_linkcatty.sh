@@ -1,5 +1,5 @@
 #!/bin/bash
-# LinkCatty Installer for Linux/macOS
+# LinkCatty Installer for Linux/macOS – auto-detects architecture
 
 set -e
 
@@ -26,7 +26,7 @@ mkdir -p "$TEMP_DIR" 2>/dev/null
 
 echo "Downloading files from GitHub..."
 
-# Download files (simplified list)
+# Download core files
 curl -s -L -o "$TEMP_DIR/run.sh" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
 curl -s -L -o "$TEMP_DIR/sources/LinkCatty.py" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
 mkdir -p "$TEMP_DIR/sources/downloaders"
@@ -42,8 +42,59 @@ curl -s -L -o "$TEMP_DIR/sources/utils/__init__.py" "https://raw.githubuserconte
 curl -s -L -o "$TEMP_DIR/sources/requirements.txt" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
 curl -s -L -o "$TEMP_DIR/sources/version.txt" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 curl -s -L -o "$TEMP_DIR/sources/PortablePython.zip" "https://github.com/maiz-an/LinkCatty/releases/download/v1.0/PortablePython.zip"
-mkdir -p "$TEMP_DIR/sources/FFmpeg/linux/bin"
-curl -s -L -o "$TEMP_DIR/sources/FFmpeg/linux/bin/ffmpeg" "https://github.com/maiz-an/LinkCatty/releases/download/v1.0/ffmpeg-linux" 2>/dev/null || echo "FFmpeg not available, will download later"
+
+# Detect OS and architecture
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
+# Map architecture to our naming
+case "$ARCH" in
+    x86_64|amd64)
+        ARCH="x64"
+        ;;
+    aarch64|arm64)
+        ARCH="arm64"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH"
+        exit 1
+        ;;
+esac
+
+# Determine FFmpeg zip file name
+if [ "$OS" = "linux" ]; then
+    FFMPEG_ZIP="linux-${ARCH}.zip"
+elif [ "$OS" = "darwin" ]; then
+    FFMPEG_ZIP="macos-${ARCH}.zip"
+else
+    echo "Unsupported OS: $OS"
+    exit 1
+fi
+
+FFMPEG_URL="https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/${FFMPEG_ZIP}"
+echo "Downloading FFmpeg for ${OS}-${ARCH} from: ${FFMPEG_URL}"
+
+mkdir -p "$TEMP_DIR/sources/FFmpeg/${OS}/bin"
+FFMPEG_ZIP_TEMP="${TEMP_DIR}/ffmpeg.zip"
+
+curl -s -L -o "$FFMPEG_ZIP_TEMP" "$FFMPEG_URL"
+if [ $? -ne 0 ]; then
+    echo "Warning: FFmpeg download failed. Audio conversion may not work."
+else
+    # Extract and find the ffmpeg binary
+    unzip -q "$FFMPEG_ZIP_TEMP" -d "$TEMP_DIR/ffmpeg_extract"
+    EXTRACT_DIR="$TEMP_DIR/ffmpeg_extract"
+    FFMPEG_BIN=$(find "$EXTRACT_DIR" -name "ffmpeg" -type f | head -n1)
+    if [ -n "$FFMPEG_BIN" ]; then
+        cp "$FFMPEG_BIN" "$TEMP_DIR/sources/FFmpeg/${OS}/bin/ffmpeg"
+        chmod +x "$TEMP_DIR/sources/FFmpeg/${OS}/bin/ffmpeg"
+        echo "FFmpeg installed successfully"
+    else
+        echo "Warning: Could not find ffmpeg binary in the zip"
+    fi
+    rm -rf "$EXTRACT_DIR"
+    rm -f "$FFMPEG_ZIP_TEMP"
+fi
 
 echo "Installing..."
 
