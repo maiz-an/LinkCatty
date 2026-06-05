@@ -85,6 +85,9 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     del "%TEMP%\download_history_backup.json" 2>nul
     del "%TEMP%\PortablePython_backup.zip" 2>nul
 
+    :: Force the correct version number to prevent update loop
+    echo %REMOTE_VER% > "%~dp0sources\version.txt"
+
     echo.
     echo [3/3] Update completed. Restarting...
     timeout /t 2 >nul

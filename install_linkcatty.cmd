@@ -118,7 +118,7 @@ echo    %INSTALL_DIR%
 echo.
 echo    Run 'linkcatty' from any command prompt to start.
 echo.
-echo Note:
-echo Close and reopen your terminal if 'linkcatty' is not recognized.
+echo    Note:
+echo      Close and reopen your terminal if 'linkcatty' is not recognized.
 echo.
 pause
