@@ -58,7 +58,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[5]=sources\utils\ui.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
     set "FILE_LIST[6]=sources\requirements.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
     set "FILE_LIST[7]=sources\version.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-    set "FILE_LIST[8]=run.bat|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.bat"
+    set "FILE_LIST[8]=run.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
     set "FILE_LIST[9]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
     set "TOTAL_FILES=10"
 

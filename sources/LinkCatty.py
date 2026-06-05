@@ -10,7 +10,7 @@ from pathlib import Path
 # Add the parent directory (root) to sys.path so we can import from sources
 # But since we are already inside sources, we can import directly from downloaders and utils
 BASE_DIR = Path(__file__).parent
-ROOT_DIR = BASE_DIR.parent  # the root folder (where run.bat lives)
+ROOT_DIR = BASE_DIR.parent  # the root folder (where run.cmd lives)
 
 # Add root to sys.path for any root-level modules (none currently)
 sys.path.insert(0, str(BASE_DIR))

@@ -43,7 +43,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "sources/utils/ui.py"
         "sources/requirements.txt"
         "sources/version.txt"
-        "run.bat"
+        "run.cmd"
         "run.sh"
     )
     FILE_URLS=(
@@ -55,7 +55,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.bat"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
     )
     TOTAL=${#FILE_PATHS[@]}

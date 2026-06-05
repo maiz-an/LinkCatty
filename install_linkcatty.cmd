@@ -27,9 +27,9 @@ mkdir "%TEMP_DIR%" 2>nul
 :: Download files
 echo Downloading files from GitHub...
 
-:: Download run.bat
-echo   - Downloading run.bat...
-powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.bat' -OutFile '%TEMP_DIR%\run.bat'}" >nul 2>&1
+:: Download run.cmd
+echo   - Downloading run.cmd...
+powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd' -OutFile '%TEMP_DIR%\run.cmd'}" >nul 2>&1
 
 :: Download sources structure
 echo   - Downloading sources\LinkCatty.py...
@@ -88,9 +88,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Rename run.bat to linkcatty.bat
-if exist "%INSTALL_DIR%\run.bat" (
-    move "%INSTALL_DIR%\run.bat" "%INSTALL_DIR%\linkcatty.bat" >nul
+:: Rename run.cmd to linkcatty.bat
+if exist "%INSTALL_DIR%\run.cmd" (
+    move "%INSTALL_DIR%\run.cmd" "%INSTALL_DIR%\linkcatty.bat" >nul
 )
 
 :: Clean temp
