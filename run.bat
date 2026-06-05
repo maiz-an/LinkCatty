@@ -13,12 +13,16 @@ echo Checking for updates...
 set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
 
+:: Read local version (strip CR/LF)
 if exist "%LOCAL_VERSION_FILE%" (
     for /f "usebackq delims=" %%i in ("%LOCAL_VERSION_FILE%") do set "LOCAL_VER=%%i"
+    :: Remove any trailing carriage return
+    for /f "delims=" %%a in ("!LOCAL_VER!") do set "LOCAL_VER=%%a"
 ) else (
     set "LOCAL_VER=0.0.0"
 )
 
+:: Download remote version
 set "TEMP_FILE=%TEMP%\remote_version.txt"
 powershell -command "& {Invoke-WebRequest -Uri '%REMOTE_VERSION_URL%' -OutFile '%TEMP_FILE%'}" >nul 2>&1
 
@@ -31,6 +35,10 @@ if exist "%TEMP_FILE%" (
     echo Warning: Could not check for updates.
     set "REMOTE_VER=%LOCAL_VER%"
 )
+
+:: Debug output (remove after testing)
+echo Local version: [%LOCAL_VER%]
+echo Remote version: [%REMOTE_VER%]
 
 if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     echo.
@@ -51,17 +59,15 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[5]=sources\utils\ui.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
     set "FILE_LIST[6]=sources\requirements.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
     set "FILE_LIST[7]=sources\version.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-
-    :: Also update the launchers themselves
     set "FILE_LIST[8]=run.bat|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.bat"
     set "FILE_LIST[9]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
 
-    :: Create backup of protected files
+    :: Backup protected files
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
     if exist "%~dp0sources\PortablePython.zip" copy "%~dp0sources\PortablePython.zip" "%TEMP%\PortablePython_backup.zip" >nul
 
-    :: Download and update each file
+    :: Download each file
     for /l %%i in (0,1,9) do (
         call :DownloadFile %%i
     )
@@ -71,7 +77,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     if exist "%TEMP%\download_history_backup.json" copy "%TEMP%\download_history_backup.json" "%~dp0sources\download_history.json" >nul 2>&1
     if exist "%TEMP%\PortablePython_backup.zip" copy "%TEMP%\PortablePython_backup.zip" "%~dp0sources\PortablePython.zip" >nul 2>&1
 
-    :: Cleanup backup
+    :: Cleanup
     del "%TEMP%\settings_backup.json" 2>nul
     del "%TEMP%\download_history_backup.json" 2>nul
     del "%TEMP%\PortablePython_backup.zip" 2>nul
@@ -83,7 +89,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
 )
 
 :: -------------------------------------------------------------------
-:: Continue with normal launch
+:: Continue with normal launch (same as before)
 :: -------------------------------------------------------------------
 echo.
 echo ============================================================
@@ -151,10 +157,10 @@ if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     echo Warning: FFmpeg not found - video merging may fail.
 )
 
-:: Install packages if pip is available
+:: Install/upgrade packages if pip is available
 "%PYTHON_EXE%" -m pip --version >nul 2>&1
 if not errorlevel 1 (
-    echo Installing/updating packages...
+    echo Checking for package updates...
     "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy
 ) else (
     echo Warning: pip not available. Skipping package installation.
@@ -186,7 +192,6 @@ for /f "tokens=1,2 delims=|" %%a in ("!entry!") do (
 :: Create directory if needed
 for %%f in ("%FILE_PATH%") do set "FILE_DIR=%%~dpf"
 if not exist "%~dp0!FILE_DIR!" mkdir "%~dp0!FILE_DIR!" 2>nul
-
 :: Download file
 powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '!FILE_URL!' -OutFile '%~dp0!FILE_PATH!' }" >nul 2>&1
 exit /b

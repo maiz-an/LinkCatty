@@ -5,18 +5,22 @@ echo "Checking for updates..."
 REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 LOCAL_VERSION_FILE="./sources/version.txt"
 
+# Read local version (trim whitespace and carriage return)
 if [ -f "$LOCAL_VERSION_FILE" ]; then
-    LOCAL_VER=$(cat "$LOCAL_VERSION_FILE")
+    LOCAL_VER=$(tr -d '\r\n' < "$LOCAL_VERSION_FILE")
 else
     LOCAL_VER="0.0.0"
 fi
 
-REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL")
+REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL" | tr -d '\r\n')
 
 if [ -z "$REMOTE_VER" ]; then
     echo "Warning: Could not check for updates."
     REMOTE_VER="$LOCAL_VER"
 fi
+
+echo "Local version: [$LOCAL_VER]"
+echo "Remote version: [$REMOTE_VER]"
 
 if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     echo ""
@@ -55,42 +59,26 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
     )
 
-    # Create backup of protected files
-    if [ -f "./sources/settings.json" ]; then
-        cp "./sources/settings.json" "/tmp/settings_backup.json"
-    fi
-    if [ -f "./sources/download_history.json" ]; then
-        cp "./sources/download_history.json" "/tmp/download_history_backup.json"
-    fi
-    if [ -f "./sources/PortablePython.zip" ]; then
-        cp "./sources/PortablePython.zip" "/tmp/PortablePython_backup.zip"
-    fi
+    # Backup protected files
+    [ -f "./sources/settings.json" ] && cp "./sources/settings.json" "/tmp/settings_backup.json"
+    [ -f "./sources/download_history.json" ] && cp "./sources/download_history.json" "/tmp/download_history_backup.json"
+    [ -f "./sources/PortablePython.zip" ] && cp "./sources/PortablePython.zip" "/tmp/PortablePython_backup.zip"
 
     # Download and update each file
     for i in "${!FILE_PATHS[@]}"; do
         FILE_PATH="${FILE_PATHS[$i]}"
         FILE_URL="${FILE_URLS[$i]}"
-        # Create directory if needed
         mkdir -p "$(dirname "$FILE_PATH")"
-        # Download the file
         curl -s -L -o "$FILE_PATH" "$FILE_URL"
     done
 
     # Restore protected files
-    if [ -f "/tmp/settings_backup.json" ]; then
-        cp "/tmp/settings_backup.json" "./sources/settings.json"
-    fi
-    if [ -f "/tmp/download_history_backup.json" ]; then
-        cp "/tmp/download_history_backup.json" "./sources/download_history.json"
-    fi
-    if [ -f "/tmp/PortablePython_backup.zip" ]; then
-        cp "/tmp/PortablePython_backup.zip" "./sources/PortablePython.zip"
-    fi
+    [ -f "/tmp/settings_backup.json" ] && cp "/tmp/settings_backup.json" "./sources/settings.json"
+    [ -f "/tmp/download_history_backup.json" ] && cp "/tmp/download_history_backup.json" "./sources/download_history.json"
+    [ -f "/tmp/PortablePython_backup.zip" ] && cp "/tmp/PortablePython_backup.zip" "./sources/PortablePython.zip"
 
     # Cleanup backup
-    rm -f "/tmp/settings_backup.json"
-    rm -f "/tmp/download_history_backup.json"
-    rm -f "/tmp/PortablePython_backup.zip"
+    rm -f "/tmp/settings_backup.json" "/tmp/download_history_backup.json" "/tmp/PortablePython_backup.zip"
 
     echo "Update completed. Restarting..."
     sleep 2
@@ -183,6 +171,13 @@ elif [ "$UNAME" = "Linux" ]; then
         fi
     fi
     export PATH="$FFMPEG_DIR:$PATH"
+fi
+
+# Upgrade packages if pip is available
+$PYTHON_EXE -m pip --version >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Checking for package updates..."
+    $PYTHON_EXE -m pip install --quiet --upgrade yt-dlp spotipy
 fi
 
 # Launch
