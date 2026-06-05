@@ -128,18 +128,15 @@ def progress_hook(d):
             print("\n✅ Download Completed Successfully\n")
 
 # ----------------------------------------------------------------------
-# Download with retry using cookies if needed
+# Download a single video (with retry)
 # ----------------------------------------------------------------------
-def download_with_retry(url, mode, config, use_cookies=False):
-    global download_completed_shown
-    download_completed_shown = False
-
-    download_dir = Path(config['download_dir'])
+def download_single_video(video_url, output_dir, mode, config, max_retries=2):
+    """Download one video with up to max_retries. Returns (success, error_msg)."""
     yt_cfg = config['youtube']
     quiet = yt_cfg.get('quiet_mode', True)
 
-    # Base options – improved filename: Artist/Channel - Title
-    outtmpl = str(download_dir / '%(uploader)s - %(title)s.%(ext)s')
+    # Template: Artist - Title (artist is the uploader/channel name)
+    outtmpl = str(Path(output_dir) / '%(uploader)s - %(title)s.%(ext)s')
 
     if mode == "1":
         ydl_opts = {
@@ -166,44 +163,51 @@ def download_with_retry(url, mode, config, use_cookies=False):
             'noprogress': False,
         }
 
-    if use_cookies:
-        # Try to use browser cookies
-        for browser in ['chrome', 'firefox', 'edge', 'brave']:
-            try:
-                ydl_opts['cookiesfrombrowser'] = (browser,)
-                # Quick test
-                with YoutubeDL({'quiet': True, 'cookiesfrombrowser': (browser,)}) as test:
-                    test.extract_info("https://youtube.com", download=False)
-                print_info(f"Using cookies from {browser}")
-                break
-            except:
-                continue
-
+    # Add FFmpeg if available
     ffmpeg = get_ffmpeg_path()
     if ffmpeg:
         ydl_opts['ffmpeg_location'] = ffmpeg
 
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        return True
-    except Exception as e:
-        error_msg = str(e)
-        if "Sign in to confirm" in error_msg and not use_cookies:
-            print_warning("YouTube requires authentication. Retrying with browser cookies...")
-            print_info("Please close your browser (Chrome/Firefox/Edge) and press Enter.")
-            input("Press Enter to continue...")
-            return download_with_retry(url, mode, config, use_cookies=True)
-        else:
-            print_error(f"Download failed: {error_msg}")
-            return False
+    # Attempt with retries
+    for attempt in range(max_retries + 1):
+        use_cookies = (attempt > 0)  # retry with cookies on second attempt
+        if use_cookies:
+            # Try to find a working browser
+            for browser in ['chrome', 'firefox', 'edge', 'brave']:
+                try:
+                    ydl_opts['cookiesfrombrowser'] = (browser,)
+                    # Test cookie extraction
+                    with YoutubeDL({'quiet': True, 'cookiesfrombrowser': (browser,)}) as test:
+                        test.extract_info("https://youtube.com", download=False)
+                    print_info(f"Retry using cookies from {browser}")
+                    break
+                except:
+                    continue
+            else:
+                print_warning("No browser cookies available. Trying without cookies...")
+                # Remove cookies option if none work
+                ydl_opts.pop('cookiesfrombrowser', None)
+
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+            return True, None
+        except Exception as e:
+            error_msg = str(e)
+            if attempt < max_retries and ("Sign in to confirm" in error_msg or "bot" in error_msg):
+                print_warning(f"Authentication failed. Retry {attempt+1}/{max_retries} with cookies...")
+                print_info("Please close your browser and press Enter to continue.")
+                input("Press Enter to continue...")
+                continue
+            else:
+                return False, error_msg
+    return False, "Max retries exceeded"
 
 # ----------------------------------------------------------------------
-# Download playlist one by one
+# Download playlist with per-video retry and skip if already exists
 # ----------------------------------------------------------------------
 def download_playlist(url, mode, config):
     print_info("Fetching playlist information...")
-    # Add spinner while fetching playlist info
     start_spinner("Loading playlist")
     try:
         with YoutubeDL({'quiet': True, 'extract_flat': True, 'no_warnings': True}) as ydl:
@@ -229,37 +233,62 @@ def download_playlist(url, mode, config):
     playlist_folder = Path(config['download_dir']) / playlist_title
     playlist_folder.mkdir(exist_ok=True)
 
-    success = 0
+    success_count = 0
+    fail_count = 0
+    failed_videos = []
+
     for i, entry in enumerate(entries, 1):
         video_url = f"https://www.youtube.com/watch?v={entry['id']}"
         video_title = entry.get('title', f'Video {i}')
+        # Sanitize filename to check existence
+        safe_title = video_title.replace('/', '_').replace('\\', '_').replace(':', '_').replace('*', '_').replace('?', '_').replace('"', '_').replace('<', '_').replace('>', '_').replace('|', '_')
+        # Get uploader (if available from flat info) – fallback to "Unknown Artist"
+        uploader = entry.get('uploader', 'Unknown Artist')
+        expected_filename = f"{uploader} - {safe_title}.{'mp4' if mode=='1' else 'mp3'}"
+        expected_path = playlist_folder / expected_filename
+
+        if expected_path.exists():
+            print(f"\n{'─' * 61}")
+            print_info(f"[{i}/{total}] Skipping (already exists): {video_title[:50]}")
+            success_count += 1
+            continue
+
         print(f"\n{'─' * 61}")
         print_info(f"[{i}/{total}] Downloading: {video_title[:50]}")
-
-        # Create a temporary config for single video in playlist folder
-        temp_config = config.copy()
-        temp_config['download_dir'] = str(playlist_folder)
-
-        success_flag = download_with_retry(video_url, mode, temp_config, use_cookies=False)
-        if success_flag:
-            success += 1
+        success, error = download_single_video(video_url, str(playlist_folder), mode, config, max_retries=2)
+        if success:
+            success_count += 1
             print_success(f"[{i}/{total}] Completed: {video_title[:50]}")
             log_download("YouTube", video_title, mode=mode, status="Success")
         else:
-            print_error(f"[{i}/{total}] Failed: {video_title[:50]}")
-            log_download("YouTube", video_title, mode=mode, status="Failed")
+            fail_count += 1
+            failed_videos.append((video_url, video_title, error))
+            print_error(f"[{i}/{total}] Failed: {video_title[:50]} - {error[:100]}")
+            log_download("YouTube", video_title, mode=mode, status="Failed", error=error)
+
+        # Small delay between videos
         time.sleep(0.5)
 
+    # Summary
     print("\n" + "═" * 61)
-    print_success(f"Playlist download complete: {success}/{total} successful")
+    print_success(f"Playlist download finished: {success_count} successful, {fail_count} failed")
+    if failed_videos:
+        print_warning("The following videos failed. You can retry them manually:")
+        for url, title, err in failed_videos:
+            print(f"  - {title[:60]} : {err[:80]}")
+        # Save failed list to a file for later retry
+        fail_log = playlist_folder / "_failed_videos.txt"
+        with open(fail_log, 'w', encoding='utf-8') as f:
+            for url, title, err in failed_videos:
+                f.write(f"{url} | {title}\n")
+        print_info(f"Failed URLs saved to: {fail_log}")
     print("═" * 61)
 
 # ----------------------------------------------------------------------
 # Main download dispatcher
 # ----------------------------------------------------------------------
 def download_content(url, mode, config):
-    # Show spinner while fetching info
-    start_spinner("Fetching video/playlist information")
+    start_spinner("🎬 Fetching video/playlist information")
     info = get_url_info(url)
     stop_spinner()
     if not info:
@@ -275,12 +304,14 @@ def download_content(url, mode, config):
             print_info("Download cancelled")
             return
 
-        success = download_with_retry(url, mode, config)
+        download_dir = Path(config['download_dir'])
+        success, error = download_single_video(url, str(download_dir), mode, config, max_retries=2)
         if success:
             print_success("Download completed!")
             log_download("YouTube", info['title'], mode=mode, status="Success")
         else:
-            log_download("YouTube", info['title'], mode=mode, status="Failed")
+            print_error(f"Download failed: {error}")
+            log_download("YouTube", info['title'], mode=mode, status="Failed", error=error)
 
 # ----------------------------------------------------------------------
 # Entry point from main menu
@@ -305,6 +336,7 @@ def run(config):
         input("Press Enter...")
         return
 
+    # Manual format selection (mode 3)
     if mode == "3":
         url = input("\n🎯 YouTube URL: ").strip()
         if not url:
@@ -343,6 +375,7 @@ def run(config):
         input("\nPress Enter to continue...")
         return
 
+    # Normal modes 1 & 2
     while True:
         url = input("\n🎯 YouTube URL (video or playlist): ").strip()
         if not url:
