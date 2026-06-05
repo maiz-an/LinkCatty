@@ -10,8 +10,17 @@ if [[ "$*" == *"--uninstall"* ]]; then
     elif [ -f "$HOME/.local/share/LinkCatty/uninstall_linkcatty.sh" ]; then
         "$HOME/.local/share/LinkCatty/uninstall_linkcatty.sh"
     else
-        echo "Uninstaller not found. Please download uninstall_linkcatty.sh from GitHub."
-        read -p "Press Enter to exit..."
+        echo "Uninstaller not found. Downloading..."
+        UNINSTALL_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
+        UNINSTALL_FILE="/tmp/uninstall_linkcatty.sh"
+        curl -s -L -o "$UNINSTALL_FILE" "$UNINSTALL_URL"
+        if [ -f "$UNINSTALL_FILE" ]; then
+            chmod +x "$UNINSTALL_FILE"
+            "$UNINSTALL_FILE"
+        else
+            echo "Failed to download uninstaller. Please download manually from GitHub."
+            read -p "Press Enter to exit..."
+        fi
     fi
     exit 0
 fi
