@@ -5,5 +5,5 @@ prepare_portable.py
 downloads
 sources/download_history.json
 settings.json
-Downloader.sh
-Downloader.cmd
+LinkCatty.sh
+LinkCatty.cmd
