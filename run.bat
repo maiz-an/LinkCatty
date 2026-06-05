@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
-title LinkCatty Downloader
+title LinkCatty
 setlocal enabledelayedexpansion
 
 :: Try to set console width (ignore errors)
