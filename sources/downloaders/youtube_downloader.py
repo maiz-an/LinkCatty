@@ -33,7 +33,7 @@ def format_view_count(count):
     return str(count)
 
 # ----------------------------------------------------------------------
-# Fetch video/playlist info (exactly like original working code)
+# Fetch video/playlist info (with spinner)
 # ----------------------------------------------------------------------
 def get_url_info(url):
     try:
@@ -70,7 +70,7 @@ def display_video_info(info):
     print("📹 VIDEO INFORMATION")
     print("─" * 61)
     print(f"📺 Title: {info['title']}")
-    print(f"👤 Channel: {info['uploader']}")
+    print(f"👤 Artist/Channel: {info['uploader']}")
     print(f"⏱️ Duration: {format_duration(info['duration'])}")
     print(f"👀 Views: {format_view_count(info['view_count'])}")
     if info.get('upload_date'):
@@ -138,10 +138,12 @@ def download_with_retry(url, mode, config, use_cookies=False):
     yt_cfg = config['youtube']
     quiet = yt_cfg.get('quiet_mode', True)
 
-    # Base options
+    # Base options – improved filename: Artist/Channel - Title
+    outtmpl = str(download_dir / '%(uploader)s - %(title)s.%(ext)s')
+
     if mode == "1":
         ydl_opts = {
-            'outtmpl': str(download_dir / '%(title)s.%(ext)s'),
+            'outtmpl': outtmpl,
             'format': 'bestvideo+bestaudio/best',
             'merge_output_format': 'mp4',
             'progress_hooks': [progress_hook],
@@ -151,7 +153,7 @@ def download_with_retry(url, mode, config, use_cookies=False):
         }
     else:  # mode 2
         ydl_opts = {
-            'outtmpl': str(download_dir / '%(title)s.%(ext)s'),
+            'outtmpl': outtmpl,
             'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -201,61 +203,65 @@ def download_with_retry(url, mode, config, use_cookies=False):
 # ----------------------------------------------------------------------
 def download_playlist(url, mode, config):
     print_info("Fetching playlist information...")
+    # Add spinner while fetching playlist info
+    start_spinner("Loading playlist")
     try:
-        # Get playlist entries with flat extraction
         with YoutubeDL({'quiet': True, 'extract_flat': True, 'no_warnings': True}) as ydl:
             info = ydl.extract_info(url, download=False)
             if 'entries' not in info:
+                stop_spinner()
                 print_error("Not a valid playlist URL")
                 return
             entries = [e for e in info['entries'] if e]
             total = len(entries)
+            stop_spinner()
             print_success(f"Found {total} videos in playlist")
-
-        confirm = input(f"\n🚀 Download all {total} videos? (y/n): ").lower()
-        if confirm != 'y':
-            return
-
-        playlist_title = info.get('title', 'Playlist').replace('/', '_').replace('\\', '_')
-        playlist_folder = Path(config['download_dir']) / playlist_title
-        playlist_folder.mkdir(exist_ok=True)
-
-        success = 0
-        for i, entry in enumerate(entries, 1):
-            video_url = f"https://www.youtube.com/watch?v={entry['id']}"
-            video_title = entry.get('title', f'Video {i}')
-            print(f"\n{'─' * 61}")
-            print_info(f"[{i}/{total}] Downloading: {video_title[:50]}")
-
-            # Create a temporary config for single video
-            temp_config = config.copy()
-            temp_config['download_dir'] = str(playlist_folder)
-
-            # Use the same retry logic for each video
-            success_flag = download_with_retry(video_url, mode, config, use_cookies=False)
-            if success_flag:
-                success += 1
-                print_success(f"[{i}/{total}] Completed: {video_title[:50]}")
-                log_download("YouTube", video_title, mode=mode, status="Success")
-            else:
-                print_error(f"[{i}/{total}] Failed: {video_title[:50]}")
-                log_download("YouTube", video_title, mode=mode, status="Failed")
-            time.sleep(0.5)
-
-        print("\n" + "═" * 61)
-        print_success(f"Playlist download complete: {success}/{total} successful")
-        print("═" * 61)
-
     except Exception as e:
-        print_error(f"Playlist error: {e}")
+        stop_spinner()
+        print_error(f"Failed to fetch playlist: {e}")
+        return
+
+    confirm = input(f"\n🚀 Download all {total} videos? (y/n): ").lower()
+    if confirm != 'y':
+        return
+
+    playlist_title = info.get('title', 'Playlist').replace('/', '_').replace('\\', '_')
+    playlist_folder = Path(config['download_dir']) / playlist_title
+    playlist_folder.mkdir(exist_ok=True)
+
+    success = 0
+    for i, entry in enumerate(entries, 1):
+        video_url = f"https://www.youtube.com/watch?v={entry['id']}"
+        video_title = entry.get('title', f'Video {i}')
+        print(f"\n{'─' * 61}")
+        print_info(f"[{i}/{total}] Downloading: {video_title[:50]}")
+
+        # Create a temporary config for single video in playlist folder
+        temp_config = config.copy()
+        temp_config['download_dir'] = str(playlist_folder)
+
+        success_flag = download_with_retry(video_url, mode, temp_config, use_cookies=False)
+        if success_flag:
+            success += 1
+            print_success(f"[{i}/{total}] Completed: {video_title[:50]}")
+            log_download("YouTube", video_title, mode=mode, status="Success")
+        else:
+            print_error(f"[{i}/{total}] Failed: {video_title[:50]}")
+            log_download("YouTube", video_title, mode=mode, status="Failed")
+        time.sleep(0.5)
+
+    print("\n" + "═" * 61)
+    print_success(f"Playlist download complete: {success}/{total} successful")
+    print("═" * 61)
 
 # ----------------------------------------------------------------------
 # Main download dispatcher
 # ----------------------------------------------------------------------
 def download_content(url, mode, config):
-    # First, get info (this may take a moment but should respond)
-    print_info("Fetching video information...")
+    # Show spinner while fetching info
+    start_spinner("Fetching video/playlist information")
     info = get_url_info(url)
+    stop_spinner()
     if not info:
         return
 
@@ -315,7 +321,7 @@ def run(config):
             yt_cfg = config['youtube']
             quiet = yt_cfg.get('quiet_mode', True)
             opts = {
-                'outtmpl': str(Path(download_dir) / '%(title)s.%(ext)s'),
+                'outtmpl': str(Path(download_dir) / '%(uploader)s - %(title)s.%(ext)s'),
                 'format': fmt,
                 'quiet': quiet,
                 'no_warnings': quiet,
