@@ -6,12 +6,15 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
 from utils.ui import (
-    clear_screen, print_error, print_success, print_info, print_warning,
-    start_spinner, stop_spinner, progress_bar
+    clear_screen, print_banner, print_error, print_success, print_info, print_warning,
+    start_spinner, stop_spinner
 )
 from utils.logger import log_download
 from utils.ffmpeg import get_ffmpeg_path
 
+# ----------------------------------------------------------------------
+# Helper functions
+# ----------------------------------------------------------------------
 def extract_playlist_id(url):
     m = re.search(r'playlist/([a-zA-Z0-9]+)', url)
     return m.group(1) if m else None
@@ -24,6 +27,9 @@ def extract_album_id(url):
     m = re.search(r'album/([a-zA-Z0-9]+)', url)
     return m.group(1) if m else None
 
+# ----------------------------------------------------------------------
+# Main Spotify Downloader Class
+# ----------------------------------------------------------------------
 class SpotifyDownloader:
     def __init__(self, config):
         self.config = config
@@ -88,7 +94,7 @@ class SpotifyDownloader:
         opts['outtmpl'] = str(self.download_dir / f"{safe_title}.%(ext)s")
         if index and total:
             print(f"[{index}/{total}] ", end="")
-        print(f"📥 Downloading: {artists} - {track_info['name']}")
+        print_info(f"Downloading: {artists} - {track_info['name']}")
         try:
             start_spinner("Downloading from YouTube")
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -112,6 +118,9 @@ class SpotifyDownloader:
             confirm = input("Download all? (y/n): ").lower()
             if confirm != 'y':
                 return
+
+            # Fetch all tracks
+            print_info("Fetching playlist tracks...")
             tracks = []
             results = self.spotify.playlist_tracks(playlist_id)
             while results:
@@ -123,21 +132,33 @@ class SpotifyDownloader:
                             'artists': [a['name'] for a in t['artists']]
                         })
                 results = self.spotify.next(results) if results['next'] else None
+
+            total = len(tracks)
+            print_success(f"Found {total} tracks")
+
             success, fail = 0, 0
             for i, track in enumerate(tracks, 1):
+                print(f"\n{'─' * 61}")
+                print_info(f"[{i}/{total}] Searching: {track['name']}")
                 yt_url = self.search_youtube(track)
                 if not yt_url:
-                    print_error(f"[{i}/{len(tracks)}] Not found: {track['name']}")
+                    print_error(f"[{i}/{total}] Not found on YouTube: {track['name']}")
                     log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Playlist", status="Failed")
                     fail += 1
                     continue
-                if self.download_track(yt_url, track, i, len(tracks)):
+                if self.download_track(yt_url, track, i, total):
                     success += 1
+                    print_success(f"[{i}/{total}] Downloaded: {track['name']}")
                     log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Playlist", status="Success")
                 else:
                     fail += 1
+                    print_error(f"[{i}/{total}] Failed: {track['name']}")
+                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Playlist", status="Failed")
                 time.sleep(1)
-            print_success(f"Completed: {success} successful, {fail} failed")
+
+            print("\n" + "═" * 61)
+            print_success(f"Playlist download finished: {success} successful, {fail} failed")
+            print("═" * 61)
         except Exception as e:
             print_error(f"Error fetching playlist: {e}")
 
@@ -157,6 +178,8 @@ class SpotifyDownloader:
             confirm = input("Download? (y/n): ").lower()
             if confirm != 'y':
                 return
+
+            print_info("Searching on YouTube...")
             yt_url = self.search_youtube(track_info)
             if not yt_url:
                 print_error("Track not found on YouTube", "Try a different spelling or manual search")
@@ -165,6 +188,9 @@ class SpotifyDownloader:
             if self.download_track(yt_url, track_info):
                 print_success("Download completed")
                 log_download("Spotify", track_info['name'], artist=" & ".join(track_info['artists']), mode="Single", status="Success")
+            else:
+                print_error("Download failed")
+                log_download("Spotify", track_info['name'], artist=" & ".join(track_info['artists']), mode="Single", status="Failed")
         except Exception as e:
             print_error(f"Error: {e}")
 
@@ -180,43 +206,61 @@ class SpotifyDownloader:
             confirm = input("Download all? (y/n): ").lower()
             if confirm != 'y':
                 return
+
             tracks = []
             for t in album['tracks']['items']:
                 tracks.append({
                     'name': t['name'],
                     'artists': [a['name'] for a in t['artists']]
                 })
+            total = len(tracks)
+            print_success(f"Found {total} tracks")
+
             success, fail = 0, 0
             for i, track in enumerate(tracks, 1):
+                print(f"\n{'─' * 61}")
+                print_info(f"[{i}/{total}] Searching: {track['name']}")
                 yt_url = self.search_youtube(track)
                 if not yt_url:
-                    print_error(f"[{i}/{len(tracks)}] Not found: {track['name']}")
+                    print_error(f"[{i}/{total}] Not found on YouTube: {track['name']}")
                     log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Album", status="Failed")
                     fail += 1
                     continue
-                if self.download_track(yt_url, track, i, len(tracks)):
+                if self.download_track(yt_url, track, i, total):
                     success += 1
+                    print_success(f"[{i}/{total}] Downloaded: {track['name']}")
                     log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Album", status="Success")
                 else:
                     fail += 1
+                    print_error(f"[{i}/{total}] Failed: {track['name']}")
+                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Album", status="Failed")
                 time.sleep(1)
-            print_success(f"Completed: {success} successful, {fail} failed")
+
+            print("\n" + "═" * 61)
+            print_success(f"Album download finished: {success} successful, {fail} failed")
+            print("═" * 61)
         except Exception as e:
             print_error(f"Error: {e}")
 
+# ----------------------------------------------------------------------
+# Entry point called from main menu
+# ----------------------------------------------------------------------
 def run(config):
     clear_screen()
-    print("\n" + "═" * 55)
-    print("            🎵 Spotify Downloader")
-    print("═" * 55)
+    print_banner()
+    print("                   🎵 Spotify Downloader")
+    print("=" * 61)
+    print()
     print("1. Download playlist")
     print("2. Download single track")
     print("3. Download album")
     print("4. Back to main menu")
-    print("═" * 55)
+    print()
+    print("=" * 61)
     choice = input("Select (1-4): ").strip()
     if choice == "4":
         return
+
     try:
         downloader = SpotifyDownloader(config)
     except (ValueError, ConnectionError) as e:
@@ -227,6 +271,7 @@ def run(config):
     url = input("\n🎯 Enter Spotify URL: ").strip()
     if not url:
         return
+
     if choice == "1":
         downloader.download_playlist(url)
     elif choice == "2":
@@ -235,4 +280,5 @@ def run(config):
         downloader.download_album(url)
     else:
         print_error("Invalid choice", "Please select 1-4")
+
     input("\nPress Enter to continue...")

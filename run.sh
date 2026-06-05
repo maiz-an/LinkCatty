@@ -1,8 +1,8 @@
 #!/bin/bash
-# LinkCatty Launcher for Linux/macOS
+# LinkCatty Launcher for Linux/macOS with auto-update
 
 echo "Checking for updates..."
-REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/refs/heads/main/sources/version.txt"
+REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 LOCAL_VERSION_FILE="./sources/version.txt"
 
 if [ -f "$LOCAL_VERSION_FILE" ]; then
@@ -20,23 +20,91 @@ fi
 
 if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     echo ""
-    echo "════════════════════════════════════════════════════════════════"
+    echo "============================================================"
     echo "                     UPDATE AVAILABLE!"
-    echo "════════════════════════════════════════════════════════════════"
+    echo "============================================================"
     echo "Current Version: $LOCAL_VER"
     echo "Latest Version:  $REMOTE_VER"
     echo ""
-    echo "Please download the latest version from:"
-    echo "https://github.com/maiz-an/LinkCatty"
-    echo ""
-    read -p "Press Enter to exit..."
+    echo "Downloading updated files..."
+
+    # Define all files to update
+    declare -a FILE_PATHS=(
+        "sources/downloaders/spotify_downloader.py"
+        "sources/downloaders/youtube_downloader.py"
+        "sources/utils/config.py"
+        "sources/utils/ffmpeg.py"
+        "sources/utils/logger.py"
+        "sources/utils/ui.py"
+        "sources/requirements.txt"
+        "sources/version.txt"
+        "run.bat"
+        "run.sh"
+    )
+
+    declare -a FILE_URLS=(
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.bat"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
+    )
+
+    # Create backup of protected files
+    if [ -f "./sources/settings.json" ]; then
+        cp "./sources/settings.json" "/tmp/settings_backup.json"
+    fi
+    if [ -f "./sources/download_history.json" ]; then
+        cp "./sources/download_history.json" "/tmp/download_history_backup.json"
+    fi
+    if [ -f "./sources/PortablePython.zip" ]; then
+        cp "./sources/PortablePython.zip" "/tmp/PortablePython_backup.zip"
+    fi
+
+    # Download and update each file
+    for i in "${!FILE_PATHS[@]}"; do
+        FILE_PATH="${FILE_PATHS[$i]}"
+        FILE_URL="${FILE_URLS[$i]}"
+        # Create directory if needed
+        mkdir -p "$(dirname "$FILE_PATH")"
+        # Download the file
+        curl -s -L -o "$FILE_PATH" "$FILE_URL"
+    done
+
+    # Restore protected files
+    if [ -f "/tmp/settings_backup.json" ]; then
+        cp "/tmp/settings_backup.json" "./sources/settings.json"
+    fi
+    if [ -f "/tmp/download_history_backup.json" ]; then
+        cp "/tmp/download_history_backup.json" "./sources/download_history.json"
+    fi
+    if [ -f "/tmp/PortablePython_backup.zip" ]; then
+        cp "/tmp/PortablePython_backup.zip" "./sources/PortablePython.zip"
+    fi
+
+    # Cleanup backup
+    rm -f "/tmp/settings_backup.json"
+    rm -f "/tmp/download_history_backup.json"
+    rm -f "/tmp/PortablePython_backup.zip"
+
+    echo "Update completed. Restarting..."
+    sleep 2
+    exec "$0"
     exit 0
 fi
 
+# -------------------------------------------------------------------
+# Continue with normal launch
+# -------------------------------------------------------------------
 echo ""
-echo "════════════════════════════════════════════════════════════════"
+echo "============================================================"
 echo "                    LinkCatty Setup"
-echo "════════════════════════════════════════════════════════════════"
+echo "============================================================"
 echo ""
 
 PORTABLE_DIR="./sources/portable_python"
@@ -67,7 +135,6 @@ elif [ -f "$PORTABLE_DIR/bin/python" ]; then
 elif [ -f "$PORTABLE_DIR/python.exe" ]; then
     PYTHON_EXE="$PORTABLE_DIR/python.exe"
 else
-    # Recursive search
     PYTHON_EXE=$(find "$PORTABLE_DIR" -name "python3" -o -name "python" -o -name "python.exe" | head -n1)
 fi
 
@@ -122,10 +189,8 @@ fi
 echo ""
 echo "🚀 Launching LinkCatty..."
 echo ""
-
 $PYTHON_EXE "./sources/LinkCatty.py"
 EXIT_CODE=$?
-
 if [ $EXIT_CODE -ne 0 ]; then
     echo ""
     echo "❌ Application exited with error code $EXIT_CODE"
