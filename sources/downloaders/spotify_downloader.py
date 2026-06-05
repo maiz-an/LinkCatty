@@ -6,6 +6,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
 from utils.ui import (
+    RESET, CYAN, BOLD,
     clear_screen, print_banner, print_error, print_success, print_info, print_warning,
     start_spinner, stop_spinner
 )
@@ -251,10 +252,10 @@ def run(config):
     print("                   🎵 Spotify Downloader")
     print("=" * 61)
     print()
-    print("1. Download playlist")
-    print("2. Download single track")
-    print("3. Download album")
-    print("4. Back to main menu")
+    print(f"{CYAN}{BOLD}1.{RESET} Download playlist")
+    print(f"{CYAN}{BOLD}2.{RESET} Download single track")
+    print(f"{CYAN}{BOLD}3.{RESET} Download album")
+    print(f"{CYAN}{BOLD}4.{RESET} Back to main menu")
     print()
     print("=" * 61)
     choice = input("Select (1-4): ").strip()
