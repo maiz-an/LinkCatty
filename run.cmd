@@ -4,11 +4,10 @@ title LinkCatty
 setlocal enabledelayedexpansion
 
 :: -------------------------------------------------------------------
-:: Check for uninstall flag
+:: Check for uninstall flag (unchanged)
 :: -------------------------------------------------------------------
 echo %* | findstr /i "\-\-uninstall" >nul
 if not errorlevel 1 (
-    :: Try to find uninstaller
     if exist "%~dp0uninstall_linkcatty.cmd" (
         start "" "%~dp0uninstall_linkcatty.cmd"
     ) else if exist "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" (
@@ -17,9 +16,9 @@ if not errorlevel 1 (
         echo Uninstaller not found. Downloading now...
         set "UNINSTALL_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
-        powershell -command "& {Invoke-WebRequest -Uri '%UNINSTALL_URL%' -OutFile '%UNINSTALL_FILE%'}" >nul 2>&1
-        if exist "%UNINSTALL_FILE%" (
-            start "" "%UNINSTALL_FILE%"
+        powershell -command "& {Invoke-WebRequest -Uri '!UNINSTALL_URL!' -OutFile '!UNINSTALL_FILE!'}" >nul 2>&1
+        if exist "!UNINSTALL_FILE!" (
+            start "" "!UNINSTALL_FILE!"
         ) else (
             echo Failed to download uninstaller. Please download manually from GitHub.
             pause
@@ -30,9 +29,6 @@ if not errorlevel 1 (
 
 mode con cols=62 lines=30 >nul 2>&1
 
-:: -------------------------------------------------------------------
-:: Print banner first
-:: -------------------------------------------------------------------
 echo.
 echo ============================================================
 echo                    LinkCatty Launcher
@@ -40,32 +36,32 @@ echo ============================================================
 echo.
 
 :: -------------------------------------------------------------------
-:: Check for updates (after banner)
+:: Check for updates (corrected)
 :: -------------------------------------------------------------------
 echo [1/3] Checking for updates...
 set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
 
+:: Read local version, trim CR/LF and spaces
+set "LOCAL_VER=0.0.0"
 if exist "%LOCAL_VERSION_FILE%" (
     for /f "usebackq delims=" %%i in ("%LOCAL_VERSION_FILE%") do set "LOCAL_VER=%%i"
     for /f "delims=" %%a in ("!LOCAL_VER!") do set "LOCAL_VER=%%a"
-) else (
-    set "LOCAL_VER=0.0.0"
 )
 
+:: Download remote version
 set "TEMP_FILE=%TEMP%\remote_version.txt"
 powershell -command "& {Invoke-WebRequest -Uri '%REMOTE_VERSION_URL%' -OutFile '%TEMP_FILE%'}" >nul 2>&1
-
+set "REMOTE_VER=%LOCAL_VER%"
 if exist "%TEMP_FILE%" (
     for /f "usebackq delims=" %%A in ("%TEMP_FILE%") do (
         for /f "delims=" %%B in ("%%A") do set "REMOTE_VER=%%B"
     )
     del "%TEMP_FILE%"
-) else (
-    set "REMOTE_VER=%LOCAL_VER%"
 )
 
-if not "%LOCAL_VER%"=="%REMOTE_VER%" (
+:: Compare versions (case‑insensitive, trimmed)
+if /i not "%LOCAL_VER%"=="%REMOTE_VER%" (
     echo.
     echo ============================================================
     echo                     UPDATE AVAILABLE!
@@ -86,15 +82,17 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[8]=run.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
     set "FILE_LIST[9]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
     set "FILE_LIST[10]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
-    set "TOTAL_FILES=11"
+    set "FILE_LIST[11]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
+    set "TOTAL_FILES=12"
 
     :: Backup user data
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
     if exist "%~dp0sources\PortablePython.zip" copy "%~dp0sources\PortablePython.zip" "%TEMP%\PortablePython_backup.zip" >nul
 
+    :: Download all files
     set "DOWNLOADED=0"
-    for /l %%i in (0,1,10) do (
+    for /l %%i in (0,1,11) do (
         set /a DOWNLOADED+=1
         set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL_FILES!
         <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL_FILES!] !PERCENT!%%  "
@@ -106,13 +104,23 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     if exist "%TEMP%\settings_backup.json" copy "%TEMP%\settings_backup.json" "%~dp0sources\settings.json" >nul 2>&1
     if exist "%TEMP%\download_history_backup.json" copy "%TEMP%\download_history_backup.json" "%~dp0sources\download_history.json" >nul 2>&1
     if exist "%TEMP%\PortablePython_backup.zip" copy "%TEMP%\PortablePython_backup.zip" "%~dp0sources\PortablePython.zip" >nul 2>&1
+    del "%TEMP%\settings_backup.json" "%TEMP%\download_history_backup.json" "%TEMP%\PortablePython_backup.zip" 2>nul
 
-    del "%TEMP%\settings_backup.json" 2>nul
-    del "%TEMP%\download_history_backup.json" 2>nul
-    del "%TEMP%\PortablePython_backup.zip" 2>nul
+    :: ----- Write the new version file correctly -----
+    :: Use PowerShell to write UTF‑8 without BOM and without extra spaces/newlines
+    powershell -command "& { [System.IO.File]::WriteAllText('%~dp0sources\version.txt', '%REMOTE_VER%', [System.Text.UTF8Encoding]::new($false)) }" >nul 2>&1
 
-    :: Force the correct version number to prevent update loop
-    echo %REMOTE_VER% > "%~dp0sources\version.txt"
+    :: Verify it was written correctly
+    set "VERIFY_VER=0.0.0"
+    if exist "%~dp0sources\version.txt" (
+        for /f "usebackq delims=" %%v in ("%~dp0sources\version.txt") do set "VERIFY_VER=%%v"
+        for /f "delims=" %%a in ("!VERIFY_VER!") do set "VERIFY_VER=%%a"
+    )
+    if not "!VERIFY_VER!"=="%REMOTE_VER%" (
+        :: If still wrong, force delete and try simple echo
+        del "%~dp0sources\version.txt" 2>nul
+        (echo %REMOTE_VER%) > "%~dp0sources\version.txt"
+    )
 
     echo.
     echo [3/3] Update completed. Restarting...
@@ -122,7 +130,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
 )
 
 :: -------------------------------------------------------------------
-:: Normal launch (extract Python, install packages)
+:: Normal launch (unchanged)
 :: -------------------------------------------------------------------
 echo [2/3] Extracting Portable Python...
 set "PORTABLE_DIR=%~dp0sources\portable_python"
@@ -152,7 +160,6 @@ if not exist "%PORTABLE_DIR%\python.exe" (
 )
 echo Portable Python ready.
 
-:: Locate python.exe
 set "PYTHON_EXE="
 if exist "%PORTABLE_DIR%\python.exe" (
     set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
@@ -170,12 +177,10 @@ if exist "%PORTABLE_DIR%\python.exe" (
     )
 )
 
-:: Add Scripts/bin to PATH
 set "SCRIPT_DIR=%PORTABLE_DIR%\Scripts"
 if not exist "%SCRIPT_DIR%" set "SCRIPT_DIR=%PORTABLE_DIR%\bin"
 if exist "%SCRIPT_DIR%" set "PATH=%SCRIPT_DIR%;%PATH%"
 
-:: FFmpeg
 set "FFMPEG_DIR=%~dp0sources\FFmpeg\windows\ffmpeg\bin"
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     set "PATH=%FFMPEG_DIR%;%PATH%"
@@ -183,17 +188,13 @@ if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     echo Warning: FFmpeg not found.
 )
 
-:: Install/upgrade packages (including pip auto-upgrade)
 echo [3/3] Installing packages...
 "%PYTHON_EXE%" -m pip --version >nul 2>&1
 if not errorlevel 1 (
-    :: Upgrade pip silently
     "%PYTHON_EXE%" -m pip install --quiet --upgrade pip
-    :: Install/upgrade yt-dlp and spotipy
     "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy
 )
 
-:: Launch
 echo.
 echo Launching LinkCatty...
 echo.

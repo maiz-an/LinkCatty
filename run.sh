@@ -36,14 +36,15 @@ echo "[1/3] Checking for updates..."
 REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 LOCAL_VERSION_FILE="./sources/version.txt"
 
+# Read local version (strip CR and spaces)
 if [ -f "$LOCAL_VERSION_FILE" ]; then
-    LOCAL_VER=$(tr -d '\r\n' < "$LOCAL_VERSION_FILE")
+    LOCAL_VER=$(tr -d '\r\n' < "$LOCAL_VERSION_FILE" | xargs)
 else
     LOCAL_VER="0.0.0"
 fi
 
-REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL" | tr -d '\r\n')
-
+# Download remote version
+REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL" | tr -d '\r\n' | xargs)
 if [ -z "$REMOTE_VER" ]; then
     REMOTE_VER="$LOCAL_VER"
 fi
@@ -69,6 +70,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "sources/version.txt"
         "run.cmd"
         "run.sh"
+        "uninstall_linkcatty.cmd"
         "uninstall_linkcatty.sh"
     )
     FILE_URLS=(
@@ -82,6 +84,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
     )
     TOTAL=${#FILE_PATHS[@]}
@@ -105,8 +108,19 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     [ -f "/tmp/settings_backup.json" ] && cp "/tmp/settings_backup.json" "./sources/settings.json"
     [ -f "/tmp/download_history_backup.json" ] && cp "/tmp/download_history_backup.json" "./sources/download_history.json"
     [ -f "/tmp/PortablePython_backup.zip" ] && cp "/tmp/PortablePython_backup.zip" "./sources/PortablePython.zip"
-
     rm -f "/tmp/settings_backup.json" "/tmp/download_history_backup.json" "/tmp/PortablePython_backup.zip"
+
+    # ----- Write the new version file cleanly -----
+    # Use printf to avoid extra newline and spaces
+    printf "%s" "$REMOTE_VER" > "./sources/version.txt"
+
+    # Verify
+    VERIFY_VER=$(tr -d '\r\n' < "./sources/version.txt" | xargs)
+    if [ "$VERIFY_VER" != "$REMOTE_VER" ]; then
+        # Force delete and retry with echo
+        rm -f "./sources/version.txt"
+        echo "$REMOTE_VER" > "./sources/version.txt"
+    fi
 
     echo "[3/3] Update completed. Restarting..."
     sleep 2
@@ -115,7 +129,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
 fi
 
 # -------------------------------------------------------------------
-# Normal launch
+# Normal launch (unchanged)
 # -------------------------------------------------------------------
 echo "[2/3] Extracting Portable Python..."
 PORTABLE_DIR="./sources/portable_python"
