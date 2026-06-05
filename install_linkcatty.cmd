@@ -200,9 +200,7 @@ if not exist "%SHORTCUT_PATH%" (
 
 cls
 echo.
-echo ============================================================
-echo               INSTALLATION SUCCESSFUL!
-echo ============================================================
+echo    INSTALLATION SUCCESSFUL!
 echo.
 echo    LinkCatty has been installed to:
 echo    %INSTALL_DIR%

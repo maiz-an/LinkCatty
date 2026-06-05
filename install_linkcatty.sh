@@ -140,15 +140,14 @@ EOF
 
 clear
 echo ""
-echo "============================================================"
-echo "               INSTALLATION SUCCESSFUL!"
-echo "============================================================"
+echo "    INSTALLATION SUCCESSFUL!"
 echo ""
 echo "    LinkCatty has been installed to:"
 echo "    $INSTALL_DIR"
 echo ""
 echo "    Run 'linkcatty' from any terminal to start."
 echo ""
-echo "    Note: Close and reopen your terminal if 'linkcatty' is not recognized."
+echo "    Note:"
+echo "      Close and reopen your terminal if 'linkcatty' is not recognized."
 echo ""
 read -p "Press Enter to exit..."

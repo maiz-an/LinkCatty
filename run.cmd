@@ -3,6 +3,23 @@ chcp 65001 >nul 2>&1
 title LinkCatty
 setlocal enabledelayedexpansion
 
+:: -------------------------------------------------------------------
+:: Check for uninstall flag
+:: -------------------------------------------------------------------
+echo %* | findstr /i "\-\-uninstall" >nul
+if not errorlevel 1 (
+    :: Try to find uninstaller
+    if exist "%~dp0uninstall_linkcatty.cmd" (
+        start "" "%~dp0uninstall_linkcatty.cmd"
+    ) else if exist "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" (
+        start "" "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd"
+    ) else (
+        echo Uninstaller not found. Please download uninstall_linkcatty.cmd from GitHub.
+        pause
+    )
+    exit /b 0
+)
+
 mode con cols=62 lines=30 >nul 2>&1
 
 :: -------------------------------------------------------------------
@@ -60,7 +77,8 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[7]=sources\version.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
     set "FILE_LIST[8]=run.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
     set "FILE_LIST[9]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
-    set "TOTAL_FILES=10"
+    set "FILE_LIST[10]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
+    set "TOTAL_FILES=11"
 
     :: Backup user data
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
@@ -68,7 +86,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     if exist "%~dp0sources\PortablePython.zip" copy "%~dp0sources\PortablePython.zip" "%TEMP%\PortablePython_backup.zip" >nul
 
     set "DOWNLOADED=0"
-    for /l %%i in (0,1,9) do (
+    for /l %%i in (0,1,10) do (
         set /a DOWNLOADED+=1
         set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL_FILES!
         <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL_FILES!] !PERCENT!%%  "

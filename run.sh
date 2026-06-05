@@ -1,6 +1,21 @@
 #!/bin/bash
 # LinkCatty Launcher for Linux/macOS
 
+# -------------------------------------------------------------------
+# Check for uninstall flag
+# -------------------------------------------------------------------
+if [[ "$*" == *"--uninstall"* ]]; then
+    if [ -f "./uninstall_linkcatty.sh" ]; then
+        ./uninstall_linkcatty.sh
+    elif [ -f "$HOME/.local/share/LinkCatty/uninstall_linkcatty.sh" ]; then
+        "$HOME/.local/share/LinkCatty/uninstall_linkcatty.sh"
+    else
+        echo "Uninstaller not found. Please download uninstall_linkcatty.sh from GitHub."
+        read -p "Press Enter to exit..."
+    fi
+    exit 0
+fi
+
 echo ""
 echo "============================================================"
 echo "                    LinkCatty Launcher"
@@ -45,6 +60,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "sources/version.txt"
         "run.cmd"
         "run.sh"
+        "uninstall_linkcatty.sh"
     )
     FILE_URLS=(
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
@@ -57,6 +73,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
     )
     TOTAL=${#FILE_PATHS[@]}
 
