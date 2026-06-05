@@ -17,9 +17,10 @@ sys.path.insert(0, str(BASE_DIR))
 
 # Import our modules
 from utils.config import load_config, save_config
-from utils.ui import clear_screen, print_banner, print_main_menu
+from utils.ui import clear_screen, print_banner, print_main_menu, set_console_width
 from downloaders import youtube_downloader, spotify_downloader
-
+# Set console width to 62 characters for optimal display
+set_console_width(62)
 # ----------------------------------------------------------------------
 # Settings Menu
 # ----------------------------------------------------------------------

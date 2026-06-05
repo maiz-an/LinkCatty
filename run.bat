@@ -2,7 +2,7 @@
 chcp 65001 >nul
 title LinkCatty Downloader
 setlocal enabledelayedexpansion
-
+mode con cols=62 lines=30
 :: -------------------------------------------------------------------
 :: Update Check (reads version.txt from sources folder)
 :: -------------------------------------------------------------------

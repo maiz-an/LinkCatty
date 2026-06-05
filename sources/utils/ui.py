@@ -21,6 +21,24 @@ WHITE = "\033[97m"
 _spinner_running = False
 _spinner_text = ""
 
+def set_console_width(width=62):
+    """Attempt to set console width to the specified number of characters."""
+    system = platform.system()
+    try:
+        if system == "Windows":
+            # Use mode command to set columns and rows (rows optional)
+            os.system(f"mode con cols={width} lines=30")
+        else:
+            # For macOS/Linux: use stty or escape sequence
+            # Option 1: stty (works on most Unix terminals)
+            os.system(f"stty cols {width}")
+            # Option 2: fallback escape sequence for xterm-like terminals
+            # (works in many terminal emulators)
+            sys.stdout.write(f"\x1b[8;30;{width}t")
+            sys.stdout.flush()
+    except Exception:
+        pass  # Silently fail if unsupported
+
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -40,11 +58,11 @@ def print_main_menu():
     print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
     print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
     print(f"")
-    print(f"{CYAN}{BOLD}1.{RESET}{BOLD} 📹YouTube Downloader")
-    print(f"{CYAN}{BOLD}2.{RESET}{BOLD} 🎵Spotify Downloader")
-    print(f"{CYAN}{BOLD}3.{RESET}{BOLD} 🛠️Other (coming soon)")
-    print(f"{CYAN}{BOLD}4.{RESET}{BOLD} ⚙️Settings")
-    print(f"{CYAN}{BOLD}5.{RESET}{BOLD} ❌Exit")
+    print(f"{CYAN}{BOLD}1.{RESET}{BOLD} YouTube Downloader 📹")
+    print(f"{CYAN}{BOLD}2.{RESET}{BOLD} Spotify Downloader 🎵")
+    print(f"{CYAN}{BOLD}3.{RESET}{BOLD} Other (coming soon) 🛠️")
+    print(f"{CYAN}{BOLD}4.{RESET}{BOLD} Settings ⚙️")
+    print(f"{CYAN}{BOLD}5.{RESET}{BOLD} Exit ❌")
     print(f"")
     print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
 
