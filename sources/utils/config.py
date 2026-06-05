@@ -13,7 +13,8 @@ DEFAULT_DOWNLOAD_DIR = str(ROOT_DIR / "downloads")
 DEFAULT_CONFIG = {
     "download_dir": DEFAULT_DOWNLOAD_DIR,
     "youtube": {
-        "audio_quality": "320k",
+        "audio_quality": "320k",   # for MP3 only
+        "video_quality": "best",   # new: best, 2160p, 1440p, 1080p, 720p, 480p, 360p
         "auto_retry": True,
         "max_retries": 3,
         "quiet_mode": True

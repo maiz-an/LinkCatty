@@ -4,3 +4,4 @@ sources/PortablePython
 prepare_portable.py
 downloads
 sources/download_history.json
+settings.json

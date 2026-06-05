@@ -58,12 +58,25 @@ def settings_menu(config):
         elif choice == "2":
             yt = config['youtube']
             print(f"\n▶️  YouTube Settings")
-            print(f"Audio quality [{yt['audio_quality']}]: 1. 320k  2. 192k")
+            print(f"Audio quality (for MP3) [{yt['audio_quality']}]: 1. 320k  2. 192k")
             q = input("Choice (1/2): ")
             if q == '1':
                 yt['audio_quality'] = '320k'
             elif q == '2':
                 yt['audio_quality'] = '192k'
+            
+            print(f"\nVideo quality (for video downloads):")
+            print(f"Current: {yt['video_quality']}")
+            print("1. Best (highest MP4)")
+            print("2. 1080p")
+            print("3. 720p")
+            print("4. 480p")
+            print("5. 360p")
+            vq = input("Select (1-5): ").strip()
+            quality_map = {"1": "best", "2": "1080p", "3": "720p", "4": "480p", "5": "360p"}
+            if vq in quality_map:
+                yt['video_quality'] = quality_map[vq]
+            
             yt['auto_retry'] = input("Auto-retry failed downloads? (y/n): ").lower() == 'y'
             yt['quiet_mode'] = input("Quiet mode (less output)? (y/n): ").lower() == 'y'
             save_config(config)
