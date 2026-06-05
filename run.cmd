@@ -14,8 +14,16 @@ if not errorlevel 1 (
     ) else if exist "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" (
         start "" "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd"
     ) else (
-        echo Uninstaller not found. Please download uninstall_linkcatty.cmd from GitHub.
-        pause
+        echo Uninstaller not found. Downloading now...
+        set "UNINSTALL_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
+        set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
+        powershell -command "& {Invoke-WebRequest -Uri '%UNINSTALL_URL%' -OutFile '%UNINSTALL_FILE%'}" >nul 2>&1
+        if exist "%UNINSTALL_FILE%" (
+            start "" "%UNINSTALL_FILE%"
+        ) else (
+            echo Failed to download uninstaller. Please download manually from GitHub.
+            pause
+        )
     )
     exit /b 0
 )
