@@ -31,92 +31,119 @@ echo.
 set "FAILED=0"
 
 :: Download run.cmd
-echo [1/14] Downloading run.cmd...
+echo [1/16] Downloading run.cmd...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd' -OutFile '%TEMP_DIR%\run.cmd'}" >nul 2>&1
 if not exist "%TEMP_DIR%\run.cmd" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\run.cmd" echo   OK
 
-:: Download LinkCatty.py
-echo [2/14] Downloading sources\LinkCatty.py...
+:: Create sources structure
 mkdir "%TEMP_DIR%\sources" 2>nul
+mkdir "%TEMP_DIR%\sources\downloaders" 2>nul
+mkdir "%TEMP_DIR%\sources\utils" 2>nul
+
+:: Download main LinkCatty.py
+echo [2/16] Downloading sources\LinkCatty.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py' -OutFile '%TEMP_DIR%\sources\LinkCatty.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\LinkCatty.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\LinkCatty.py" echo   OK
 
 :: Download spotify_downloader.py
-echo [3/14] Downloading sources\downloaders\spotify_downloader.py...
-mkdir "%TEMP_DIR%\sources\downloaders" 2>nul
+echo [3/16] Downloading sources\downloaders\spotify_downloader.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py' -OutFile '%TEMP_DIR%\sources\downloaders\spotify_downloader.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\downloaders\spotify_downloader.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\downloaders\spotify_downloader.py" echo   OK
 
 :: Download youtube_downloader.py
-echo [4/14] Downloading sources\downloaders\youtube_downloader.py...
+echo [4/16] Downloading sources\downloaders\youtube_downloader.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py' -OutFile '%TEMP_DIR%\sources\downloaders\youtube_downloader.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\downloaders\youtube_downloader.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\downloaders\youtube_downloader.py" echo   OK
 
-:: Download __init__.py for downloaders
-echo [5/14] Downloading sources\downloaders\__init__.py...
+:: Download downloaders/__init__.py
+echo [5/16] Downloading sources\downloaders\__init__.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/__init__.py' -OutFile '%TEMP_DIR%\sources\downloaders\__init__.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\downloaders\__init__.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\downloaders\__init__.py" echo   OK
 
 :: Download config.py
-echo [6/14] Downloading sources\utils\config.py...
-mkdir "%TEMP_DIR%\sources\utils" 2>nul
+echo [6/16] Downloading sources\utils\config.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py' -OutFile '%TEMP_DIR%\sources\utils\config.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\utils\config.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\utils\config.py" echo   OK
 
 :: Download ffmpeg.py
-echo [7/14] Downloading sources\utils\ffmpeg.py...
+echo [7/16] Downloading sources\utils\ffmpeg.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py' -OutFile '%TEMP_DIR%\sources\utils\ffmpeg.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\utils\ffmpeg.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\utils\ffmpeg.py" echo   OK
 
 :: Download logger.py
-echo [8/14] Downloading sources\utils\logger.py...
+echo [8/16] Downloading sources\utils\logger.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py' -OutFile '%TEMP_DIR%\sources\utils\logger.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\utils\logger.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\utils\logger.py" echo   OK
 
 :: Download ui.py
-echo [9/14] Downloading sources\utils\ui.py...
+echo [9/16] Downloading sources\utils\ui.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py' -OutFile '%TEMP_DIR%\sources\utils\ui.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\utils\ui.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\utils\ui.py" echo   OK
 
-:: Download __init__.py for utils
-echo [10/14] Downloading sources\utils\__init__.py...
+:: Download utils/__init__.py
+echo [10/16] Downloading sources\utils\__init__.py...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/__init__.py' -OutFile '%TEMP_DIR%\sources\utils\__init__.py'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\utils\__init__.py" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\utils\__init__.py" echo   OK
 
 :: Download requirements.txt
-echo [11/14] Downloading sources\requirements.txt...
+echo [11/16] Downloading sources\requirements.txt...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt' -OutFile '%TEMP_DIR%\sources\requirements.txt'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\requirements.txt" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\requirements.txt" echo   OK
 
 :: Download version.txt
-echo [12/14] Downloading sources\version.txt...
+echo [12/16] Downloading sources\version.txt...
 powershell -command "& {Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt' -OutFile '%TEMP_DIR%\sources\version.txt'}" >nul 2>&1
 if not exist "%TEMP_DIR%\sources\version.txt" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\version.txt" echo   OK
 
-:: Download PortablePython.zip (optional)
-echo [13/14] Downloading sources\PortablePython.zip...
+:: Download PortablePython.zip
+echo [13/16] Downloading sources\PortablePython.zip...
 powershell -command "& {Invoke-WebRequest -Uri 'https://github.com/maiz-an/LinkCatty/releases/download/v1.0/PortablePython.zip' -OutFile '%TEMP_DIR%\sources\PortablePython.zip'}" >nul 2>&1
-if not exist "%TEMP_DIR%\sources\PortablePython.zip" echo   WARNING: PortablePython.zip not available (network or missing release)
+if not exist "%TEMP_DIR%\sources\PortablePython.zip" set "FAILED=1" & echo   FAILED
 if exist "%TEMP_DIR%\sources\PortablePython.zip" echo   OK
 
-:: Download ffmpeg.exe
-echo [14/14] Downloading sources\FFmpeg\windows\ffmpeg\bin\ffmpeg.exe...
+:: Download FFmpeg from a reliable source
+echo [14/16] Downloading sources\FFmpeg\windows\ffmpeg\bin\ffmpeg.exe...
 mkdir "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin" 2>nul
-powershell -command "& {Invoke-WebRequest -Uri 'https://github.com/maiz-an/LinkCatty/releases/download/v1.0/ffmpeg.exe' -OutFile '%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin\ffmpeg.exe'}" >nul 2>&1
-if not exist "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin\ffmpeg.exe" echo   WARNING: ffmpeg.exe not available
-if exist "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin\ffmpeg.exe" echo   OK
+powershell -command "& {Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile '%TEMP_DIR%\ffmpeg.zip'}" >nul 2>&1
+if errorlevel 1 (
+    echo   FAILED
+    set "FAILED=1"
+) else (
+    :: Extract the ffmpeg.exe from the zip
+    powershell -command "& {Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%TEMP_DIR%\ffmpeg.zip', '%TEMP_DIR%\ffmpeg_extract')}" >nul 2>&1
+    if exist "%TEMP_DIR%\ffmpeg_extract\bin\ffmpeg.exe" (
+        copy "%TEMP_DIR%\ffmpeg_extract\bin\ffmpeg.exe" "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin\ffmpeg.exe" >nul
+        echo   OK
+    ) else (
+        echo   FAILED
+        set "FAILED=1"
+    )
+    :: Cleanup
+    rmdir /s /q "%TEMP_DIR%\ffmpeg_extract" 2>nul
+    del "%TEMP_DIR%\ffmpeg.zip" 2>nul
+)
+
+:: Download sources\__init__.py (main sources package init)
+echo [15/16] Downloading sources\__init__.py...
+type nul > "%TEMP_DIR%\sources\__init__.py" 2>nul
+if exist "%TEMP_DIR%\sources\__init__.py" echo   OK
+
+:: Download root-level __init__.py (optional, for package structure)
+echo [16/16] Downloading __init__.py (root-level)...
+type nul > "%TEMP_DIR%\__init__.py" 2>nul
+if exist "%TEMP_DIR%\__init__.py" echo   OK
 
 if "%FAILED%"=="1" (
     echo.
