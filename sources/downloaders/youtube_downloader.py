@@ -2,38 +2,13 @@ import sys
 import time
 from pathlib import Path
 from yt_dlp import YoutubeDL
-import browser_cookie3
 
 from utils.ui import (
     clear_screen, print_banner, print_error, print_success, print_info, print_warning,
-    start_spinner, stop_spinner, progress_bar
+    start_spinner, stop_spinner
 )
 from utils.logger import log_download
 from utils.ffmpeg import get_ffmpeg_path
-
-# ----------------------------------------------------------------------
-# Cookie handling – bypass YouTube bot detection
-# ----------------------------------------------------------------------
-def get_youtube_cookies():
-    """Extract YouTube cookies from the default browser (Chrome, Firefox, Edge, etc.)."""
-    browsers = [
-        ('chrome', browser_cookie3.chrome),
-        ('firefox', browser_cookie3.firefox),
-        ('opera', browser_cookie3.opera),
-        ('edge', browser_cookie3.edge),
-        ('brave', browser_cookie3.brave),
-        ('chromium', browser_cookie3.chromium)
-    ]
-    for name, func in browsers:
-        try:
-            cj = func(domain_name='youtube.com')
-            if cj:
-                print_info(f"Loaded YouTube cookies from {name}")
-                return cj
-        except Exception:
-            continue
-    print_warning("Could not load cookies from any browser. You may encounter download errors.")
-    return None
 
 # ----------------------------------------------------------------------
 # Formatting helpers
@@ -41,9 +16,12 @@ def get_youtube_cookies():
 def format_duration(seconds):
     if not seconds:
         return "Unknown"
-    m, s = divmod(seconds, 60)
-    h, m = divmod(m, 60)
-    return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    else:
+        return f"{minutes:02d}:{seconds:02d}"
 
 def format_view_count(count):
     if not count:
@@ -55,32 +33,23 @@ def format_view_count(count):
     return str(count)
 
 # ----------------------------------------------------------------------
-# Fetch video/playlist info (with cookies)
+# Fetch video/playlist info (exactly like original working code)
 # ----------------------------------------------------------------------
 def get_url_info(url):
-    """Fetch metadata for a single video or playlist using cookies."""
     try:
-        cookies = get_youtube_cookies()
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'cookiejar': cookies
-        }
+        ydl_opts = {'quiet': True, 'no_warnings': True}
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if 'entries' in info:
-                # Playlist
                 entries = [e for e in info['entries'] if e]
                 return {
                     'type': 'playlist',
                     'title': info.get('title', 'Unknown Playlist'),
                     'uploader': info.get('uploader', 'Unknown'),
                     'video_count': len(entries),
-                    'videos': [(e.get('title', f'Video {i+1}'), e.get('duration', 0)) for i, e in enumerate(entries[:5])],
-                    'total_videos': len(entries)
+                    'videos': [e.get('title', f'Video {i+1}') for i, e in enumerate(entries[:5])]
                 }
             else:
-                # Single video
                 return {
                     'type': 'video',
                     'title': info.get('title', 'Unknown'),
@@ -94,11 +63,11 @@ def get_url_info(url):
         return None
 
 # ----------------------------------------------------------------------
-# Display formatted information
+# Display info
 # ----------------------------------------------------------------------
 def display_video_info(info):
     print("\n" + "─" * 61)
-    print(f"📹 VIDEO INFORMATION")
+    print("📹 VIDEO INFORMATION")
     print("─" * 61)
     print(f"📺 Title: {info['title']}")
     print(f"👤 Channel: {info['uploader']}")
@@ -110,184 +79,182 @@ def display_video_info(info):
 
 def display_playlist_info(info):
     print("\n" + "─" * 61)
-    print(f"📂 PLAYLIST INFORMATION")
+    print("📂 PLAYLIST INFORMATION")
     print("─" * 61)
     print(f"📺 Playlist: {info['title']}")
     print(f"👤 Channel: {info['uploader']}")
     print(f"🎬 Total Videos: {info['video_count']}")
     print("\n📹 First few videos:")
-    for i, (title, duration) in enumerate(info['videos'], 1):
-        dur_str = format_duration(duration)
-        print(f"  {i}. {title[:50]} ({dur_str})")
+    for i, title in enumerate(info['videos'], 1):
+        print(f"  {i}. {title[:50]}")
     print("─" * 61)
 
 # ----------------------------------------------------------------------
-# Progress hook (supports single video and playlist context)
+# Progress hook (exactly like original)
 # ----------------------------------------------------------------------
-def progress_hook(d, video_index=None, total_videos=None, video_title=""):
+download_completed_shown = False
+
+def progress_hook(d):
+    global download_completed_shown
     if d['status'] == 'downloading':
-        total = d.get('total_bytes', d.get('total_bytes_estimate', 1))
-        downloaded = d.get('downloaded_bytes', 0)
-        speed = d.get('speed', 0)
-        speed_str = f"{speed/1024/1024:.1f} MB/s" if speed else "N/A"
-        eta = d.get('eta', 0)
-        eta_str = f"{eta}s" if eta else "N/A"
-
-        # Build prefix with playlist progress if available
-        if video_index is not None and total_videos:
-            prefix = f"[{video_index}/{total_videos}] {video_title[:30]}... "
+        if '_percent_str' in d:
+            percent = d['_percent_str'].strip()
+            speed = d.get('_speed_str', 'N/A').strip()
+            eta = d.get('_eta_str', 'N/A').strip()
+            total_size = d.get('_total_bytes_str', 'N/A').strip()
+            downloaded = d.get('_downloaded_bytes_str', 'N/A').strip()
+            sys.stdout.write(f"\r⏳ Downloading... {percent} | {downloaded}/{total_size} | Speed: {speed} | ETA: {eta}")
+            sys.stdout.flush()
+    elif d['status'] == 'finished' and not download_completed_shown:
+        download_completed_shown = True
+        filepath = d.get('filepath', 'Unknown')
+        time.sleep(0.5)
+        if filepath and filepath != 'Unknown' and Path(filepath).exists():
+            filepath = str(Path(filepath).absolute())
+            filename = Path(filepath).name
+            try:
+                size_mb = Path(filepath).stat().st_size / (1024 * 1024)
+            except:
+                size_mb = 0
+            print("\n" + "═" * 55)
+            print("            ✅ DOWNLOAD COMPLETED")
+            print("═" * 55)
+            print(f"📄 File name: {filename}")
+            print(f"📂 Location: {Path(filepath).parent}")
+            print(f"💾 File size: {size_mb:.2f} MB")
+            print(f"⏰ Completed at: {time.strftime('%H:%M:%S')}")
+            print("═" * 55 + "\n")
         else:
-            prefix = "Downloading "
-
-        progress_bar(downloaded, total, prefix=prefix, suffix=f"{speed_str} | ETA: {eta_str}")
-    elif d['status'] == 'finished':
-        print("\n" + " " * 80, end="\r")
-        print_success("Download finished, now converting...")
+            print("\n✅ Download Completed Successfully\n")
 
 # ----------------------------------------------------------------------
-# Download a single video (with optional playlist context)
+# Download with retry using cookies if needed
 # ----------------------------------------------------------------------
-def download_video(url, mode, config, playlist_context=None):
+def download_with_retry(url, mode, config, use_cookies=False):
+    global download_completed_shown
+    download_completed_shown = False
+
     download_dir = Path(config['download_dir'])
     yt_cfg = config['youtube']
     quiet = yt_cfg.get('quiet_mode', True)
-    cookies = get_youtube_cookies()
 
-    opts = {
-        'outtmpl': str(download_dir / '%(title)s.%(ext)s'),
-        'quiet': quiet,
-        'no_warnings': quiet,
-        'noprogress': True,          # use our own hook
-    }
-    if cookies:
-        opts['cookiejar'] = cookies
+    # Base options
+    if mode == "1":
+        ydl_opts = {
+            'outtmpl': str(download_dir / '%(title)s.%(ext)s'),
+            'format': 'bestvideo+bestaudio/best',
+            'merge_output_format': 'mp4',
+            'progress_hooks': [progress_hook],
+            'quiet': quiet,
+            'no_warnings': quiet,
+            'noprogress': False,
+        }
+    else:  # mode 2
+        ydl_opts = {
+            'outtmpl': str(download_dir / '%(title)s.%(ext)s'),
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': yt_cfg['audio_quality'].replace('k', ''),
+            }],
+            'progress_hooks': [progress_hook],
+            'quiet': quiet,
+            'no_warnings': quiet,
+            'noprogress': False,
+        }
 
-    # Add custom progress hook with playlist context
-    if playlist_context:
-        opts['progress_hooks'] = [lambda d: progress_hook(
-            d,
-            video_index=playlist_context['index'],
-            total_videos=playlist_context['total'],
-            video_title=playlist_context['title']
-        )]
-    else:
-        opts['progress_hooks'] = [lambda d: progress_hook(d)]
+    if use_cookies:
+        # Try to use browser cookies
+        for browser in ['chrome', 'firefox', 'edge', 'brave']:
+            try:
+                ydl_opts['cookiesfrombrowser'] = (browser,)
+                # Quick test
+                with YoutubeDL({'quiet': True, 'cookiesfrombrowser': (browser,)}) as test:
+                    test.extract_info("https://youtube.com", download=False)
+                print_info(f"Using cookies from {browser}")
+                break
+            except:
+                continue
 
     ffmpeg = get_ffmpeg_path()
     if ffmpeg:
-        opts['ffmpeg_location'] = ffmpeg
-
-    if mode == "1":          # Video best quality
-        opts['format'] = 'bestvideo+bestaudio/best'
-        opts['merge_output_format'] = 'mp4'
-    elif mode == "2":        # MP3 audio
-        opts['format'] = 'bestaudio/best'
-        opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': yt_cfg['audio_quality'].replace('k', ''),
-        }]
+        ydl_opts['ffmpeg_location'] = ffmpeg
 
     try:
-        with YoutubeDL(opts) as ydl:
+        with YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
         return True
     except Exception as e:
-        print_error(f"Download failed: {e}")
-        return False
+        error_msg = str(e)
+        if "Sign in to confirm" in error_msg and not use_cookies:
+            print_warning("YouTube requires authentication. Retrying with browser cookies...")
+            print_info("Please close your browser (Chrome/Firefox/Edge) and press Enter.")
+            input("Press Enter to continue...")
+            return download_with_retry(url, mode, config, use_cookies=True)
+        else:
+            print_error(f"Download failed: {error_msg}")
+            return False
 
 # ----------------------------------------------------------------------
-# Download entire playlist with per‑video progress
+# Download playlist one by one
 # ----------------------------------------------------------------------
 def download_playlist(url, mode, config):
-    yt_cfg = config['youtube']
-    quiet = yt_cfg.get('quiet_mode', True)
-    cookies = get_youtube_cookies()
-
-    print_info("Fetching playlist videos...")
+    print_info("Fetching playlist information...")
     try:
-        # Use extract_flat to get video URLs without downloading
-        with YoutubeDL({'quiet': True, 'extract_flat': True, 'no_warnings': True, 'cookiejar': cookies}) as ydl:
+        # Get playlist entries with flat extraction
+        with YoutubeDL({'quiet': True, 'extract_flat': True, 'no_warnings': True}) as ydl:
             info = ydl.extract_info(url, download=False)
             if 'entries' not in info:
                 print_error("Not a valid playlist URL")
-                return False
+                return
+            entries = [e for e in info['entries'] if e]
+            total = len(entries)
+            print_success(f"Found {total} videos in playlist")
 
-        entries = [e for e in info['entries'] if e]
-        total = len(entries)
-        print_success(f"Found {total} videos in playlist")
-
-        confirm = input(f"\n🚀 Download all {total} videos as {'MP3' if mode=='2' else 'video'}? (y/n): ").lower()
+        confirm = input(f"\n🚀 Download all {total} videos? (y/n): ").lower()
         if confirm != 'y':
-            return False
+            return
 
-        # Create a dedicated folder for the playlist
         playlist_title = info.get('title', 'Playlist').replace('/', '_').replace('\\', '_')
         playlist_folder = Path(config['download_dir']) / playlist_title
         playlist_folder.mkdir(exist_ok=True)
 
-        success_count = 0
-        fail_count = 0
-
+        success = 0
         for i, entry in enumerate(entries, 1):
             video_url = f"https://www.youtube.com/watch?v={entry['id']}"
             video_title = entry.get('title', f'Video {i}')
-
             print(f"\n{'─' * 61}")
             print_info(f"[{i}/{total}] Downloading: {video_title[:50]}")
 
-            # Prepare opts for this specific video (output inside playlist folder)
-            opts = {
-                'outtmpl': str(playlist_folder / '%(title)s.%(ext)s'),
-                'quiet': quiet,
-                'no_warnings': quiet,
-                'noprogress': True,
-                'progress_hooks': [lambda d, idx=i, ttl=total, title=video_title: progress_hook(d, idx, ttl, title)],
-            }
-            if cookies:
-                opts['cookiejar'] = cookies
+            # Create a temporary config for single video
+            temp_config = config.copy()
+            temp_config['download_dir'] = str(playlist_folder)
 
-            ffmpeg = get_ffmpeg_path()
-            if ffmpeg:
-                opts['ffmpeg_location'] = ffmpeg
-
-            if mode == "1":
-                opts['format'] = 'bestvideo+bestaudio/best'
-                opts['merge_output_format'] = 'mp4'
-            elif mode == "2":
-                opts['format'] = 'bestaudio/best'
-                opts['postprocessors'] = [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': yt_cfg['audio_quality'].replace('k', ''),
-                }]
-
-            try:
-                with YoutubeDL(opts) as ydl:
-                    ydl.download([video_url])
-                success_count += 1
+            # Use the same retry logic for each video
+            success_flag = download_with_retry(video_url, mode, config, use_cookies=False)
+            if success_flag:
+                success += 1
                 print_success(f"[{i}/{total}] Completed: {video_title[:50]}")
                 log_download("YouTube", video_title, mode=mode, status="Success")
-            except Exception as e:
-                fail_count += 1
-                print_error(f"[{i}/{total}] Failed: {video_title[:50]} - {str(e)[:50]}")
-                log_download("YouTube", video_title, mode=mode, status="Failed", error=str(e))
-
-            time.sleep(0.5)   # be gentle
+            else:
+                print_error(f"[{i}/{total}] Failed: {video_title[:50]}")
+                log_download("YouTube", video_title, mode=mode, status="Failed")
+            time.sleep(0.5)
 
         print("\n" + "═" * 61)
-        print_success(f"Playlist download complete: {success_count} successful, {fail_count} failed")
+        print_success(f"Playlist download complete: {success}/{total} successful")
         print("═" * 61)
-        return True
 
     except Exception as e:
-        print_error(f"Failed to process playlist: {e}")
-        return False
+        print_error(f"Playlist error: {e}")
 
 # ----------------------------------------------------------------------
-# Main download dispatcher (detects video vs playlist)
+# Main download dispatcher
 # ----------------------------------------------------------------------
 def download_content(url, mode, config):
+    # First, get info (this may take a moment but should respond)
+    print_info("Fetching video information...")
     info = get_url_info(url)
     if not info:
         return
@@ -302,22 +269,12 @@ def download_content(url, mode, config):
             print_info("Download cancelled")
             return
 
-        try:
-            start_spinner("Preparing download")
-            success = download_video(url, mode, config)
-            stop_spinner()
-            if success:
-                print_success("Download completed!")
-                log_download("YouTube", info['title'], mode=mode, status="Success")
-        except Exception as e:
-            stop_spinner()
-            print_error(f"Download failed: {e}", "Check your internet connection and try again")
-            if config['youtube'].get('auto_retry', True):
-                retry = input("Retry? (y/n): ").lower()
-                if retry == 'y':
-                    download_content(url, mode, config)
-            else:
-                log_download("YouTube", info['title'], mode=mode, status="Failed", error=str(e))
+        success = download_with_retry(url, mode, config)
+        if success:
+            print_success("Download completed!")
+            log_download("YouTube", info['title'], mode=mode, status="Success")
+        else:
+            log_download("YouTube", info['title'], mode=mode, status="Failed")
 
 # ----------------------------------------------------------------------
 # Entry point from main menu
@@ -342,21 +299,18 @@ def run(config):
         input("Press Enter...")
         return
 
-    # Manual format selection (mode 3)
     if mode == "3":
         url = input("\n🎯 YouTube URL: ").strip()
         if not url:
             return
         print_info("Fetching available formats...")
-        cookies = get_youtube_cookies()
         try:
-            with YoutubeDL({'quiet': True, 'listformats': True, 'cookiejar': cookies}) as ydl:
+            with YoutubeDL({'quiet': True, 'listformats': True}) as ydl:
                 ydl.extract_info(url, download=False)
             fmt = input("🎯 Enter format ID: ").strip()
             if not fmt:
                 print_error("No format ID provided")
                 return
-
             download_dir = config['download_dir']
             yt_cfg = config['youtube']
             quiet = yt_cfg.get('quiet_mode', True)
@@ -365,15 +319,12 @@ def run(config):
                 'format': fmt,
                 'quiet': quiet,
                 'no_warnings': quiet,
-                'noprogress': True,
-                'progress_hooks': [lambda d: progress_hook(d)],
+                'noprogress': False,
+                'progress_hooks': [progress_hook],
             }
-            if cookies:
-                opts['cookiejar'] = cookies
             ffmpeg = get_ffmpeg_path()
             if ffmpeg:
                 opts['ffmpeg_location'] = ffmpeg
-
             start_spinner("Downloading with custom format")
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
@@ -386,7 +337,6 @@ def run(config):
         input("\nPress Enter to continue...")
         return
 
-    # Normal modes 1 & 2 (allow multiple downloads)
     while True:
         url = input("\n🎯 YouTube URL (video or playlist): ").strip()
         if not url:

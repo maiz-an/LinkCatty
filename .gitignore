@@ -2,3 +2,5 @@ sources/utils/__pycache__
 sources/downloaders/__pycache__
 sources/PortablePython
 prepare_portable.py
+downloads
+sources/download_history.json
