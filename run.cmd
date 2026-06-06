@@ -163,7 +163,7 @@ echo [3/3] Installing packages...
 "%PYTHON_EXE%" -m pip --version >nul 2>&1
 if not errorlevel 1 (
     "%PYTHON_EXE%" -m pip install --quiet --upgrade pip
-    "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy spotdl
+    "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy spotdl deno
 )
 
 echo.

@@ -1,3 +1,4 @@
 yt-dlp>=2024.11.18
 spotipy>=2.24.0
 spotdl>=4.5.0
+deno>=2.8.2

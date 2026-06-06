@@ -13,6 +13,8 @@ from utils.ui import (
     print_warning,
     BOLD,
     CYAN,
+    GREEN,
+    YELLOW,
     RESET,
     clear_screen,
     confirm,
@@ -26,288 +28,409 @@ from utils.ui import (
     stop_spinner,
 )
 
-# spotdl library – only used for metadata (optional)
+# ─────────────────────────────────────────────────────────────────────
+#  spotdl imports  (metadata only – no official Spotify API ever)
+# ─────────────────────────────────────────────────────────────────────
 try:
     from spotdl.utils.spotify import SpotifyClient
+    from spotdl.types.playlist import Playlist as SpotPlaylist
+    from spotdl.types.album   import Album    as SpotAlbum
+    _SPOTDL_AVAILABLE = True
 except ImportError:
     SpotifyClient = None
+    SpotPlaylist  = None
+    SpotAlbum     = None
+    _SPOTDL_AVAILABLE = False
 
 
-# ----------------------------------------------------------------------
-# Spotify Downloader – purely spotdl‑based
-# ----------------------------------------------------------------------
-class SpotifyDownloader:
-    def __init__(self, config):
-        self.config = config
-        self.spotify_config = config["spotify"]
-        self.download_dir = Path(config["download_dir"])
-        self.download_dir.mkdir(parents=True, exist_ok=True)
+# ─────────────────────────────────────────────────────────────────────
+#  Deno – install once per process, never again
+# ─────────────────────────────────────────────────────────────────────
+_DENO_READY = False
 
-        # spotdl CLI must be installed
-        self.spotdl_path = shutil.which("spotdl")
-        if not self.spotdl_path:
-            raise RuntimeError(
-                "spotdl is not installed or not in PATH. "
-                "Please run: pip install spotdl"
-            )
 
-        # Credentials (needed by spotdl CLI to resolve {playlist}/{album})
-        self.client_id = self.spotify_config.get("client_id", "").strip()
-        self.client_secret = self.spotify_config.get("client_secret", "").strip()
-
-        # Initialise spotdl's Spotify client for metadata (if credentials exist)
-        self.spotdl_client_available = False
-        if SpotifyClient is not None and self.client_id and self.client_secret:
-            try:
-                SpotifyClient.init(self.client_id, self.client_secret)
-                self.spotdl_client_available = True
-            except Exception:
-                pass
-
-        # Ensure Deno is installed (spotdl needs it for some YouTube tracks)
-        self._ensure_deno()
-
-    # ------------------------------------------------------------------
-    def _ensure_deno(self):
-        """Install Deno silently if it's not already present."""
+def _ensure_deno(spotdl_path: str) -> None:
+    global _DENO_READY
+    if _DENO_READY:
+        return
+    if shutil.which("deno"):
+        _DENO_READY = True
+        return
+    print_info("Deno not found – installing automatically (one-time setup)…")
+    try:
+        proc = subprocess.Popen(
+            [spotdl_path, "--download-deno"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        proc.communicate(input="y\n", timeout=90)
         if shutil.which("deno"):
-            return
-        print_info("Deno not found – installing automatically (required for Spotify downloads).")
+            print_success("Deno installed successfully.")
+        else:
+            print_warning("Deno may not have installed correctly. Some downloads could fail.")
+    except Exception as exc:
+        print_warning(f"Could not install Deno automatically: {exc}")
+    _DENO_READY = True  # never retry regardless of outcome
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  SpotifyClient – FREE MODE ONLY  (SpotipyFree / no credentials)
+#
+#  WHY: the official Spotify Web API (client_id + client_secret) now
+#  requires a premium developer subscription even for read-only calls.
+#  spotdl ships a free, unofficial client (SpotipyFree) that works for
+#  every user with zero credentials.  We always use that for metadata.
+#  The user's credentials (if any) are passed to the spotdl *CLI* only
+#  so spotdl can resolve playlist/album track lists during download.
+# ─────────────────────────────────────────────────────────────────────
+_FREE_CLIENT = None   # module-level singleton
+
+
+def _get_free_client():
+    """
+    Return a SpotipyFree client, initialised once per process.
+    Always uses free/unofficial mode – credentials are intentionally
+    never passed here.
+    """
+    global _FREE_CLIENT
+    if _FREE_CLIENT is not None:
+        return _FREE_CLIENT
+
+    if SpotifyClient is None:
+        return None
+
+    # Reset class singleton so we can (re-)init cleanly
+    if SpotifyClient._instance is not None:
+        # Already initialised elsewhere – just use it
         try:
-            # Run spotdl's own Deno installer, answer 'y' automatically
-            proc = subprocess.Popen(
-                [self.spotdl_path, "--download-deno"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                text=True,
-            )
-            proc.communicate(input="y\n", timeout=60)
-        except Exception:
-            print_warning("Could not install Deno automatically. Some downloads may fail.")
-
-    # ------------------------------------------------------------------
-    def _get_playlist_meta(self, url):
-        """Return (name, track_count). track_count is None if unknown."""
-        if self.spotdl_client_available:
-            try:
-                playlist = SpotifyClient.get_playlist(url)
-                return playlist.name, playlist.total
-            except Exception:
-                pass
-
-        name = self._get_oembed_title(url)
-        if name:
-            return name, None
-        return None, None
-
-    def _get_album_meta(self, url):
-        """Return (name, track_count) for albums."""
-        if self.spotdl_client_available:
-            try:
-                album = SpotifyClient.get_album(url)
-                return album.name, album.total_tracks
-            except Exception:
-                pass
-
-        name = self._get_oembed_title(url)
-        if name:
-            name = re.sub(r"\s*[-–|].*$", "", name).strip()
-        if name:
-            return name, None
-        return None, None
-
-    @staticmethod
-    def _get_oembed_title(url):
-        """Fetch title from Spotify oEmbed (no auth needed)."""
-        try:
-            embed_url = "https://open.spotify.com/oembed?url=" + urllib.parse.quote(url, safe="")
-            req = urllib.request.Request(
-                embed_url,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                return data.get("title", "").strip()
-        except Exception:
-            return None
-
-    # ------------------------------------------------------------------
-    def _clean_name(self, name):
-        """Remove characters invalid in folder names."""
-        return re.sub(r'[\\/*?:"<>|]', "", name) if name else None
-
-    def _find_output_folder(self, item_type, expected_name):
-        """
-        After download, find the folder spotdl actually created.
-        Uses the expected name (from metadata) if it exists, otherwise falls back to
-        the most recently modified subdirectory in download_dir.
-        """
-        base = str(self.download_dir)
-        if not expected_name:
-            return base
-
-        safe_name = self._clean_name(expected_name)
-        if not safe_name:
-            return base
-
-        candidate = os.path.join(base, safe_name)
-        if os.path.isdir(candidate):
-            return candidate
-
-        # Fallback: find newest subdirectory (spotdl might have cleaned the name differently)
-        try:
-            subdirs = [os.path.join(base, d) for d in os.listdir(base)
-                       if os.path.isdir(os.path.join(base, d))]
-            if subdirs:
-                return max(subdirs, key=lambda d: os.path.getmtime(d))
+            _FREE_CLIENT = SpotifyClient()
+            return _FREE_CLIENT
         except Exception:
             pass
 
-        return base
+    try:
+        _FREE_CLIENT = SpotifyClient.init(
+            client_id="",
+            client_secret="",
+            use_official_api=False,   # ← always free / SpotipyFree
+        )
+    except Exception:
+        try:
+            _FREE_CLIENT = SpotifyClient()
+        except Exception:
+            _FREE_CLIENT = None
 
-    def _count_audio_files(self, folder):
-        """Recursively count audio files in folder."""
-        count = 0
-        for root, _, files in os.walk(folder):
-            for f in files:
-                if f.lower().endswith(('.mp3', '.m4a', '.opus', '.ogg', '.flac', '.wav')):
-                    count += 1
-        return count
+    return _FREE_CLIENT
 
-    # ------------------------------------------------------------------
-    def _spotdl_download(self, url, item_type, metadata_name=None):
+
+# ─────────────────────────────────────────────────────────────────────
+#  Display helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _display_track_info(info: dict) -> None:
+    print("\n" + "─" * 61)
+    print("🎵 TRACK INFORMATION")
+    print("─" * 61)
+    print(f"🎶 Title  : {info.get('title') or 'Unknown'}")
+    print(f"🎤 Artist : {info.get('artist') or 'Unknown'}")
+    if info.get("album"):
+        print(f"💿 Album  : {info['album']}")
+    print("─" * 61)
+
+
+def _display_album_info(info: dict) -> None:
+    print("\n" + "─" * 61)
+    print("💿 ALBUM INFORMATION")
+    print("─" * 61)
+    print(f"💿 Album       : {info.get('name') or 'Unknown'}")
+    if info.get("artist"):
+        print(f"🎤 Artist      : {info['artist']}")
+    tc = info.get("track_count")
+    print(f"🎬 Total Tracks: {tc if tc is not None else 'Unknown'}")
+    print("─" * 61)
+
+
+def _display_playlist_info(info: dict) -> None:
+    print("\n" + "─" * 61)
+    print("📂 PLAYLIST INFORMATION")
+    print("─" * 61)
+    print(f"📋 Playlist    : {info.get('name') or 'Unknown'}")
+    if info.get("author"):
+        print(f"👤 Author      : {info['author']}")
+    tc = info.get("track_count")
+    print(f"🎬 Total Tracks: {tc if tc is not None else 'Unknown'}")
+    print("─" * 61)
+
+
+def _display_download_result(item_type: str, name: str | None,
+                              out_folder: str, downloaded: int) -> None:
+    print("\n" + "─" * 61)
+    print("✅ DOWNLOAD COMPLETE")
+    print("─" * 61)
+    if name:
+        label = {"track": "🎶 Track", "album": "💿 Album", "playlist": "📋 Playlist"}[item_type]
+        print(f"{label}    : {name}")
+    print(f"📁 Saved to  : {out_folder}")
+    print(f"🎵 Files     : {downloaded} audio file(s)")
+    print("─" * 61)
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  SpotifyDownloader
+# ─────────────────────────────────────────────────────────────────────
+
+class SpotifyDownloader:
+    def __init__(self, config):
+        self.config        = config
+        self.spotify_config = config["spotify"]
+        self.download_dir  = Path(config["download_dir"])
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+
+        self.spotdl_path = shutil.which("spotdl")
+        if not self.spotdl_path:
+            raise RuntimeError(
+                "spotdl is not installed or not in PATH.\n"
+                "  → Run: pip install spotdl"
+            )
+
+        # Credentials are only ever forwarded to the spotdl CLI, never used
+        # to initialise the metadata client (which is always free mode).
+        self.client_id     = self.spotify_config.get("client_id", "").strip()
+        self.client_secret = self.spotify_config.get("client_secret", "").strip()
+
+        # Free client for metadata (no credentials, no premium required)
+        self._client = _get_free_client()
+
+        # Ensure Deno is available (one-time install)
+        _ensure_deno(self.spotdl_path)
+
+    # ── metadata ──────────────────────────────────────────────────────
+
+    def _get_playlist_meta(self, url: str) -> dict:
+        meta = {"name": None, "author": None, "track_count": None}
+        if SpotPlaylist is not None and self._client is not None:
+            try:
+                pl_meta, songs    = SpotPlaylist.get_metadata(url)
+                meta["name"]        = pl_meta.get("name")
+                meta["author"]      = pl_meta.get("author_name")
+                meta["track_count"] = len(songs)
+                return meta
+            except Exception:
+                pass
+        meta["name"] = _oembed_title(url)   # last-resort fallback
+        return meta
+
+    def _get_album_meta(self, url: str) -> dict:
+        meta = {"name": None, "artist": None, "track_count": None}
+        if SpotAlbum is not None and self._client is not None:
+            try:
+                al_meta, songs    = SpotAlbum.get_metadata(url)
+                meta["name"]        = al_meta.get("name")
+                meta["artist"]      = al_meta.get("artist")
+                meta["track_count"] = len(songs)
+                return meta
+            except Exception:
+                pass
+        title = _oembed_title(url)
+        if title:
+            meta["name"] = re.sub(r"\s*[-–|].*$", "", title).strip()
+        return meta
+
+    def _get_track_meta(self, url: str) -> dict:
+        meta = {"title": None, "artist": None, "album": None}
+        if self._client is not None:
+            try:
+                track_id = url.split("/track/")[-1].split("?")[0]
+                tr = self._client.track(track_id)
+                meta["title"]  = tr.get("name")
+                artists = tr.get("artists", [])
+                if artists:
+                    a = artists[0]
+                    meta["artist"] = a.get("name") if isinstance(a, dict) else str(a)
+                alb = tr.get("album")
+                if isinstance(alb, dict):
+                    meta["album"] = alb.get("name")
+                return meta
+            except Exception:
+                pass
+        title = _oembed_title(url)
+        if title:
+            parts = title.split(" - ", 1)
+            meta["title"]  = parts[0].strip()
+            meta["artist"] = parts[1].strip() if len(parts) > 1 else None
+        return meta
+
+    # ── core download ─────────────────────────────────────────────────
+
+    def _spotdl_download(self, url: str, item_type: str,
+                          meta_name: str | None = None) -> tuple:
         """
-        Run spotdl with credentials, clean output (no Deno prompt).
-        Returns (success_bool, output_folder_path).
-        """
-        quality = self.spotify_config.get("audio_quality", "320k").replace("k", "")
-        output_dir = str(self.download_dir)
+        Run spotdl CLI and return (success, out_folder, file_count).
 
-        # Output template
-        if item_type == "album":
-            template = os.path.join(output_dir, "{album}", "{title} - {artists}.{ext}")
-        elif item_type == "playlist":
-            template = os.path.join(output_dir, "{playlist}", "{title} - {artists}.{ext}")
+        Metadata is fetched via the free client above.
+        The CLI handles its own Spotify token internally (also free).
+        Credentials are passed to the CLI only if the user explicitly
+        configured them (optional speed/reliability improvement).
+        """
+        quality  = self.spotify_config.get("audio_quality", "320k").replace("k", "")
+        base_dir = str(self.download_dir)
+
+        if item_type in ("album", "playlist"):
+            folder_name = _safe_name(meta_name) if meta_name else f"{{{item_type}}}"
+            out_dir  = os.path.join(base_dir, folder_name)
+            template = os.path.join(out_dir, "{title} - {artists}.{ext}")
         else:
-            template = os.path.join(output_dir, "{title} - {artists}.{ext}")
+            out_dir  = base_dir
+            template = os.path.join(out_dir, "{title} - {artists}.{ext}")
 
-        cmd = [
-            "spotdl",
-            url,
-            "--output", template,
-            "--bitrate", f"{quality}k",
-            # "--no-progress" removed – not supported by all spotdl versions
-        ]
-
-        # Pass credentials so spotdl can resolve {playlist}/{album}
+        cmd = ["spotdl", url, "--output", template, "--bitrate", f"{quality}k"]
+        # Only pass credentials to CLI if user configured them
         if self.client_id and self.client_secret:
             cmd += ["--client-id", self.client_id, "--client-secret", self.client_secret]
 
-        print_info(f"Output folder: {output_dir}")
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              universal_newlines=True, bufsize=1) as proc:
+        print_info(f"Output folder : {out_dir}")
+        print()
+
+        with subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            universal_newlines=True, bufsize=1,
+        ) as proc:
             for line in proc.stdout:
                 print(line, end="")
             proc.wait()
 
-        # Find where spotdl actually saved the files
-        out_folder = self._find_output_folder(item_type, metadata_name)
+        actual = _find_output_folder(self.download_dir, meta_name)
+        count  = _count_audio_files(actual)
+        return count > 0, actual, count
 
-        # Success = at least one audio file created (recursively)
-        file_count = self._count_audio_files(out_folder)
-        return file_count > 0, out_folder
+    # ── public entry-points ───────────────────────────────────────────
 
-    # ------------------------------------------------------------------
-    def download_single_track(self, url):
-        if "/track/" not in url:
-            print_error("Invalid Spotify track URL")
-            return
-
+    def download_single_track(self, url: str) -> None:
+        meta = self._get_track_meta(url)
+        _display_track_info(meta)
         if not confirm("Proceed with download?"):
             return
-
-        success, out_folder = self._spotdl_download(url, "track")
+        success, out_folder, n = self._spotdl_download(url, "track")
         if success:
-            print_success("Track downloaded successfully")
-            log_download("Spotify", url, artist="spotdl", mode="Single", status="Success")
+            _display_download_result("track", meta.get("title"), out_folder, n)
+            log_download("Spotify", url, artist=meta.get("artist", "spotdl"),
+                         mode="Single", status="Success")
         else:
-            print_error("Download failed – no audio file was created")
+            print_error("Download failed – no audio file was created.")
             log_download("Spotify", url, artist="spotdl", mode="Single", status="Failed")
 
-    # ------------------------------------------------------------------
-    def download_album(self, url):
-        if "/album/" not in url:
-            print_error("Invalid Spotify album URL")
-            return
-
-        name, track_count = self._get_album_meta(url)
-        if name:
-            track_str = f"{track_count} track(s)" if track_count is not None else "unknown tracks"
-            print_info(f"Album: {name} – {track_str}")
-        else:
-            print_info("Album metadata unavailable")
-
+    def download_album(self, url: str) -> None:
+        meta = self._get_album_meta(url)
+        _display_album_info(meta)
         if not confirm("Download all tracks?"):
             return
-
-        success, out_folder = self._spotdl_download(url, "album", metadata_name=name)
+        success, out_folder, n = self._spotdl_download(url, "album", meta_name=meta["name"])
         if success:
-            print_success(f"Album downloaded successfully → {out_folder}")
+            _display_download_result("album", meta["name"], out_folder, n)
             log_download("Spotify", url, artist="spotdl", mode="Album", status="Success")
         else:
-            print_error("Album download failed – no tracks were saved")
+            print_error("Album download failed – no tracks were saved.")
             log_download("Spotify", url, artist="spotdl", mode="Album", status="Failed")
 
-    # ------------------------------------------------------------------
-    def download_playlist(self, url):
-        if "/playlist/" not in url:
-            print_error("Invalid Spotify playlist URL")
-            return
-
-        name, track_count = self._get_playlist_meta(url)
-        if name:
-            track_str = f"{track_count} track(s)" if track_count is not None else "unknown tracks"
-            print_info(f"Playlist: {name} – {track_str}")
-        else:
-            print_info("Playlist metadata unavailable")
-
+    def download_playlist(self, url: str) -> None:
+        meta = self._get_playlist_meta(url)
+        _display_playlist_info(meta)
         if not confirm("Download all tracks?"):
             return
-
-        success, out_folder = self._spotdl_download(url, "playlist", metadata_name=name)
+        success, out_folder, n = self._spotdl_download(url, "playlist", meta_name=meta["name"])
         if success:
-            print_success(f"Playlist downloaded successfully → {out_folder}")
+            _display_download_result("playlist", meta["name"], out_folder, n)
             log_download("Spotify", url, artist="spotdl", mode="Playlist", status="Success")
         else:
-            print_error("Playlist download failed – no tracks were saved")
+            print_error("Playlist download failed – no tracks were saved.")
             log_download("Spotify", url, artist="spotdl", mode="Playlist", status="Failed")
 
 
-# ----------------------------------------------------------------------
-# Helpers (unchanged)
-# ----------------------------------------------------------------------
-def extract_spotify_id(url, item_type):
-    match = re.search(rf"{item_type}/([a-zA-Z0-9]+)", url)
-    return match.group(1) if match else None
+# ─────────────────────────────────────────────────────────────────────
+#  Standalone helpers
+# ─────────────────────────────────────────────────────────────────────
 
-
-def is_spotify_url(url, item_type):
-    return bool(re.match(r"^https?://", url)) and f"spotify.com/{item_type}/" in url
-
-
-# ----------------------------------------------------------------------
-# Workflow runners (unchanged)
-# ----------------------------------------------------------------------
-def create_downloader(config):
+def _oembed_title(url: str) -> str | None:
+    """Last-resort title via Spotify oEmbed (no credentials needed)."""
     try:
-        return SpotifyDownloader(config)
-    except Exception as error:
-        print_error(str(error))
+        api = "https://open.spotify.com/oembed?url=" + urllib.parse.quote(url, safe="")
+        req = urllib.request.Request(
+            api,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode()).get("title", "").strip() or None
+    except Exception:
         return None
 
 
-def run_spotify_workflow(config, choice):
+def _safe_name(name: str | None) -> str | None:
+    if not name:
+        return None
+    return re.sub(r'[\\/*?:"<>|]', "", name).strip() or None
+
+
+def _find_output_folder(download_dir: Path, meta_name: str | None) -> str:
+    base = str(download_dir)
+    safe = _safe_name(meta_name)
+    if safe:
+        candidate = os.path.join(base, safe)
+        if os.path.isdir(candidate):
+            return candidate
+    try:
+        subdirs = [
+            os.path.join(base, d)
+            for d in os.listdir(base)
+            if os.path.isdir(os.path.join(base, d))
+        ]
+        if subdirs:
+            return max(subdirs, key=os.path.getmtime)
+    except Exception:
+        pass
+    return base
+
+
+def _count_audio_files(folder: str) -> int:
+    exts = {".mp3", ".m4a", ".opus", ".ogg", ".flac", ".wav"}
+    count = 0
+    for root, _, files in os.walk(folder):
+        for f in files:
+            if Path(f).suffix.lower() in exts:
+                count += 1
+    return count
+
+
+def extract_spotify_id(url: str, item_type: str) -> str | None:
+    m = re.search(rf"{item_type}/([a-zA-Z0-9]+)", url)
+    return m.group(1) if m else None
+
+
+def is_spotify_url(url: str, item_type: str) -> bool:
+    return bool(re.match(r"^https?://", url)) and f"spotify.com/{item_type}/" in url
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Workflow runners
+# ─────────────────────────────────────────────────────────────────────
+
+def create_downloader(config):
+    try:
+        return SpotifyDownloader(config)
+    except Exception as err:
+        print_error(str(err))
+        return None
+
+
+def run_spotify_workflow(config, choice: str) -> None:
     downloader = create_downloader(config)
     if downloader is None:
         pause()
@@ -319,7 +442,10 @@ def run_spotify_workflow(config, choice):
         if not url:
             return
         if not is_spotify_url(url, item_type):
-            print_error(f"Invalid Spotify {item_type} URL", f"Use a link containing spotify.com/{item_type}/.")
+            print_error(
+                f"Invalid Spotify {item_type} URL",
+                f"Use a link containing spotify.com/{item_type}/.",
+            )
             continue
 
         if choice == "1":
@@ -333,7 +459,7 @@ def run_spotify_workflow(config, choice):
             return
 
 
-def run(config):
+def run(config) -> None:
     while True:
         clear_screen()
         print_banner()
@@ -351,7 +477,10 @@ def run(config):
             return
         try:
             run_spotify_workflow(config, choice)
-        except Exception as error:
+        except Exception as err:
             stop_spinner()
-            print_error(f"Spotify workflow error: {error}", "You remain in the Spotify Downloader.")
+            print_error(
+                f"Spotify workflow error: {err}",
+                "You remain in the Spotify Downloader.",
+            )
             pause()
