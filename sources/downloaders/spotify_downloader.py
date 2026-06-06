@@ -64,6 +64,28 @@ class SpotifyDownloader:
             except Exception:
                 pass
 
+        # Ensure Deno is installed (spotdl needs it for some YouTube tracks)
+        self._ensure_deno()
+
+    # ------------------------------------------------------------------
+    def _ensure_deno(self):
+        """Install Deno silently if it's not already present."""
+        if shutil.which("deno"):
+            return
+        print_info("Deno not found – installing automatically (required for Spotify downloads).")
+        try:
+            # Run spotdl's own Deno installer, answer 'y' automatically
+            proc = subprocess.Popen(
+                [self.spotdl_path, "--download-deno"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            proc.communicate(input="y\n", timeout=60)
+        except Exception:
+            print_warning("Could not install Deno automatically. Some downloads may fail.")
+
     # ------------------------------------------------------------------
     def _get_playlist_meta(self, url):
         """Return (name, track_count). track_count is None if unknown."""
@@ -145,20 +167,18 @@ class SpotifyDownloader:
         return base
 
     def _count_audio_files(self, folder):
-        """Count audio files in a folder (non-recursive, quick)."""
+        """Recursively count audio files in folder."""
         count = 0
-        try:
-            for f in os.listdir(folder):
+        for root, _, files in os.walk(folder):
+            for f in files:
                 if f.lower().endswith(('.mp3', '.m4a', '.opus', '.ogg', '.flac', '.wav')):
                     count += 1
-        except FileNotFoundError:
-            pass
         return count
 
     # ------------------------------------------------------------------
     def _spotdl_download(self, url, item_type, metadata_name=None):
         """
-        Run spotdl with credentials, clean output and auto-download Deno.
+        Run spotdl with credentials, clean output (no Deno prompt).
         Returns (success_bool, output_folder_path).
         """
         quality = self.spotify_config.get("audio_quality", "320k").replace("k", "")
@@ -178,7 +198,7 @@ class SpotifyDownloader:
             "--output", template,
             "--bitrate", f"{quality}k",
             "--no-progress",
-            "--download-deno",
+            # "--download-deno"  ← removed – Deno already installed by _ensure_deno()
         ]
 
         # Pass credentials so spotdl can resolve {playlist}/{album}
@@ -195,7 +215,7 @@ class SpotifyDownloader:
         # Find where spotdl actually saved the files
         out_folder = self._find_output_folder(item_type, metadata_name)
 
-        # Success = at least one audio file created
+        # Success = at least one audio file created (recursively)
         file_count = self._count_audio_files(out_folder)
         return file_count > 0, out_folder
 
