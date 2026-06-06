@@ -4,7 +4,7 @@ title LinkCatty
 setlocal enabledelayedexpansion
 
 :: -------------------------------------------------------------------
-:: Check for uninstall flag (unchanged)
+:: Check for uninstall flag
 :: -------------------------------------------------------------------
 echo %* | findstr /i "\-\-uninstall" >nul
 if not errorlevel 1 (
@@ -13,14 +13,14 @@ if not errorlevel 1 (
     ) else if exist "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" (
         start "" "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd"
     ) else (
-        echo Uninstaller not found. Downloading now...
+        echo Uninstaller not found. Downloading...
         set "UNINSTALL_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
         powershell -command "& {Invoke-WebRequest -Uri '!UNINSTALL_URL!' -OutFile '!UNINSTALL_FILE!'}" >nul 2>&1
         if exist "!UNINSTALL_FILE!" (
             start "" "!UNINSTALL_FILE!"
         ) else (
-            echo Failed to download uninstaller. Please download manually from GitHub.
+            echo Failed to download uninstaller.
             pause
         )
     )
@@ -35,33 +35,24 @@ echo                    LinkCatty Launcher
 echo ============================================================
 echo.
 
-:: -------------------------------------------------------------------
-:: Check for updates (corrected)
-:: -------------------------------------------------------------------
 echo [1/3] Checking for updates...
 set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
 
-:: Read local version, trim CR/LF and spaces
 set "LOCAL_VER=0.0.0"
 if exist "%LOCAL_VERSION_FILE%" (
     for /f "usebackq delims=" %%i in ("%LOCAL_VERSION_FILE%") do set "LOCAL_VER=%%i"
-    for /f "delims=" %%a in ("!LOCAL_VER!") do set "LOCAL_VER=%%a"
 )
 
-:: Download remote version
 set "TEMP_FILE=%TEMP%\remote_version.txt"
 powershell -command "& {Invoke-WebRequest -Uri '%REMOTE_VERSION_URL%' -OutFile '%TEMP_FILE%'}" >nul 2>&1
 set "REMOTE_VER=%LOCAL_VER%"
 if exist "%TEMP_FILE%" (
-    for /f "usebackq delims=" %%A in ("%TEMP_FILE%") do (
-        for /f "delims=" %%B in ("%%A") do set "REMOTE_VER=%%B"
-    )
+    for /f "usebackq delims=" %%A in ("%TEMP_FILE%") do set "REMOTE_VER=%%A"
     del "%TEMP_FILE%"
 )
 
-:: Compare versions (case‑insensitive, trimmed)
-if /i not "%LOCAL_VER%"=="%REMOTE_VER%" (
+if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     echo.
     echo ============================================================
     echo                     UPDATE AVAILABLE!
@@ -85,12 +76,10 @@ if /i not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[11]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
     set "TOTAL_FILES=12"
 
-    :: Backup user data
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
     if exist "%~dp0sources\PortablePython.zip" copy "%~dp0sources\PortablePython.zip" "%TEMP%\PortablePython_backup.zip" >nul
 
-    :: Download all files
     set "DOWNLOADED=0"
     for /l %%i in (0,1,11) do (
         set /a DOWNLOADED+=1
@@ -100,27 +89,12 @@ if /i not "%LOCAL_VER%"=="%REMOTE_VER%" (
         echo.
     )
 
-    :: Restore user data
     if exist "%TEMP%\settings_backup.json" copy "%TEMP%\settings_backup.json" "%~dp0sources\settings.json" >nul 2>&1
     if exist "%TEMP%\download_history_backup.json" copy "%TEMP%\download_history_backup.json" "%~dp0sources\download_history.json" >nul 2>&1
     if exist "%TEMP%\PortablePython_backup.zip" copy "%TEMP%\PortablePython_backup.zip" "%~dp0sources\PortablePython.zip" >nul 2>&1
     del "%TEMP%\settings_backup.json" "%TEMP%\download_history_backup.json" "%TEMP%\PortablePython_backup.zip" 2>nul
 
-    :: ----- Write the new version file correctly -----
-    :: Use PowerShell to write UTF‑8 without BOM and without extra spaces/newlines
     powershell -command "& { [System.IO.File]::WriteAllText('%~dp0sources\version.txt', '%REMOTE_VER%', [System.Text.UTF8Encoding]::new($false)) }" >nul 2>&1
-
-    :: Verify it was written correctly
-    set "VERIFY_VER=0.0.0"
-    if exist "%~dp0sources\version.txt" (
-        for /f "usebackq delims=" %%v in ("%~dp0sources\version.txt") do set "VERIFY_VER=%%v"
-        for /f "delims=" %%a in ("!VERIFY_VER!") do set "VERIFY_VER=%%a"
-    )
-    if not "!VERIFY_VER!"=="%REMOTE_VER%" (
-        :: If still wrong, force delete and try simple echo
-        del "%~dp0sources\version.txt" 2>nul
-        (echo %REMOTE_VER%) > "%~dp0sources\version.txt"
-    )
 
     echo.
     echo [3/3] Update completed. Restarting...
@@ -129,9 +103,6 @@ if /i not "%LOCAL_VER%"=="%REMOTE_VER%" (
     exit /b 0
 )
 
-:: -------------------------------------------------------------------
-:: Normal launch (unchanged)
-:: -------------------------------------------------------------------
 echo [2/3] Extracting Portable Python...
 set "PORTABLE_DIR=%~dp0sources\portable_python"
 if not exist "%PORTABLE_DIR%\python.exe" (
