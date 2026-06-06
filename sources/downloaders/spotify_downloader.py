@@ -197,8 +197,7 @@ class SpotifyDownloader:
             url,
             "--output", template,
             "--bitrate", f"{quality}k",
-            "--no-progress",
-            # "--download-deno"  ← removed – Deno already installed by _ensure_deno()
+            # "--no-progress" removed – not supported by all spotdl versions
         ]
 
         # Pass credentials so spotdl can resolve {playlist}/{album}
