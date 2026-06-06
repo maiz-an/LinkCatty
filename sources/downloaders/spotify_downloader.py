@@ -9,12 +9,19 @@ from pathlib import Path
 
 import yt_dlp
 
+# Existing Spotify API library
 try:
     import spotipy
     from spotipy.oauth2 import SpotifyClientCredentials
 except ImportError:
     spotipy = None
     SpotifyClientCredentials = None
+
+# New: spotdl library for an additional fallback
+try:
+    from spotdl.utils.spotify import SpotifyClient as SpotdlClient
+except ImportError:
+    SpotdlClient = None
 
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
@@ -282,7 +289,53 @@ def _parse_tracks_from_embed_data(data, item_type):
         return []
 
 
-def fetch_public_playlist_tracks(playlist_url):
+# ----------------------------------------------------------------------
+# NEW: fallback using spotdl library
+# ----------------------------------------------------------------------
+def _init_spotdl_client(client_id, client_secret):
+    """Initialise spotdl's Spotify client if not already done."""
+    if SpotdlClient is None:
+        return False
+    if not client_id or not client_secret:
+        return False
+    try:
+        # spotdl's init can be called multiple times, it's safe
+        SpotdlClient.init(client_id, client_secret)
+        return True
+    except Exception:
+        return False
+
+
+def _fetch_tracks_via_spotdl(url, item_type, client_id, client_secret):
+    """Use spotdl to retrieve track list from a Spotify URL."""
+    if not _init_spotdl_client(client_id, client_secret):
+        return None
+
+    try:
+        if item_type == "playlist":
+            songs = SpotdlClient.get_playlist_songs(url)
+        elif item_type == "album":
+            songs = SpotdlClient.get_album_songs(url)
+        else:
+            return None
+
+        tracks = []
+        for song in songs:
+            artists = [song.artist]  # spotdl's Song object has .artist (str)
+            # In newer versions song.artists might be a list; handle both.
+            if hasattr(song, 'artists') and isinstance(song.artists, list):
+                artists = [a.name if hasattr(a, 'name') else str(a) for a in song.artists]
+            tracks.append({
+                "name": song.name,
+                "artists": artists if artists else ["Unknown Artist"],
+            })
+        return tracks
+    except Exception:
+        return None
+# ----------------------------------------------------------------------
+
+
+def fetch_public_playlist_tracks(playlist_url, client_id=None, client_secret=None):
     playlist_id = extract_spotify_id(playlist_url, "playlist")
     if not playlist_id:
         raise ValueError("Invalid playlist URL")
@@ -329,11 +382,18 @@ def fetch_public_playlist_tracks(playlist_url):
     except Exception:
         pass
 
-    print_warning("Spotify scraping failed → using fallback empty playlist mode")
+    # 5th: NEW – spotdl library (if available and credentials exist)
+    if client_id and client_secret:
+        spotdl_tracks = _fetch_tracks_via_spotdl(playlist_url, "playlist", client_id, client_secret)
+        if spotdl_tracks:
+            print_info("Retrieved tracks via spotdl.")
+            return spotdl_tracks
+
+    print_warning("All scraping methods failed → returning empty list")
     return []
 
 
-def fetch_public_album_tracks(album_url):
+def fetch_public_album_tracks(album_url, client_id=None, client_secret=None):
     album_id = extract_spotify_id(album_url, "album")
     if not album_id:
         raise ValueError("Invalid album URL")
@@ -380,7 +440,14 @@ def fetch_public_album_tracks(album_url):
     except Exception:
         pass
 
-    print_warning("Album scraping failed → fallback mode enabled")
+    # 5th: spotdl fallback
+    if client_id and client_secret:
+        spotdl_tracks = _fetch_tracks_via_spotdl(album_url, "album", client_id, client_secret)
+        if spotdl_tracks:
+            print_info("Retrieved tracks via spotdl.")
+            return spotdl_tracks
+
+    print_warning("All scraping methods failed → returning empty list")
     return []
 
 
@@ -399,6 +466,9 @@ class SpotifyDownloader:
 
         client_id = self.spotify_config.get("client_id", "").strip()
         client_secret = self.spotify_config.get("client_secret", "").strip()
+        self.client_id = client_id
+        self.client_secret = client_secret
+
         if not client_id or not client_secret or spotipy is None:
             return
 
@@ -539,7 +609,8 @@ class SpotifyDownloader:
             else:
                 print_warning(f"API failed ({error}). Falling back to public web scraping.")
             try:
-                tracks = fetch_public_playlist_tracks(url)
+                # Pass client_id/secret so the spotdl fallback can be used inside
+                tracks = fetch_public_playlist_tracks(url, self.client_id, self.client_secret)
                 if not tracks:
                     raise Exception("No tracks extracted")
                 print_success(f"Found {len(tracks)} tracks via public scraping.")
@@ -591,7 +662,7 @@ class SpotifyDownloader:
             else:
                 print_warning(f"API failed ({error}). Falling back to public web scraping.")
             try:
-                tracks = fetch_public_album_tracks(url)
+                tracks = fetch_public_album_tracks(url, self.client_id, self.client_secret)
                 if not tracks:
                     raise Exception("No tracks extracted")
                 print_success(f"Found {len(tracks)} tracks via public scraping.")

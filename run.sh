@@ -209,7 +209,7 @@ echo "[3/3] Installing packages..."
 $PYTHON_EXE -m pip --version >/dev/null 2>&1
 if [ $? -eq 0 ]; then
     $PYTHON_EXE -m pip install --quiet --upgrade pip
-    $PYTHON_EXE -m pip install --quiet --upgrade yt-dlp spotipy
+    $PYTHON_EXE -m pip install --quiet --upgrade yt-dlp spotipy spotdl
 fi
 
 # Launch
