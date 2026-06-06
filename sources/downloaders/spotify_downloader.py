@@ -151,29 +151,48 @@ def fetch_public_track_info(url):
     }
 
 
+def extract_initial_state_json(html):
+    """Extract the window.__INITIAL_STATE__ JSON object from Spotify embed HTML."""
+    start_marker = 'window.__INITIAL_STATE__ = '
+    start = html.find(start_marker)
+    if start == -1:
+        return None
+    start += len(start_marker)
+    brace_count = 0
+    i = start
+    while i < len(html):
+        ch = html[i]
+        if ch == '{':
+            brace_count += 1
+        elif ch == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                break
+        i += 1
+    if brace_count != 0:
+        return None
+    json_str = html[start:i+1]
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        return None
+
+
 def fetch_public_playlist_tracks(playlist_url):
     """Extract track list from a public Spotify playlist using the embed page."""
     playlist_id = extract_spotify_id(playlist_url, "playlist")
     if not playlist_id:
         raise ValueError("Invalid playlist URL")
-    
+
     embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
     embed_html = fetch_url(embed_url)
-    
-    # Find the JSON data inside the script tag with id "initial-state"
-    # Spotify embed uses a <script> tag containing window.__INITIAL_STATE__
-    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.+?});', embed_html, re.DOTALL)
-    if not match:
-        raise ValueError("Could not find playlist data. The playlist may be private or deleted.")
-    
-    try:
-        data = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        raise ValueError("Invalid JSON in playlist data")
-    
-    # Navigate to tracks – structure may vary, try common paths
+
+    data = extract_initial_state_json(embed_html)
+    if not data:
+        raise ValueError("Could not extract playlist data. The playlist may be private or deleted.")
+
     tracks = []
-    # Path 1: data['context']['tracks']['items']
+    # Common JSON paths
     if 'context' in data and 'tracks' in data['context']:
         items = data['context']['tracks'].get('items', [])
         for item in items:
@@ -183,7 +202,6 @@ def fetch_public_playlist_tracks(playlist_url):
                     'name': track.get('name', 'Unknown'),
                     'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
                 })
-    # Path 2: data['initialPayload']['tracks'] – older format
     elif 'initialPayload' in data and 'tracks' in data['initialPayload']:
         items = data['initialPayload']['tracks'].get('items', [])
         for item in items:
@@ -193,9 +211,17 @@ def fetch_public_playlist_tracks(playlist_url):
                     'name': track.get('name', 'Unknown'),
                     'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
                 })
+    elif 'data' in data and 'playlist' in data['data']:
+        items = data['data']['playlist'].get('tracks', {}).get('items', [])
+        for item in items:
+            track = item.get('track', {})
+            if track:
+                tracks.append({
+                    'name': track.get('name', 'Unknown'),
+                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                })
     else:
-        # Fallback: search for any "track" objects recursively
-        # This is a last resort; better to keep simple paths
+        # Recursive fallback
         def find_tracks(obj, depth=0):
             if depth > 5:
                 return
@@ -208,15 +234,15 @@ def fetch_public_playlist_tracks(playlist_url):
                     })
                 else:
                     for v in obj.values():
-                        find_tracks(v, depth+1)
+                        find_tracks(v, depth + 1)
             elif isinstance(obj, list):
                 for item in obj:
-                    find_tracks(item, depth+1)
+                    find_tracks(item, depth + 1)
+
         find_tracks(data)
-    
+
     if not tracks:
         raise ValueError("No tracks found. The playlist may be empty or private.")
-    
     return tracks
 
 
@@ -225,21 +251,15 @@ def fetch_public_album_tracks(album_url):
     album_id = extract_spotify_id(album_url, "album")
     if not album_id:
         raise ValueError("Invalid album URL")
-    
+
     embed_url = f"https://open.spotify.com/embed/album/{album_id}"
     embed_html = fetch_url(embed_url)
-    
-    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.+?});', embed_html, re.DOTALL)
-    if not match:
-        raise ValueError("Could not find album data. The album may be private or deleted.")
-    
-    try:
-        data = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        raise ValueError("Invalid JSON in album data")
-    
+
+    data = extract_initial_state_json(embed_html)
+    if not data:
+        raise ValueError("Could not extract album data. The album may be private or deleted.")
+
     tracks = []
-    # Common path: data['context']['tracks']['items']
     if 'context' in data and 'tracks' in data['context']:
         items = data['context']['tracks'].get('items', [])
         for item in items:
@@ -258,8 +278,16 @@ def fetch_public_album_tracks(album_url):
                     'name': track.get('name', 'Unknown'),
                     'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
                 })
+    elif 'data' in data and 'album' in data['data']:
+        items = data['data']['album'].get('tracks', {}).get('items', [])
+        for item in items:
+            track = item
+            if track:
+                tracks.append({
+                    'name': track.get('name', 'Unknown'),
+                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                })
     else:
-        # fallback recursive search
         def find_tracks(obj, depth=0):
             if depth > 5:
                 return
@@ -270,18 +298,24 @@ def fetch_public_album_tracks(album_url):
                         'name': t.get('name', 'Unknown'),
                         'artists': [a.get('name', 'Unknown') for a in t.get('artists', [])]
                     })
+                elif 'name' in obj and 'artists' in obj:
+                    tracks.append({
+                        'name': obj.get('name', 'Unknown'),
+                        'artists': [a.get('name', 'Unknown') for a in obj.get('artists', [])]
+                    })
                 else:
                     for v in obj.values():
-                        find_tracks(v, depth+1)
+                        find_tracks(v, depth + 1)
             elif isinstance(obj, list):
                 for item in obj:
-                    find_tracks(item, depth+1)
+                    find_tracks(item, depth + 1)
+
         find_tracks(data)
-    
+
     if not tracks:
         raise ValueError("No tracks found. The album may be empty or private.")
-    
     return tracks
+
 
 def is_premium_required_error(error):
     message = str(error).lower()
@@ -422,7 +456,6 @@ class SpotifyDownloader:
             return
         tracks = []
         try:
-            # Try API first (requires API credentials, may need Premium)
             if self.spotify is not None:
                 playlist = self.spotify.playlist(playlist_id)
                 print_info(f"Playlist: {playlist['name']} by {playlist['owner']['display_name']}")
@@ -438,7 +471,6 @@ class SpotifyDownloader:
                 print_info("Spotify API blocked (Premium required). Falling back to public web scraping.")
             else:
                 print_warning(f"API failed ({error}). Falling back to public web scraping.")
-            # Fallback to public scraping
             try:
                 tracks = fetch_public_playlist_tracks(url)
                 print_success(f"Found {len(tracks)} tracks via public scraping.")
@@ -472,7 +504,6 @@ class SpotifyDownloader:
             return
         tracks = []
         try:
-            # Try API first
             if self.spotify is not None:
                 album = self.spotify.album(album_id)
                 print_info(f"Album: {album['name']} by {album['artists'][0]['name']}")
