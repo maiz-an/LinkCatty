@@ -1,56 +1,68 @@
-# 🚀 LinkCatty – Universal Downloader
+<!-- Banner / Logo (optional) -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/assets/logo.png" alt="LinkCatty Logo" width="200"/>
+</p>
 
-**LinkCatty** is a cross‑platform, all‑in‑one downloader for **YouTube** and **Spotify**.  
-Download videos, playlists, albums, or tracks in the best quality – all from your terminal.
+<h1 align="center">🚀 LinkCatty – Universal Downloader</h1>
 
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
-![Python](https://img.shields.io/badge/python-3.12+-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
+<p align="center">
+  <strong>Download YouTube videos, playlists, and Spotify tracks – all from your terminal.</strong><br>
+  Cross‑platform · Portable · Auto‑update · Open Source
+</p>
+
+<p align="center">
+  <a href="#-installation"><img src="https://img.shields.io/badge/Install-1‑click-8b5cf6?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="#-uninstall"><img src="https://img.shields.io/badge/Uninstall-clean-ef4444?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/maiz-an/LinkCatty"><img src="https://img.shields.io/badge/GitHub-Repo-181717?style=for-the-badge&logo=github&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square">
+  <img src="https://img.shields.io/badge/Python-3.12+-green?style=flat-square">
+  <img src="https://img.shields.io/badge/License-MIT-orange?style=flat-square">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square">
+</p>
 
 ---
 
 ## ✨ Features
 
-- 📹 **YouTube** – single videos, playlists, custom format, MP3 conversion
-- 🎵 **Spotify** – tracks, albums, playlists (searches and downloads from YouTube)
-- ⚙️ **Settings** – choose video quality (1080p, 720p, etc.), audio bitrate (320k/192k), auto‑retry, quiet mode
-- 📊 **Download history** – keeps a log of everything you’ve downloaded
-- 🔄 **Auto‑update** – always stays up‑to‑date with the latest version
-- 🧩 **Portable** – no system Python required; bundles its own Python runtime
+| Area | Description |
+|------|-------------|
+| 📹 **YouTube** | Single videos, playlists, custom format selection, MP3 conversion. Choose quality up to 1080p / 720p / best available. |
+| 🎵 **Spotify** | Tracks, albums, playlists – searches for the song on YouTube and downloads as high‑quality MP3 (320k or 192k). |
+| ⚙️ **Settings** | Download folder, video quality, audio bitrate, auto‑retry, quiet mode, download history. |
+| 🔄 **Auto‑update** | Automatically checks for new versions and updates itself – always up‑to‑date. |
+| 🧩 **Portable** | No system Python required. Bundles its own Python runtime. |
+| 🔐 **Privacy‑first** | Open‑source, no tracking, no data collection. Everything runs locally. |
 
 ---
 
 ## 💿 Installation
 
-### Windows (Command Prompt)
+### 📌 One‑line install (no admin rights needed)
 
-Open **Command Prompt** (Win + R → `cmd` → OK) and paste:
+| Platform | Command |
+|----------|---------|
+| **Windows (CMD)** | `curl -L -o "%TEMP%\install_linkcatty.cmd" https://tinyurl.com/linkcattycmd && "%TEMP%\install_linkcatty.cmd"` |
+| **macOS / Linux** | `curl -L -o /tmp/install_linkcatty.sh https://tinyurl.com/linkcattysh && chmod +x /tmp/install_linkcatty.sh && /tmp/install_linkcatty.sh` |
 
-```cmd
-curl -L -o "%TEMP%\install_linkcatty.cmd" https://tinyurl.com/linkcattycmd && "%TEMP%\install_linkcatty.cmd"
-```
+> After installation: **close and reopen your terminal** – then simply type `linkcatty` to launch.
 
-After installation, **close the current terminal** and open a new one.  
-Now you can run `linkcatty` from any Command Prompt.
+### 📦 What the installer does
 
-### macOS / Linux (Terminal)
-
-Open a terminal and paste:
-
-```bash
-curl -L -o /tmp/install_linkcatty.sh https://tinyurl.com/linkcattysh && chmod +x /tmp/install_linkcatty.sh && /tmp/install_linkcatty.sh
-```
-
-After installation, **restart your terminal** (or source your shell config).  
-Then simply type `linkcatty` to start.
+- Downloads the latest version from GitHub
+- Installs everything to `%LOCALAPPDATA%\LinkCatty` (Windows) or `~/.local/share/LinkCatty` (Unix)
+- Adds the folder to your **user PATH** (persistent)
+- Creates a **Start Menu / desktop shortcut**
+- Bundles FFmpeg (Windows x64, macOS Intel/ARM, Linux x64/ARM64)
 
 ---
 
 ## 🧭 How to Use
 
-When you run `linkcatty`, you’ll see the main menu:
+Run `linkcatty` – you’ll see the main menu:
 
-```
 =============================================================
                       🎯 MAIN MENU
 =============================================================
@@ -60,16 +72,15 @@ When you run `linkcatty`, you’ll see the main menu:
 4. ⚙️  Settings
 5. ❌ Exit
 =============================================================
-```
 
-### YouTube Downloader
+### 🎬 YouTube Downloader
 
-- Choose format: **Video (best quality)** or **Audio (MP3)**
+- Choose **Video (best quality)** or **Audio (MP3)**
 - Paste a YouTube URL (single video or playlist)
-- The app will show video/playlist information, then download into a subfolder
+- The app shows video/playlist information, then downloads into a subfolder
 - Playlist downloads create a folder named after the playlist
 
-### Spotify Downloader
+### 🎵 Spotify Downloader
 
 > **First time?** Go to `Settings` → `Spotify API credentials` and enter your Client ID and Secret.  
 > Get them for free from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/).
@@ -78,7 +89,7 @@ When you run `linkcatty`, you’ll see the main menu:
 - Paste the Spotify URL
 - The app searches for the song on YouTube and downloads it as MP3
 
-### Settings
+### ⚙️ Settings
 
 - Change download folder
 - Adjust video quality (best / 1080p / 720p / 480p / 360p)
@@ -90,64 +101,42 @@ When you run `linkcatty`, you’ll see the main menu:
 
 ## 🗑️ Uninstall
 
-### Windows
+Remove LinkCatty completely (installation folder, PATH entry, and shortcuts):
 
-Open Command Prompt and run:
-
-```cmd
-curl -L -o "%TEMP%\uninstall_linkcatty.cmd" https://tinyurl.com/linkcatty-uninstall-cmd && "%TEMP%\uninstall_linkcatty.cmd"
-```
-
-### macOS / Linux
-
-Open a terminal and run:
-
-```bash
-curl -L -o /tmp/uninstall_linkcatty.sh https://tinyurl.com/linkcatty-uninstall-sh && chmod +x /tmp/uninstall_linkcatty.sh && /tmp/uninstall_linkcatty.sh
-```
-
-This removes the app, the PATH entry, and the desktop shortcut.
+| Platform | Command |
+|----------|---------|
+| **Windows** | `curl -L -o "%TEMP%\uninstall_linkcatty.cmd" https://tinyurl.com/linkcatty-uninstall-cmd && "%TEMP%\uninstall_linkcatty.cmd"` |
+| **macOS / Linux** | `curl -L -o /tmp/uninstall_linkcatty.sh https://tinyurl.com/linkcatty-uninstall-sh && chmod +x /tmp/uninstall_linkcatty.sh && /tmp/uninstall_linkcatty.sh` |
 
 ---
 
 ## ❓ Troubleshooting
 
-### `linkcatty` is not recognized
-
-- Close your terminal and open a **new** one (environment variables are refreshed).
-- On Windows, check that `%LOCALAPPDATA%\LinkCatty` is in your user `PATH` (run `echo %PATH%`).
-
-### YouTube says “Sign in to confirm you’re not a bot”
-
-- Close your browser completely and try again.  
-- If that doesn’t help, manually export your YouTube cookies to `sources/cookies.txt` using a browser extension like “Get cookies.txt LOCALLY”.
-
-### Spotify downloads fail
-
-- Make sure you entered valid **Client ID** and **Client Secret** in Settings.
-- Some rare tracks might not be found on YouTube – the app will skip them and continue.
-
-### FFmpeg not found (video merging may fail)
-
-- The installer tries to bundle FFmpeg. If you see this warning, you can install FFmpeg manually (or ignore it – audio‑only downloads still work).
+| Issue | Solution |
+|-------|----------|
+| `linkcatty` not recognized | Close and reopen your terminal. On Windows, check `%LOCALAPPDATA%\LinkCatty` is in your `PATH`. |
+| YouTube “Sign in to confirm you’re not a bot” | Close your browser completely and retry. If still fails, export YouTube cookies to `sources/cookies.txt` (use “Get cookies.txt LOCALLY” extension). |
+| Spotify downloads fail | Verify your Client ID / Secret in Settings. Some rare tracks may not be found on YouTube – they are skipped. |
+| FFmpeg not found (video merging may fail) | The installer bundles FFmpeg. If you see this warning, you can install FFmpeg manually (audio‑only downloads still work). |
 
 ---
 
-## 🧑‍💻 Development
+## 🧑‍💻 Development & Contribution
 
-LinkCatty is open source. You can find the source code and contribute here:  
-[https://github.com/maiz-an/LinkCatty](https://github.com/maiz-an/LinkCatty)
+LinkCatty is open source and welcomes contributions.
+
+```bash
+git clone https://github.com/maiz-an/LinkCatty.git
+cd LinkCatty
+# Use the portable Python environment, or install dependencies manually:
+pip install -r sources/requirements.txt
+```
+
+- **Issues / Feature requests**: [GitHub Issues](https://github.com/maiz-an/LinkCatty/issues)
+- **Pull requests**: Always welcome
 
 ---
 
-
-## ✅ What’s Included
-
-- Clear description of what LinkCatty does.
-- **One‑line install commands** for Windows and Unix (using your TinyURLs).
-- Step‑by‑step usage guide for YouTube and Spotify.
-- Settings explanation.
-- Uninstall instructions (you’ll need to upload the uninstaller scripts too).
-- Troubleshooting section.
-
-Now your GitHub repo looks professional and your friends can install LinkCatty with a single copy‑paste. 🚀
+<p align="center">
+  <sub>Made with ❤️ for the open‑source community</sub>
+</p>
