@@ -170,9 +170,9 @@ def run_spotify_workflow(config, choice):
 
         if choice == "1":
             downloader.download_single_track(url)
-        elif choice == "2":
-            downloader.download_playlist(url)
         elif choice == "3":
+            downloader.download_playlist(url)
+        elif choice == "2":
             downloader.download_album(url)
         if not confirm(f"\nProcess another Spotify {item_type}?"):
             return
@@ -186,8 +186,8 @@ def run(config):
         print("=" * 61)
         print()
         print(f"{CYAN}{BOLD}1.{RESET} Download single track")
-        print(f"{CYAN}{BOLD}2.{RESET} Download playlist")
-        print(f"{CYAN}{BOLD}3.{RESET} Download album")
+        print(f"{CYAN}{BOLD}2.{RESET} Download album")
+        print(f"{CYAN}{BOLD}3.{RESET} Download playlist")
         print(f"{CYAN}{BOLD}4.{RESET} Back to main menu")
         print()
         print("=" * 61)
