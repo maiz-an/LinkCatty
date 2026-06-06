@@ -1,161 +1,171 @@
 #!/usr/bin/env python3
 """
 LinkCatty - Unified Downloader for YouTube, Spotify and more.
-Now located inside the 'sources' folder.
 """
 import sys
-import os
 from pathlib import Path
 
-# Add the parent directory (root) to sys.path so we can import from sources
-# But since we are already inside sources, we can import directly from downloaders and utils
 BASE_DIR = Path(__file__).parent
-ROOT_DIR = BASE_DIR.parent  # the root folder (where run.cmd lives)
-
-# Add root to sys.path for any root-level modules (none currently)
 sys.path.insert(0, str(BASE_DIR))
 
-# Import our modules
+from downloaders import spotify_downloader, youtube_downloader
 from utils.config import load_config, save_config
-from utils.ui import clear_screen, print_banner, print_main_menu, set_console_width
-from downloaders import youtube_downloader, spotify_downloader
-# Set console width to 62 characters for optimal display
+from utils.ui import (
+    clear_screen,
+    confirm,
+    menu_choice,
+    pause,
+    print_banner,
+    print_error,
+    print_info,
+    print_main_menu,
+    print_success,
+    set_console_width,
+)
+
 set_console_width(62)
-# ----------------------------------------------------------------------
-# Settings Menu
-# ----------------------------------------------------------------------
+
+
 def settings_menu(config):
-    from utils.ui import clear_screen, print_banner
     from utils.logger import clear_history
 
     while True:
-        clear_screen()
-        print_banner()
-        print("                        ⚙️  SETTINGS")
-        print("=" * 61)
-        print(f"1. Download folder   [{config['download_dir']}]")
-        print("2. YouTube settings")
-        print("3. Spotify settings")
-        print("4. Spotify API credentials")
-        print("5. Clear download history")
-        print("6. Back to main menu")
-        print("=" * 61)
-        choice = input("Select (1-6): ").strip()
+        try:
+            clear_screen()
+            print_banner()
+            print("                        ⚙️  SETTINGS")
+            print("=" * 61)
+            print(f"1. Download folder   [{config['download_dir']}]")
+            print("2. YouTube settings")
+            print("3. Spotify settings")
+            print("4. Spotify API credentials")
+            print("5. Clear download history")
+            print("6. Back to main menu")
+            print("=" * 61)
+            choice = menu_choice("Select (1-6): ", "123456")
 
-        if choice == "1":
-            new_dir = input("New download folder (absolute path): ").strip()
-            if new_dir:
-                p = Path(new_dir).expanduser().resolve()
-                try:
-                    p.mkdir(parents=True, exist_ok=True)
-                    config['download_dir'] = str(p)
+            if choice in (None, "6"):
+                return
+
+            if choice == "1":
+                new_dir = input("New download folder (absolute path): ").strip()
+                if not new_dir:
+                    print_error("Download folder was not changed", "Enter a full folder path or choose Back.")
+                else:
+                    path = Path(new_dir).expanduser().resolve()
+                    path.mkdir(parents=True, exist_ok=True)
+                    config["download_dir"] = str(path)
                     save_config(config)
-                    print(f"✅ Folder changed to: {p}")
-                except Exception as e:
-                    print(f"❌ Error: {e}")
+                    print_success(f"Folder changed to: {path}")
 
-        elif choice == "2":
-            yt = config['youtube']
-            print(f"\n▶️  YouTube Settings")
-            print(f"Audio quality (for MP3) [{yt['audio_quality']}]: 1. 320k  2. 192k")
-            q = input("Choice (1/2): ")
-            if q == '1':
-                yt['audio_quality'] = '320k'
-            elif q == '2':
-                yt['audio_quality'] = '192k'
-            
-            print(f"\nVideo quality (for video downloads):")
-            print(f"Current: {yt['video_quality']}")
-            print("1. Best (highest MP4)")
-            print("2. 1080p")
-            print("3. 720p")
-            print("4. 480p")
-            print("5. 360p")
-            vq = input("Select (1-5): ").strip()
-            quality_map = {"1": "best", "2": "1080p", "3": "720p", "4": "480p", "5": "360p"}
-            if vq in quality_map:
-                yt['video_quality'] = quality_map[vq]
-            
-            yt['auto_retry'] = input("Auto-retry failed downloads? (y/n): ").lower() == 'y'
-            yt['quiet_mode'] = input("Quiet mode (less output)? (y/n): ").lower() == 'y'
-            save_config(config)
-            print("✅ YouTube settings saved.")
+            elif choice == "2":
+                youtube_settings(config)
 
-        elif choice == "3":
-            sp = config['spotify']
-            print(f"\n🎧 Spotify Settings")
-            print(f"Audio quality [{sp['audio_quality']}]: 1. 320k  2. 192k")
-            q = input("Choice (1/2): ")
-            if q == '1':
-                sp['audio_quality'] = '320k'
-            elif q == '2':
-                sp['audio_quality'] = '192k'
-            sp['auto_retry'] = input("Auto-retry failed downloads? (y/n): ").lower() == 'y'
-            sp['quiet_mode'] = input("Quiet mode? (y/n): ").lower() == 'y'
-            save_config(config)
-            print("✅ Spotify settings saved.")
+            elif choice == "3":
+                spotify_settings(config)
 
-        elif choice == "4":
-            print("\n🔑 Spotify API Credentials")
-            print("Get them from: https://developer.spotify.com/dashboard/")
-            new_id = input("Client ID: ").strip()
-            new_secret = input("Client Secret: ").strip()
-            if new_id and new_secret:
-                config['spotify']['client_id'] = new_id
-                config['spotify']['client_secret'] = new_secret
-                save_config(config)
-                print("✅ Credentials saved.")
-            else:
-                print("❌ Both ID and Secret are required.")
+            elif choice == "4":
+                print("\n🔑 Spotify API Credentials")
+                print("Get them from: https://developer.spotify.com/dashboard/")
+                client_id = input("Client ID: ").strip()
+                client_secret = input("Client Secret: ").strip()
+                if client_id and client_secret:
+                    config["spotify"]["client_id"] = client_id
+                    config["spotify"]["client_secret"] = client_secret
+                    save_config(config)
+                    print_success("Credentials saved.")
+                else:
+                    print_error("Both Client ID and Client Secret are required.")
 
-        elif choice == "5":
-            confirm = input("Are you sure you want to clear all download history? (y/n): ").lower()
-            if confirm == 'y':
-                clear_history()
-                print("✅ History cleared.")
-            else:
-                print("Cancelled.")
+            elif choice == "5":
+                if confirm("Clear all download history?"):
+                    clear_history()
+                    print_success("History cleared.")
+                else:
+                    print_info("Cancelled.")
 
-        elif choice == "6":
-            break
+        except Exception as error:
+            print_error(
+                f"Settings error: {error}",
+                "Correct the value and try again. You remain in Settings.",
+            )
 
-        input("\nPress Enter to continue...")
+        pause()
 
-# ----------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------
+
+def youtube_settings(config):
+    youtube = config["youtube"]
+    print("\n▶️  YouTube Settings")
+    print(f"Audio quality (for MP3) [{youtube['audio_quality']}]: 1. 320k  2. 192k")
+    audio_choice = menu_choice("Choice (1/2): ", "12")
+    youtube["audio_quality"] = "320k" if audio_choice == "1" else "192k"
+
+    print(f"\nVideo quality (current: {youtube['video_quality']})")
+    print("1. Best (highest MP4)")
+    print("2. 1080p")
+    print("3. 720p")
+    print("4. 480p")
+    print("5. 360p")
+    quality_map = {"1": "best", "2": "1080p", "3": "720p", "4": "480p", "5": "360p"}
+    youtube["video_quality"] = quality_map[menu_choice("Select (1-5): ", "12345")]
+    youtube["auto_retry"] = confirm("Auto-retry failed downloads?", youtube.get("auto_retry", True))
+    youtube["quiet_mode"] = confirm("Quiet mode (less output)?", youtube.get("quiet_mode", True))
+    save_config(config)
+    print_success("YouTube settings saved.")
+
+
+def spotify_settings(config):
+    spotify = config["spotify"]
+    print("\n🎧 Spotify Settings")
+    print(f"Audio quality [{spotify['audio_quality']}]: 1. 320k  2. 192k")
+    audio_choice = menu_choice("Choice (1/2): ", "12")
+    spotify["audio_quality"] = "320k" if audio_choice == "1" else "192k"
+    spotify["auto_retry"] = confirm("Auto-retry failed downloads?", spotify.get("auto_retry", True))
+    spotify["quiet_mode"] = confirm("Quiet mode?", spotify.get("quiet_mode", True))
+    save_config(config)
+    print_success("Spotify settings saved.")
+
+
 def main():
     config = load_config()
-    # Ensure download directory exists
-    Path(config['download_dir']).mkdir(parents=True, exist_ok=True)
+    try:
+        Path(config["download_dir"]).mkdir(parents=True, exist_ok=True)
+    except Exception as error:
+        print_error(f"Could not create download folder: {error}", "Choose a writable folder in Settings.")
+        pause()
 
     while True:
         clear_screen()
         print_banner()
         print_main_menu()
-        choice = input("Select option (1-5): ").strip()
+        choice = menu_choice("Select option (1-5): ", "12345")
 
-        if choice == "1":
-            youtube_downloader.run(config)
-        elif choice == "2":
-            spotify_downloader.run(config)
-        elif choice == "3":
-            print("\n🛠️  Other downloaders (e.g., SoundCloud, Vimeo) coming soon.")
-            input("Press Enter to continue...")
-        elif choice == "4":
-            settings_menu(config)
-        elif choice == "5":
-            print("\n👋 Thanks for using LinkCatty! Goodbye.")
-            break
-        else:
-            print("❌ Invalid choice. Please enter 1-5.")
-            input("Press Enter...")
+        try:
+            if choice == "1":
+                youtube_downloader.run(config)
+            elif choice == "2":
+                spotify_downloader.run(config)
+            elif choice == "3":
+                print("\n🛠️  Other downloaders (e.g., SoundCloud, Vimeo) coming soon.")
+                pause("Press Enter to continue...")
+            elif choice == "4":
+                settings_menu(config)
+            elif choice in (None, "5"):
+                print("\n👋 Thanks for using LinkCatty! Goodbye.")
+                return
+        except Exception as error:
+            print_error(
+                f"Workflow error: {error}",
+                "This section recovered without closing the application.",
+            )
+            pause("Press Enter...")
+
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\n\n⏹️  Interrupted by user. Goodbye!")
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        input("Press Enter to exit...")
+    except Exception as error:
+        print_error(f"Unexpected error: {error}")
+        pause("Press Enter to exit...")

@@ -1,285 +1,446 @@
+import html
+import json
 import re
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
+
 import yt_dlp
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
 
-from utils.ui import (
-    RESET, CYAN, BOLD,
-    clear_screen, print_banner, print_error, print_success, print_info, print_warning,
-    start_spinner, stop_spinner
-)
-from utils.logger import log_download
+try:
+    import spotipy
+    from spotipy.oauth2 import SpotifyClientCredentials
+except ImportError:
+    spotipy = None
+    SpotifyClientCredentials = None
+
 from utils.ffmpeg import get_ffmpeg_path
+from utils.logger import log_download
+from utils.ui import (
+    BOLD,
+    CYAN,
+    RESET,
+    clear_screen,
+    confirm,
+    menu_choice,
+    pause,
+    print_banner,
+    print_error,
+    print_info,
+    print_success,
+    start_spinner,
+    stop_spinner,
+)
 
-# ----------------------------------------------------------------------
-# Helper functions
-# ----------------------------------------------------------------------
-def extract_playlist_id(url):
-    m = re.search(r'playlist/([a-zA-Z0-9]+)', url)
-    return m.group(1) if m else None
 
-def extract_track_id(url):
-    m = re.search(r'track/([a-zA-Z0-9]+)', url)
-    return m.group(1) if m else None
+def extract_spotify_id(url, item_type):
+    match = re.search(rf"{item_type}/([a-zA-Z0-9]+)", url)
+    return match.group(1) if match else None
 
-def extract_album_id(url):
-    m = re.search(r'album/([a-zA-Z0-9]+)', url)
-    return m.group(1) if m else None
 
-# ----------------------------------------------------------------------
-# Main Spotify Downloader Class
-# ----------------------------------------------------------------------
+def is_spotify_url(url, item_type):
+    return bool(re.match(r"^https?://", url)) and f"spotify.com/{item_type}/" in url
+
+
+def normalize_spotify_url(url):
+    parsed = urllib.parse.urlparse(url.strip())
+    return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
+
+def fetch_url(url, timeout=15):
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0 Safari/537.36"
+            )
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read().decode("utf-8", errors="replace")
+
+
+def extract_meta_content(page, key):
+    pattern = (
+        rf"<meta\b(?=[^>]*(?:property|name)=[\"']{re.escape(key)}[\"'])"
+        rf"(?=[^>]*content=[\"']([^\"']+)[\"'])[^>]*>"
+    )
+    match = re.search(pattern, page, re.IGNORECASE)
+    return html.unescape(match.group(1)).strip() if match else ""
+
+
+def split_artists(value):
+    value = html.unescape(value or "").strip()
+    value = re.sub(r"\s+on Spotify$", "", value, flags=re.IGNORECASE)
+    artists = [artist.strip() for artist in re.split(r"\s*(?:,|&|\band\b)\s*", value) if artist.strip()]
+    return artists or ([value] if value else [])
+
+
+def clean_spotify_title(title):
+    title = html.unescape(title or "").strip()
+    title = re.sub(r"\s*\|\s*Spotify\s*$", "", title, flags=re.IGNORECASE)
+    title = re.sub(r"\s*-\s*song and lyrics by .*$", "", title, flags=re.IGNORECASE)
+    title = re.sub(r"\s*-\s*single by .*$", "", title, flags=re.IGNORECASE)
+    title = re.sub(r"\s*-\s*track by .*$", "", title, flags=re.IGNORECASE)
+    return title.strip()
+
+
+def parse_artist_from_text(text, track_name):
+    text = html.unescape(text or "")
+    text = re.sub(r"\s*\|\s*Spotify\s*$", "", text, flags=re.IGNORECASE)
+    for pattern in (
+        r"song and lyrics by\s+(.+)$",
+        r"single by\s+(.+)$",
+        r"track by\s+(.+)$",
+        r"album by\s+(.+)$",
+    ):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return split_artists(match.group(1))
+
+    parts = [part.strip() for part in re.split(r"\s*[·•]\s*", text) if part.strip()]
+    for part in parts:
+        if part.lower() != track_name.lower() and not part.lower().startswith("spotify"):
+            return split_artists(part)
+    return []
+
+
+def fetch_public_track_info(url):
+    """Read public Spotify page metadata without Spotify API credentials or Premium."""
+    normalized_url = normalize_spotify_url(url)
+    oembed_title = ""
+    oembed_author = ""
+
+    try:
+        oembed_url = "https://open.spotify.com/oembed?url=" + urllib.parse.quote(normalized_url, safe="")
+        oembed = json.loads(fetch_url(oembed_url))
+        oembed_title = oembed.get("title", "")
+        oembed_author = oembed.get("author_name", "")
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        pass
+
+    page_title = ""
+    page_description = ""
+    try:
+        page = fetch_url(normalized_url)
+        page_title = extract_meta_content(page, "og:title") or extract_meta_content(page, "twitter:title")
+        page_description = extract_meta_content(page, "og:description") or extract_meta_content(page, "twitter:description")
+    except (OSError, urllib.error.URLError):
+        pass
+
+    raw_title = page_title or oembed_title
+    track_name = clean_spotify_title(raw_title)
+    artists = parse_artist_from_text(raw_title, track_name)
+    if not artists:
+        artists = parse_artist_from_text(page_description, track_name)
+    if not artists and oembed_author and oembed_author.lower() != "spotify":
+        artists = split_artists(oembed_author)
+
+    if not track_name:
+        raise ValueError("Could not read public track metadata from Spotify.")
+
+    return {
+        "name": track_name,
+        "artists": artists or ["Unknown Artist"],
+        "album": "",
+        "source": "public Spotify page",
+    }
+
+
+def is_premium_required_error(error):
+    message = str(error).lower()
+    return "premium subscription required" in message or "http status: 403" in message
+
+
 class SpotifyDownloader:
     def __init__(self, config):
         self.config = config
-        self.spotify_config = config['spotify']
-        self.download_dir = Path(config['download_dir'])
+        self.spotify_config = config["spotify"]
+        self.download_dir = Path(config["download_dir"])
         self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.spotify = None
 
-        client_id = self.spotify_config.get('client_id', '')
-        client_secret = self.spotify_config.get('client_secret', '')
-        if not client_id or not client_secret:
-            raise ValueError("Spotify API credentials missing")
+        client_id = self.spotify_config.get("client_id", "").strip()
+        client_secret = self.spotify_config.get("client_secret", "").strip()
+        if not client_id or not client_secret or spotipy is None:
+            return
+
         try:
             self.spotify = spotipy.Spotify(
                 client_credentials_manager=SpotifyClientCredentials(
                     client_id=client_id,
-                    client_secret=client_secret
+                    client_secret=client_secret,
                 )
             )
-        except Exception as e:
-            raise ConnectionError(f"Failed to connect to Spotify API: {e}")
+        except Exception as error:
+            print_error(f"Spotify API setup failed: {error}", "Single tracks can still use public Spotify metadata.")
 
     def get_ydl_opts(self):
-        quality = self.spotify_config.get('audio_quality', '320k').replace('k', '')
-        opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': str(self.download_dir / '%(title)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': quality,
+        quality = self.spotify_config.get("audio_quality", "320k").replace("k", "")
+        options = {
+            "format": "bestaudio/best",
+            "outtmpl": str(self.download_dir / "%(title)s.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": quality,
             }],
-            'quiet': self.spotify_config.get('quiet_mode', True),
-            'no_warnings': True,
-            'ignoreerrors': True,
+            "quiet": self.spotify_config.get("quiet_mode", True),
+            "no_warnings": True,
+            "ignoreerrors": True,
         }
         ffmpeg = get_ffmpeg_path()
         if ffmpeg:
-            opts['ffmpeg_location'] = ffmpeg
-        return opts
+            options["ffmpeg_location"] = ffmpeg
+        return options
 
     def search_youtube(self, track, retry=0):
-        artists = " & ".join(track['artists'])
-        query = f"{artists} - {track['name']} official audio"
-        query = re.sub(r'[^\w\s-]', '', query)
-        ydl_opts = {'quiet': True, 'extract_flat': True}
+        artists = [artist for artist in track["artists"] if artist != "Unknown Artist"]
+        if artists:
+            query = f"{' & '.join(artists)} - {track['name']} official audio"
+        else:
+            query = f"{track['name']} official audio"
+        query = re.sub(r"[^\w\s-]", "", query)
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL({"quiet": True, "extract_flat": True}) as ydl:
                 results = ydl.extract_info(f"ytsearch5:{query}", download=False)
-                if results and 'entries' in results and results['entries']:
-                    return results['entries'][0]['url']
+            if results and results.get("entries"):
+                result_url = results["entries"][0].get("url")
+                if result_url and not result_url.startswith("http"):
+                    return f"https://www.youtube.com/watch?v={result_url}"
+                return result_url
         except Exception:
-            if retry < 2:
+            if retry < self.spotify_config.get("max_retries", 3):
                 time.sleep(1)
-                return self.search_youtube(track, retry+1)
+                return self.search_youtube(track, retry + 1)
         return None
 
     def download_track(self, youtube_url, track_info, index=None, total=None):
-        artists = " & ".join(track_info['artists'])
-        title = f"{track_info['name']} - {artists}"
-        safe_title = re.sub(r'[<>:"/\\|?*]', '', title)
-        opts = self.get_ydl_opts()
-        opts['outtmpl'] = str(self.download_dir / f"{safe_title}.%(ext)s")
+        artists = " & ".join(track_info["artists"])
+        title = f"{track_info['name']} - {artists}" if artists != "Unknown Artist" else track_info["name"]
+        safe_title = re.sub(r'[<>:"/\\|?*]', "", title)
+        options = self.get_ydl_opts()
+        options["outtmpl"] = str(self.download_dir / f"{safe_title}.%(ext)s")
         if index and total:
             print(f"[{index}/{total}] ", end="")
         print_info(f"Downloading: {artists} - {track_info['name']}")
         try:
             start_spinner("Downloading from YouTube")
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with yt_dlp.YoutubeDL(options) as ydl:
                 ydl.download([youtube_url])
             stop_spinner()
             return True
-        except Exception as e:
+        except Exception as error:
             stop_spinner()
-            print_error(f"Download error: {e}")
+            print_error(f"Download error: {error}", "Check FFmpeg, network access, and the YouTube result.")
             return False
 
+    def fetch_playlist_tracks(self, playlist_id):
+        if self.spotify is None:
+            raise ValueError("Spotify API credentials are required to read playlist track lists.")
+        tracks = []
+        results = self.spotify.playlist_tracks(playlist_id)
+        while results:
+            for item in results.get("items", []):
+                track = item.get("track")
+                if track:
+                    tracks.append({
+                        "name": track["name"],
+                        "artists": [artist["name"] for artist in track["artists"]],
+                    })
+            results = self.spotify.next(results) if results.get("next") else None
+        return tracks
+
     def download_playlist(self, url):
-        playlist_id = extract_playlist_id(url)
+        playlist_id = extract_spotify_id(url, "playlist")
         if not playlist_id:
-            print_error("Invalid Spotify playlist URL", "URL should contain /playlist/")
+            print_error("Invalid Spotify playlist URL", "Use a link containing spotify.com/playlist/.")
+            return
+        if self.spotify is None:
+            print_error(
+                "Playlist downloads need Spotify API access.",
+                "Single-track downloads work without Premium/API access. Playlist track lists are not public enough to read reliably.",
+            )
             return
         try:
             playlist = self.spotify.playlist(playlist_id)
             print_info(f"Playlist: {playlist['name']} by {playlist['owner']['display_name']}")
             print_info(f"Total tracks: {playlist['tracks']['total']}")
-            confirm = input("Download all? (y/n): ").lower()
-            if confirm != 'y':
+            if not confirm("Download all?"):
                 return
-
-            # Fetch all tracks
             print_info("Fetching playlist tracks...")
-            tracks = []
-            results = self.spotify.playlist_tracks(playlist_id)
-            while results:
-                for item in results['items']:
-                    if item['track']:
-                        t = item['track']
-                        tracks.append({
-                            'name': t['name'],
-                            'artists': [a['name'] for a in t['artists']]
-                        })
-                results = self.spotify.next(results) if results['next'] else None
+            self.download_track_list(self.fetch_playlist_tracks(playlist_id), "Playlist")
+        except Exception as error:
+            if is_premium_required_error(error):
+                print_error(
+                    "Spotify blocked playlist metadata for this app.",
+                    "Use single-track links, or API credentials from a Spotify app that can access playlist endpoints.",
+                )
+                return
+            print_error(f"Error fetching playlist: {error}", "Check the playlist link, credentials, and network connection.")
 
-            total = len(tracks)
-            print_success(f"Found {total} tracks")
-
-            success, fail = 0, 0
-            for i, track in enumerate(tracks, 1):
-                print(f"\n{'─' * 61}")
-                print_info(f"[{i}/{total}] Searching: {track['name']}")
-                yt_url = self.search_youtube(track)
-                if not yt_url:
-                    print_error(f"[{i}/{total}] Not found on YouTube: {track['name']}")
-                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Playlist", status="Failed")
-                    fail += 1
-                    continue
-                if self.download_track(yt_url, track, i, total):
-                    success += 1
-                    print_success(f"[{i}/{total}] Downloaded: {track['name']}")
-                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Playlist", status="Success")
+    def get_track_info(self, track_id, url):
+        if self.spotify is not None:
+            try:
+                track = self.spotify.track(track_id)
+                return {
+                    "name": track["name"],
+                    "artists": [artist["name"] for artist in track["artists"]],
+                    "album": track["album"]["name"],
+                    "source": "Spotify API",
+                }
+            except Exception as error:
+                if is_premium_required_error(error):
+                    print_info("Spotify API requires Premium for this app. Trying public metadata fallback.")
                 else:
-                    fail += 1
-                    print_error(f"[{i}/{total}] Failed: {track['name']}")
-                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Playlist", status="Failed")
-                time.sleep(1)
-
-            print("\n" + "═" * 61)
-            print_success(f"Playlist download finished: {success} successful, {fail} failed")
-            print("═" * 61)
-        except Exception as e:
-            print_error(f"Error fetching playlist: {e}")
+                    print_error(f"Spotify API track lookup failed: {error}", "Trying public metadata fallback.")
+        return fetch_public_track_info(url)
 
     def download_single_track(self, url):
-        track_id = extract_track_id(url)
+        track_id = extract_spotify_id(url, "track")
         if not track_id:
-            print_error("Invalid Spotify track URL", "URL should contain /track/")
+            print_error("Invalid Spotify track URL", "Use a link containing spotify.com/track/.")
             return
         try:
-            track = self.spotify.track(track_id)
-            track_info = {
-                'name': track['name'],
-                'artists': [a['name'] for a in track['artists']],
-                'album': track['album']['name']
-            }
+            track_info = self.get_track_info(track_id, url)
             print_info(f"Track: {track_info['name']} by {', '.join(track_info['artists'])}")
-            confirm = input("Download? (y/n): ").lower()
-            if confirm != 'y':
+            if track_info.get("source") == "public Spotify page":
+                print_info("Using public Spotify metadata fallback; Premium/API access is not required.")
+            if not confirm("Download?"):
                 return
 
             print_info("Searching on YouTube...")
-            yt_url = self.search_youtube(track_info)
-            if not yt_url:
-                print_error("Track not found on YouTube", "Try a different spelling or manual search")
-                log_download("Spotify", track_info['name'], artist=" & ".join(track_info['artists']), mode="Single", status="Failed")
+            youtube_url = self.search_youtube(track_info)
+            if not youtube_url:
+                print_error("Track not found on YouTube", "Try a different spelling or manual YouTube download.")
+                log_download("Spotify", track_info["name"], artist=" & ".join(track_info["artists"]), mode="Single", status="Failed")
                 return
-            if self.download_track(yt_url, track_info):
+            if self.download_track(youtube_url, track_info):
                 print_success("Download completed")
-                log_download("Spotify", track_info['name'], artist=" & ".join(track_info['artists']), mode="Single", status="Success")
+                log_download("Spotify", track_info["name"], artist=" & ".join(track_info["artists"]), mode="Single", status="Success")
             else:
-                print_error("Download failed")
-                log_download("Spotify", track_info['name'], artist=" & ".join(track_info['artists']), mode="Single", status="Failed")
-        except Exception as e:
-            print_error(f"Error: {e}")
+                log_download("Spotify", track_info["name"], artist=" & ".join(track_info["artists"]), mode="Single", status="Failed")
+        except Exception as error:
+            print_error(f"Error fetching track: {error}", "Check the track link and network connection.")
 
     def download_album(self, url):
-        album_id = extract_album_id(url)
+        album_id = extract_spotify_id(url, "album")
         if not album_id:
-            print_error("Invalid Spotify album URL", "URL should contain /album/")
+            print_error("Invalid Spotify album URL", "Use a link containing spotify.com/album/.")
+            return
+        if self.spotify is None:
+            print_error(
+                "Album downloads need Spotify API access.",
+                "Single-track downloads work without Premium/API access. Album track lists are not public enough to read reliably.",
+            )
             return
         try:
             album = self.spotify.album(album_id)
             print_info(f"Album: {album['name']} by {album['artists'][0]['name']}")
             print_info(f"Total tracks: {album['total_tracks']}")
-            confirm = input("Download all? (y/n): ").lower()
-            if confirm != 'y':
+            if not confirm("Download all?"):
                 return
+            tracks = [
+                {"name": track["name"], "artists": [artist["name"] for artist in track["artists"]]}
+                for track in album["tracks"]["items"]
+            ]
+            self.download_track_list(tracks, "Album")
+        except Exception as error:
+            if is_premium_required_error(error):
+                print_error(
+                    "Spotify blocked album metadata for this app.",
+                    "Use single-track links, or API credentials from a Spotify app that can access album endpoints.",
+                )
+                return
+            print_error(f"Error fetching album: {error}", "Check the album link, credentials, and network connection.")
 
-            tracks = []
-            for t in album['tracks']['items']:
-                tracks.append({
-                    'name': t['name'],
-                    'artists': [a['name'] for a in t['artists']]
-                })
-            total = len(tracks)
-            print_success(f"Found {total} tracks")
+    def download_track_list(self, tracks, mode):
+        total = len(tracks)
+        if total == 0:
+            print_error("No tracks were found.")
+            return
+        print_success(f"Found {total} tracks")
+        success = 0
+        failed = 0
+        for index, track in enumerate(tracks, 1):
+            print(f"\n{'─' * 61}")
+            print_info(f"[{index}/{total}] Searching: {track['name']}")
+            youtube_url = self.search_youtube(track)
+            artist = " & ".join(track["artists"])
+            if not youtube_url:
+                print_error(f"[{index}/{total}] Not found on YouTube: {track['name']}")
+                log_download("Spotify", track["name"], artist=artist, mode=mode, status="Failed")
+                failed += 1
+                continue
+            if self.download_track(youtube_url, track, index, total):
+                print_success(f"[{index}/{total}] Downloaded: {track['name']}")
+                log_download("Spotify", track["name"], artist=artist, mode=mode, status="Success")
+                success += 1
+            else:
+                print_error(f"[{index}/{total}] Failed: {track['name']}")
+                log_download("Spotify", track["name"], artist=artist, mode=mode, status="Failed")
+                failed += 1
+            time.sleep(1)
+        print("\n" + "═" * 61)
+        print_success(f"{mode} download finished: {success} successful, {failed} failed")
+        print("═" * 61)
 
-            success, fail = 0, 0
-            for i, track in enumerate(tracks, 1):
-                print(f"\n{'─' * 61}")
-                print_info(f"[{i}/{total}] Searching: {track['name']}")
-                yt_url = self.search_youtube(track)
-                if not yt_url:
-                    print_error(f"[{i}/{total}] Not found on YouTube: {track['name']}")
-                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Album", status="Failed")
-                    fail += 1
-                    continue
-                if self.download_track(yt_url, track, i, total):
-                    success += 1
-                    print_success(f"[{i}/{total}] Downloaded: {track['name']}")
-                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Album", status="Success")
-                else:
-                    fail += 1
-                    print_error(f"[{i}/{total}] Failed: {track['name']}")
-                    log_download("Spotify", track['name'], artist=" & ".join(track['artists']), mode="Album", status="Failed")
-                time.sleep(1)
 
-            print("\n" + "═" * 61)
-            print_success(f"Album download finished: {success} successful, {fail} failed")
-            print("═" * 61)
-        except Exception as e:
-            print_error(f"Error: {e}")
-
-# ----------------------------------------------------------------------
-# Entry point called from main menu
-# ----------------------------------------------------------------------
-def run(config):
-    clear_screen()
-    print_banner()
-    print("                   🎵 Spotify Downloader")
-    print("=" * 61)
-    print()
-    print(f"{CYAN}{BOLD}1.{RESET} Download playlist")
-    print(f"{CYAN}{BOLD}2.{RESET} Download single track")
-    print(f"{CYAN}{BOLD}3.{RESET} Download album")
-    print(f"{CYAN}{BOLD}4.{RESET} Back to main menu")
-    print()
-    print("=" * 61)
-    choice = input("Select (1-4): ").strip()
-    if choice == "4":
-        return
-
+def create_downloader(config):
     try:
-        downloader = SpotifyDownloader(config)
-    except (ValueError, ConnectionError) as e:
-        print_error(str(e), "Please set your Spotify API credentials in Settings → Spotify API credentials")
-        input("Press Enter to continue...")
+        return SpotifyDownloader(config)
+    except Exception as error:
+        print_error(str(error), "Fix the download folder or configuration and try again.")
+        return None
+
+
+def run_spotify_workflow(config, choice):
+    downloader = create_downloader(config)
+    if downloader is None:
+        pause()
         return
 
-    url = input("\n🎯 Enter Spotify URL: ").strip()
-    if not url:
-        return
+    item_type = {"1": "playlist", "2": "track", "3": "album"}[choice]
+    while True:
+        url = input(f"\n🎯 Enter Spotify {item_type} URL (blank to go back): ").strip()
+        if not url:
+            return
+        if not is_spotify_url(url, item_type):
+            print_error(f"Invalid Spotify {item_type} URL", f"Use a link containing spotify.com/{item_type}/.")
+        elif choice == "1":
+            downloader.download_playlist(url)
+        elif choice == "2":
+            downloader.download_single_track(url)
+        elif choice == "3":
+            downloader.download_album(url)
 
-    if choice == "1":
-        downloader.download_playlist(url)
-    elif choice == "2":
-        downloader.download_single_track(url)
-    elif choice == "3":
-        downloader.download_album(url)
-    else:
-        print_error("Invalid choice", "Please select 1-4")
+        if not confirm(f"\nProcess another Spotify {item_type}?"):
+            return
 
-    input("\nPress Enter to continue...")
+
+def run(config):
+    while True:
+        clear_screen()
+        print_banner()
+        print("                   🎵 Spotify Downloader")
+        print("=" * 61)
+        print()
+        print(f"{CYAN}{BOLD}1.{RESET} Download playlist")
+        print(f"{CYAN}{BOLD}2.{RESET} Download single track")
+        print(f"{CYAN}{BOLD}3.{RESET} Download album")
+        print(f"{CYAN}{BOLD}4.{RESET} Back to main menu")
+        print()
+        print("=" * 61)
+        choice = menu_choice("Select (1-4): ", "1234")
+        if choice in (None, "4"):
+            return
+        try:
+            run_spotify_workflow(config, choice)
+        except Exception as error:
+            stop_spinner()
+            print_error(f"Spotify workflow error: {error}", "You remain in the Spotify Downloader.")
+            pause()

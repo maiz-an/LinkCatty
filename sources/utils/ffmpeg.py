@@ -4,8 +4,7 @@ import platform
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent
-SOURCES_DIR = BASE_DIR / "sources"
-FFMPEG_BASE = SOURCES_DIR / "FFmpeg"
+FFMPEG_BASE = BASE_DIR / "FFmpeg"
 
 def get_ffmpeg_path():
     """Return absolute path to FFmpeg executable (project-bundled or system)."""

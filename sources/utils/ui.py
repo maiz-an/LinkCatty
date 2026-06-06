@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import platform
+import shutil
 
 # ANSI color codes (Windows 10+ supports them, older Windows will fallback)
 if platform.system() == "Windows":
@@ -40,7 +41,11 @@ def set_console_width(width=62):
         pass  # Silently fail if unsupported
 
 def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    if os.name == 'nt':
+        os.system('cls')
+        return
+    if shutil.which('clear'):
+        os.system('clear')
 
 def print_banner():
     """Print the LinkCatty logo with colors."""
@@ -80,6 +85,74 @@ def print_info(message):
 
 def print_warning(message):
     print(f"{YELLOW}⚠️  {message}{RESET}")
+
+def pause(message="\nPress Enter to continue..."):
+    """Pause after a screen message without letting Ctrl+C crash a submenu."""
+    try:
+        input(message)
+    except (KeyboardInterrupt, EOFError):
+        print()
+
+def read_key():
+    """Read one keypress when possible; fall back to Enter-based input."""
+    try:
+        if os.name == "nt":
+            import msvcrt
+            while True:
+                char = msvcrt.getwch()
+                if char in ("\x00", "\xe0"):
+                    return char + msvcrt.getwch()
+                return char
+
+        import termios
+        import tty
+        if not sys.stdin.isatty():
+            value = input().strip()
+            return value[:1]
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            return sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except (ImportError, OSError, EOFError):
+        value = input().strip()
+        return value[:1]
+    except KeyboardInterrupt:
+        return "\x03"
+
+def menu_choice(prompt, valid_choices, back_choices=None):
+    """Read a single-key menu choice and validate it."""
+    valid = {str(choice) for choice in valid_choices}
+    back = set(back_choices or [])
+    while True:
+        print(prompt, end="", flush=True)
+        choice = read_key()
+        print(choice if choice not in ("\r", "\n", "\x03") else "")
+        if choice == "\x03":
+            return None
+        if choice in valid or choice in back:
+            return choice
+        print_error(
+            f"Invalid choice: {choice or '<empty>'}",
+            f"Press one of: {', '.join(sorted(valid | back))}"
+        )
+
+def confirm(prompt, default=False):
+    """Read a y/n answer as a single-key option."""
+    suffix = " [Y/n]: " if default else " [y/N]: "
+    while True:
+        print(prompt + suffix, end="", flush=True)
+        choice = read_key().lower()
+        print(choice if choice not in ("\r", "\n", "\x03") else "")
+        if choice == "\x03":
+            return False
+        if choice in ("\r", "\n", ""):
+            return default
+        if choice in ("y", "n"):
+            return choice == "y"
+        print_error("Invalid answer", "Press y or n")
 
 def start_spinner(text="Processing"):
     """Start an animated spinner in a separate thread."""

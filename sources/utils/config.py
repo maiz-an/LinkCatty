@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 from .ffmpeg import get_ffmpeg_path
 
@@ -34,21 +35,23 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
-    config = DEFAULT_CONFIG.copy()
+    config = deepcopy(DEFAULT_CONFIG)
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 user_config = json.load(f)
+                if not isinstance(user_config, dict):
+                    raise ValueError("settings.json must contain a JSON object")
                 for section, values in user_config.items():
                     if section in config:
-                        if isinstance(values, dict):
+                        if isinstance(config[section], dict) and isinstance(values, dict):
                             config[section].update(values)
-                        else:
+                        elif not isinstance(config[section], dict):
                             config[section] = values
                     else:
                         config[section] = values
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"⚠️ Could not read settings.json. Defaults loaded instead: {e}")
     config['ffmpeg_path'] = get_ffmpeg_path()
     return config
 
