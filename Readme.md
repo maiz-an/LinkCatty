@@ -63,6 +63,7 @@
 
 Run `linkcatty` – you’ll see the main menu:
 
+```
 =============================================================
                       🎯 MAIN MENU
 =============================================================
@@ -72,7 +73,7 @@ Run `linkcatty` – you’ll see the main menu:
 4. ⚙️  Settings
 5. ❌ Exit
 =============================================================
-
+```
 ### 🎬 YouTube Downloader
 
 - Choose **Video (best quality)** or **Audio (MP3)**
