@@ -51,17 +51,18 @@ class SpotifyDownloader:
                 "Please run: pip install spotdl"
             )
 
+        # Credentials (needed by spotdl CLI to resolve {playlist}/{album})
+        self.client_id = self.spotify_config.get("client_id", "").strip()
+        self.client_secret = self.spotify_config.get("client_secret", "").strip()
+
         # Initialise spotdl's Spotify client for metadata (if credentials exist)
         self.spotdl_client_available = False
-        if SpotifyClient is not None:
-            client_id = self.spotify_config.get("client_id", "").strip()
-            client_secret = self.spotify_config.get("client_secret", "").strip()
-            if client_id and client_secret:
-                try:
-                    SpotifyClient.init(client_id, client_secret)
-                    self.spotdl_client_available = True
-                except Exception:
-                    pass
+        if SpotifyClient is not None and self.client_id and self.client_secret:
+            try:
+                SpotifyClient.init(self.client_id, self.client_secret)
+                self.spotdl_client_available = True
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     def _get_playlist_meta(self, url):
@@ -110,17 +111,41 @@ class SpotifyDownloader:
             return None
 
     # ------------------------------------------------------------------
-    def _get_output_folder(self, item_type, playlist_album_name):
-        """Return the expected output folder for a playlist/album."""
+    def _clean_name(self, name):
+        """Remove characters invalid in folder names."""
+        return re.sub(r'[\\/*?:"<>|]', "", name) if name else None
+
+    def _find_output_folder(self, item_type, expected_name):
+        """
+        After download, find the folder spotdl actually created.
+        Uses the expected name (from metadata) if it exists, otherwise falls back to
+        the most recently modified subdirectory in download_dir.
+        """
         base = str(self.download_dir)
-        if item_type in ("playlist", "album") and playlist_album_name:
-            # Clean name for filesystem
-            safe_name = re.sub(r'[\\/*?:"<>|]', "", playlist_album_name)
-            return os.path.join(base, safe_name)
+        if not expected_name:
+            return base
+
+        safe_name = self._clean_name(expected_name)
+        if not safe_name:
+            return base
+
+        candidate = os.path.join(base, safe_name)
+        if os.path.isdir(candidate):
+            return candidate
+
+        # Fallback: find newest subdirectory (spotdl might have cleaned the name differently)
+        try:
+            subdirs = [os.path.join(base, d) for d in os.listdir(base)
+                       if os.path.isdir(os.path.join(base, d))]
+            if subdirs:
+                return max(subdirs, key=lambda d: os.path.getmtime(d))
+        except Exception:
+            pass
+
         return base
 
     def _count_audio_files(self, folder):
-        """Count mp3/m4a files in folder."""
+        """Count audio files in a folder (non-recursive, quick)."""
         count = 0
         try:
             for f in os.listdir(folder):
@@ -133,12 +158,13 @@ class SpotifyDownloader:
     # ------------------------------------------------------------------
     def _spotdl_download(self, url, item_type, metadata_name=None):
         """
-        Run spotdl with clean output and auto-download Deno if needed.
+        Run spotdl with credentials, clean output and auto-download Deno.
         Returns (success_bool, output_folder_path).
         """
         quality = self.spotify_config.get("audio_quality", "320k").replace("k", "")
         output_dir = str(self.download_dir)
 
+        # Output template
         if item_type == "album":
             template = os.path.join(output_dir, "{album}", "{title} - {artists}.{ext}")
         elif item_type == "playlist":
@@ -151,23 +177,23 @@ class SpotifyDownloader:
             url,
             "--output", template,
             "--bitrate", f"{quality}k",
-            "--no-progress",               # clean line‑by‑line logs
-            "--download-deno",             # auto‑download Deno if needed
+            "--no-progress",
+            "--download-deno",
         ]
 
+        # Pass credentials so spotdl can resolve {playlist}/{album}
+        if self.client_id and self.client_secret:
+            cmd += ["--client-id", self.client_id, "--client-secret", self.client_secret]
+
         print_info(f"Output folder: {output_dir}")
-        # Show spotdl’s clean log lines in real time
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, bufsize=1) as proc:
             for line in proc.stdout:
-                print(line, end="")        # spotdl already adds newlines
+                print(line, end="")
             proc.wait()
 
-        # Determine actual output folder
-        if metadata_name and item_type in ("playlist", "album"):
-            out_folder = self._get_output_folder(item_type, metadata_name)
-        else:
-            out_folder = output_dir
+        # Find where spotdl actually saved the files
+        out_folder = self._find_output_folder(item_type, metadata_name)
 
         # Success = at least one audio file created
         file_count = self._count_audio_files(out_folder)

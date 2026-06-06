@@ -83,9 +83,6 @@ Run `linkcatty` – you’ll see the main menu:
 
 ### 🎵 Spotify Downloader
 
-> **First time?** Go to `Settings` → `Spotify API credentials` and enter your Client ID and Secret.  
-> Get them for free from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/).
-
 - Select **playlist**, **single track**, or **album**
 - Paste the Spotify URL
 - The app searches for the song on YouTube and downloads it as MP3
@@ -96,6 +93,7 @@ Run `linkcatty` – you’ll see the main menu:
 - Adjust video quality (best / 1080p / 720p / 480p / 360p)
 - Adjust MP3 quality (320k / 192k)
 - Toggle auto‑retry and quiet mode
+- (Optionally) enter Spotify Client ID / Secret for better folder naming
 - Clear download history
 
 ---
@@ -117,7 +115,6 @@ Remove LinkCatty completely (installation folder, PATH entry, and shortcuts):
 |-------|----------|
 | `linkcatty` not recognized | Close and reopen your terminal. On Windows, check `%LOCALAPPDATA%\LinkCatty` is in your `PATH`. |
 | YouTube “Sign in to confirm you’re not a bot” | Close your browser completely and retry. If still fails, export YouTube cookies to `sources/cookies.txt` (use “Get cookies.txt LOCALLY” extension). |
-| Spotify downloads fail | Verify your Client ID / Secret in Settings. Some rare tracks may not be found on YouTube – they are skipped. |
 | FFmpeg not found (video merging may fail) | The installer bundles FFmpeg. If you see this warning, you can install FFmpeg manually (audio‑only downloads still work). |
 
 ---
