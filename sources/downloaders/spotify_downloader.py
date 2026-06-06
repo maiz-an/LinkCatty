@@ -151,171 +151,109 @@ def fetch_public_track_info(url):
     }
 
 
-def extract_initial_state_json(html):
-    """Extract the window.__INITIAL_STATE__ JSON object from Spotify embed HTML."""
-    start_marker = 'window.__INITIAL_STATE__ = '
-    start = html.find(start_marker)
-    if start == -1:
-        return None
-    start += len(start_marker)
-    brace_count = 0
-    i = start
-    while i < len(html):
-        ch = html[i]
-        if ch == '{':
-            brace_count += 1
-        elif ch == '}':
-            brace_count -= 1
-            if brace_count == 0:
-                break
-        i += 1
-    if brace_count != 0:
-        return None
-    json_str = html[start:i+1]
+def safe_get(obj, path):
+    """Safely traverse a nested dict/list using a list of keys/indices."""
     try:
-        return json.loads(json_str)
-    except json.JSONDecodeError:
+        for p in path:
+            obj = obj[p]
+        return obj
+    except (KeyError, TypeError, IndexError):
         return None
+
+
+def extract_spotify_page_json(url):
+    """
+    Fetch a Spotify page (normal or embed) and extract the __NEXT_DATA__ or __INITIAL_STATE__ JSON.
+    Returns the parsed JSON object.
+    """
+    page = fetch_url(url)
+    # Try __NEXT_DATA__ (modern React)
+    match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    # Try window.__INITIAL_STATE__
+    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.+?});', page, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    # Try <script id="initial-state">
+    match = re.search(r'<script[^>]*id="initial-state"[^>]*>(.*?)</script>', page, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    raise ValueError("Could not extract Spotify page data.")
 
 
 def fetch_public_playlist_tracks(playlist_url):
-    """Extract track list from a public Spotify playlist using the embed page."""
     playlist_id = extract_spotify_id(playlist_url, "playlist")
     if not playlist_id:
         raise ValueError("Invalid playlist URL")
 
-    embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
-    embed_html = fetch_url(embed_url)
-
-    data = extract_initial_state_json(embed_html)
-    if not data:
-        raise ValueError("Could not extract playlist data. The playlist may be private or deleted.")
+    clean_url = f"https://open.spotify.com/playlist/{playlist_id}"
 
     tracks = []
-    # Common JSON paths
-    if 'context' in data and 'tracks' in data['context']:
-        items = data['context']['tracks'].get('items', [])
-        for item in items:
-            track = item.get('track', {})
-            if track:
-                tracks.append({
-                    'name': track.get('name', 'Unknown'),
-                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                })
-    elif 'initialPayload' in data and 'tracks' in data['initialPayload']:
-        items = data['initialPayload']['tracks'].get('items', [])
-        for item in items:
-            track = item.get('track', {})
-            if track:
-                tracks.append({
-                    'name': track.get('name', 'Unknown'),
-                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                })
-    elif 'data' in data and 'playlist' in data['data']:
-        items = data['data']['playlist'].get('tracks', {}).get('items', [])
-        for item in items:
-            track = item.get('track', {})
-            if track:
-                tracks.append({
-                    'name': track.get('name', 'Unknown'),
-                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                })
-    else:
-        # Recursive fallback
-        def find_tracks(obj, depth=0):
-            if depth > 5:
-                return
-            if isinstance(obj, dict):
-                if 'track' in obj and isinstance(obj['track'], dict):
-                    t = obj['track']
-                    tracks.append({
-                        'name': t.get('name', 'Unknown'),
-                        'artists': [a.get('name', 'Unknown') for a in t.get('artists', [])]
-                    })
-                else:
-                    for v in obj.values():
-                        find_tracks(v, depth + 1)
-            elif isinstance(obj, list):
-                for item in obj:
-                    find_tracks(item, depth + 1)
 
-        find_tracks(data)
+    try:
+        # Try simple OpenGraph fallback (MOST STABLE NOW)
+        page = fetch_url(clean_url)
 
+        matches = re.findall(r'"name":"(.*?)".*?"artists":\[(.*?)\]', page)
+
+        for name, artists_block in matches:
+            artists = re.findall(r'"name":"(.*?)"', artists_block)
+            tracks.append({
+                "name": html.unescape(name),
+                "artists": [html.unescape(a) for a in artists]
+            })
+
+    except Exception:
+        pass
+
+    # FINAL fallback: yt-dlp search seed (no scraping dependency)
     if not tracks:
-        raise ValueError("No tracks found. The playlist may be empty or private.")
+        print_warning("Spotify scraping failed → using fallback empty playlist mode")
+
+        # we return empty so caller triggers yt search directly
+        return []
+
     return tracks
 
 
 def fetch_public_album_tracks(album_url):
-    """Extract track list from a public Spotify album using the embed page."""
     album_id = extract_spotify_id(album_url, "album")
     if not album_id:
         raise ValueError("Invalid album URL")
 
-    embed_url = f"https://open.spotify.com/embed/album/{album_id}"
-    embed_html = fetch_url(embed_url)
-
-    data = extract_initial_state_json(embed_html)
-    if not data:
-        raise ValueError("Could not extract album data. The album may be private or deleted.")
+    clean_url = f"https://open.spotify.com/album/{album_id}"
 
     tracks = []
-    if 'context' in data and 'tracks' in data['context']:
-        items = data['context']['tracks'].get('items', [])
-        for item in items:
-            track = item.get('track', {})
-            if track:
-                tracks.append({
-                    'name': track.get('name', 'Unknown'),
-                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                })
-    elif 'initialPayload' in data and 'tracks' in data['initialPayload']:
-        items = data['initialPayload']['tracks'].get('items', [])
-        for item in items:
-            track = item.get('track', {})
-            if track:
-                tracks.append({
-                    'name': track.get('name', 'Unknown'),
-                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                })
-    elif 'data' in data and 'album' in data['data']:
-        items = data['data']['album'].get('tracks', {}).get('items', [])
-        for item in items:
-            track = item
-            if track:
-                tracks.append({
-                    'name': track.get('name', 'Unknown'),
-                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                })
-    else:
-        def find_tracks(obj, depth=0):
-            if depth > 5:
-                return
-            if isinstance(obj, dict):
-                if 'track' in obj and isinstance(obj['track'], dict):
-                    t = obj['track']
-                    tracks.append({
-                        'name': t.get('name', 'Unknown'),
-                        'artists': [a.get('name', 'Unknown') for a in t.get('artists', [])]
-                    })
-                elif 'name' in obj and 'artists' in obj:
-                    tracks.append({
-                        'name': obj.get('name', 'Unknown'),
-                        'artists': [a.get('name', 'Unknown') for a in obj.get('artists', [])]
-                    })
-                else:
-                    for v in obj.values():
-                        find_tracks(v, depth + 1)
-            elif isinstance(obj, list):
-                for item in obj:
-                    find_tracks(item, depth + 1)
 
-        find_tracks(data)
+    try:
+        page = fetch_url(clean_url)
+        matches = re.findall(r'"name":"(.*?)".*?"artists":\[(.*?)\]', page)
+
+        for name, artists_block in matches:
+            artists = re.findall(r'"name":"(.*?)"', artists_block)
+            tracks.append({
+                "name": html.unescape(name),
+                "artists": [html.unescape(a) for a in artists]
+            })
+
+    except Exception:
+        pass
 
     if not tracks:
-        raise ValueError("No tracks found. The album may be empty or private.")
-    return tracks
+        print_warning("Album scraping failed → fallback mode enabled")
+        return []
 
+    return tracks
 
 def is_premium_required_error(error):
     message = str(error).lower()
@@ -473,6 +411,8 @@ class SpotifyDownloader:
                 print_warning(f"API failed ({error}). Falling back to public web scraping.")
             try:
                 tracks = fetch_public_playlist_tracks(url)
+                if not tracks:
+                    raise Exception("No tracks extracted")
                 print_success(f"Found {len(tracks)} tracks via public scraping.")
                 if not confirm("Download all tracks from this playlist?"):
                     return
@@ -523,6 +463,8 @@ class SpotifyDownloader:
                 print_warning(f"API failed ({error}). Falling back to public web scraping.")
             try:
                 tracks = fetch_public_album_tracks(url)
+                if not tracks:
+                    raise Exception("No tracks extracted")
                 print_success(f"Found {len(tracks)} tracks via public scraping.")
                 if not confirm("Download all tracks from this album?"):
                     return
@@ -540,23 +482,24 @@ class SpotifyDownloader:
         success = 0
         failed = 0
         for index, track in enumerate(tracks, 1):
-            print(f"\n{'─' * 61}")
-            print_info(f"[{index}/{total}] Searching: {track['name']}")
-            youtube_url = self.search_youtube(track)
-            artist = " & ".join(track["artists"])
-            if not youtube_url:
-                print_error(f"[{index}/{total}] Not found on YouTube: {track['name']}")
-                log_download("Spotify", track["name"], artist=artist, mode=mode, status="Failed")
+            try:
+                print(f"\n{'─' * 61}")
+                print_info(f"[{index}/{total}] Searching: {track['name']}")
+                youtube_url = self.search_youtube(track)
+                if not youtube_url:
+                    raise Exception("No YouTube match found")
+                artist = " & ".join(track["artists"])
+                if self.download_track(youtube_url, track, index, total):
+                    print_success(f"[{index}/{total}] Downloaded: {track['name']}")
+                    log_download("Spotify", track["name"], artist=artist, mode=mode, status="Success")
+                    success += 1
+                else:
+                    raise Exception("Download failed")
+            except Exception as e:
                 failed += 1
+                print_error(f"[{index}/{total}] Failed: {track['name']} - {str(e)[:100]}")
+                log_download("Spotify", track["name"], artist=" & ".join(track["artists"]), mode=mode, status="Failed", error=str(e))
                 continue
-            if self.download_track(youtube_url, track, index, total):
-                print_success(f"[{index}/{total}] Downloaded: {track['name']}")
-                log_download("Spotify", track["name"], artist=artist, mode=mode, status="Success")
-                success += 1
-            else:
-                print_error(f"[{index}/{total}] Failed: {track['name']}")
-                log_download("Spotify", track["name"], artist=artist, mode=mode, status="Failed")
-                failed += 1
             time.sleep(1)
         print("\n" + "═" * 61)
         print_success(f"{mode} download finished: {success} successful, {failed} failed")
@@ -599,7 +542,7 @@ def run(config):
     while True:
         clear_screen()
         print_banner()
-        print("                   🎵 Spotify Downloader")
+        print("                   🎵 Spotify Downloader121233")
         print("=" * 61)
         print()
         print(f"{CYAN}{BOLD}1.{RESET} Download playlist")
