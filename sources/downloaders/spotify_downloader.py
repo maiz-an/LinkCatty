@@ -51,14 +51,21 @@ def normalize_spotify_url(url):
 
 
 def fetch_url(url, timeout=15):
+    """Fetch a URL with modern browser headers to avoid 403 / login walls."""
     request = urllib.request.Request(
         url,
         headers={
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0 Safari/537.36"
-            )
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Referer": "https://open.spotify.com/",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
         },
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -163,8 +170,7 @@ def safe_get(obj, path):
 
 def extract_spotify_page_json(url):
     """
-    Fetch a Spotify page (normal or embed) and extract the __NEXT_DATA__ or __INITIAL_STATE__ JSON.
-    Returns the parsed JSON object.
+    Fetch a Spotify page and extract the __NEXT_DATA__ or __INITIAL_STATE__ JSON.
     """
     page = fetch_url(url)
     # Try __NEXT_DATA__ (modern React)
@@ -175,7 +181,7 @@ def extract_spotify_page_json(url):
         except json.JSONDecodeError:
             pass
     # Try window.__INITIAL_STATE__
-    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.+?});', page, re.DOTALL)
+    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*(\{.+?\});', page, re.DOTALL)
     if match:
         try:
             return json.loads(match.group(1))
@@ -191,39 +197,140 @@ def extract_spotify_page_json(url):
     raise ValueError("Could not extract Spotify page data.")
 
 
+def _parse_tracks_from_json(data, item_type):
+    """
+    Parse track list from Spotify __NEXT_DATA__ for playlists and albums.
+    Returns list of dicts: {'name': ..., 'artists': [...]}
+    """
+    try:
+        page_props = data['props']['pageProps']
+        entity = page_props.get(item_type)
+        if not entity:
+            return []
+
+        # Try common container names
+        tracks_container = entity.get('tracks')
+        if not tracks_container and item_type == 'playlist':
+            tracks_container = entity.get('contents')  # v2 playlist structure
+        if not tracks_container:
+            return []
+
+        items = tracks_container.get('items', [])
+        tracks = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            track_data = item.get('track', item)
+            if not isinstance(track_data, dict):
+                continue
+
+            name = track_data.get('name')
+            artist_list = track_data.get('artists', [])
+            artists = [a['name'] for a in artist_list if isinstance(a, dict) and a.get('name')]
+            if name:
+                tracks.append({
+                    'name': html.unescape(name),
+                    'artists': artists if artists else ['Unknown Artist']
+                })
+        return tracks
+    except Exception:
+        return []
+
+
+def _fetch_embed_data(item_type, item_id):
+    """
+    Fetch the public embed API that returns track data as JSON.
+    Example: https://open.spotify.com/embed/playlist/7BxegIfBopulaYyiq4uckP/data
+    """
+    url = f"https://open.spotify.com/embed/{item_type}/{item_id}/data"
+    try:
+        raw = fetch_url(url)
+        data = json.loads(raw)
+        return data
+    except Exception:
+        return None
+
+
+def _parse_tracks_from_embed_data(data, item_type):
+    """
+    Extract tracks from the embed data JSON.
+    Structure:
+    {
+      "playlist": {
+        "tracks": {
+          "items": [ { "track": { "name":..., "artists":[...] } }, ... ]
+        }
+      }
+    }
+    """
+    try:
+        container = data.get(item_type, {})
+        tracks_meta = container.get('tracks', {})
+        items = tracks_meta.get('items', [])
+        tracks = []
+        for entry in items:
+            track = entry.get('track', entry)
+            name = track.get('name')
+            artists = [a['name'] for a in track.get('artists', []) if isinstance(a, dict) and a.get('name')]
+            if name:
+                tracks.append({
+                    'name': html.unescape(name),
+                    'artists': artists if artists else ['Unknown Artist']
+                })
+        return tracks
+    except Exception:
+        return []
+
+
 def fetch_public_playlist_tracks(playlist_url):
     playlist_id = extract_spotify_id(playlist_url, "playlist")
     if not playlist_id:
         raise ValueError("Invalid playlist URL")
 
-    clean_url = f"https://open.spotify.com/playlist/{playlist_id}"
+    # 1st: embed data API (most reliable, public JSON)
+    embed_data = _fetch_embed_data("playlist", playlist_id)
+    if embed_data:
+        tracks = _parse_tracks_from_embed_data(embed_data, "playlist")
+        if tracks:
+            return tracks
 
-    tracks = []
-
+    # 2nd: embed page scraping (fallback)
+    embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
     try:
-        # Try simple OpenGraph fallback (MOST STABLE NOW)
-        page = fetch_url(clean_url)
+        data = extract_spotify_page_json(embed_url)
+        tracks = _parse_tracks_from_json(data, 'playlist')
+        if tracks:
+            return tracks
+    except Exception:
+        pass
 
+    # 3rd: normal playlist page
+    try:
+        data = extract_spotify_page_json(f"https://open.spotify.com/playlist/{playlist_id}")
+        tracks = _parse_tracks_from_json(data, 'playlist')
+        if tracks:
+            return tracks
+    except Exception:
+        pass
+
+    # 4th: regex on normal page
+    try:
+        page = fetch_url(f"https://open.spotify.com/playlist/{playlist_id}")
         matches = re.findall(r'"name":"(.*?)".*?"artists":\[(.*?)\]', page)
-
+        tracks = []
         for name, artists_block in matches:
             artists = re.findall(r'"name":"(.*?)"', artists_block)
             tracks.append({
                 "name": html.unescape(name),
-                "artists": [html.unescape(a) for a in artists]
+                "artists": [html.unescape(a) for a in artists] if artists else ["Unknown Artist"]
             })
-
+        if tracks:
+            return tracks
     except Exception:
         pass
 
-    # FINAL fallback: yt-dlp search seed (no scraping dependency)
-    if not tracks:
-        print_warning("Spotify scraping failed → using fallback empty playlist mode")
-
-        # we return empty so caller triggers yt search directly
-        return []
-
-    return tracks
+    print_warning("Spotify scraping failed → using fallback empty playlist mode")
+    return []
 
 
 def fetch_public_album_tracks(album_url):
@@ -231,29 +338,51 @@ def fetch_public_album_tracks(album_url):
     if not album_id:
         raise ValueError("Invalid album URL")
 
-    clean_url = f"https://open.spotify.com/album/{album_id}"
+    # 1st: embed data API
+    embed_data = _fetch_embed_data("album", album_id)
+    if embed_data:
+        tracks = _parse_tracks_from_embed_data(embed_data, "album")
+        if tracks:
+            return tracks
 
-    tracks = []
-
+    # 2nd: embed page
+    embed_url = f"https://open.spotify.com/embed/album/{album_id}"
     try:
-        page = fetch_url(clean_url)
-        matches = re.findall(r'"name":"(.*?)".*?"artists":\[(.*?)\]', page)
+        data = extract_spotify_page_json(embed_url)
+        tracks = _parse_tracks_from_json(data, 'album')
+        if tracks:
+            return tracks
+    except Exception:
+        pass
 
+    # 3rd: normal album page
+    try:
+        data = extract_spotify_page_json(f"https://open.spotify.com/album/{album_id}")
+        tracks = _parse_tracks_from_json(data, 'album')
+        if tracks:
+            return tracks
+    except Exception:
+        pass
+
+    # 4th: regex
+    try:
+        page = fetch_url(f"https://open.spotify.com/album/{album_id}")
+        matches = re.findall(r'"name":"(.*?)".*?"artists":\[(.*?)\]', page)
+        tracks = []
         for name, artists_block in matches:
             artists = re.findall(r'"name":"(.*?)"', artists_block)
             tracks.append({
                 "name": html.unescape(name),
-                "artists": [html.unescape(a) for a in artists]
+                "artists": [html.unescape(a) for a in artists] if artists else ["Unknown Artist"]
             })
-
+        if tracks:
+            return tracks
     except Exception:
         pass
 
-    if not tracks:
-        print_warning("Album scraping failed → fallback mode enabled")
-        return []
+    print_warning("Album scraping failed → fallback mode enabled")
+    return []
 
-    return tracks
 
 def is_premium_required_error(error):
     message = str(error).lower()
