@@ -19,6 +19,7 @@ except ImportError:
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
+    print_warning,
     BOLD,
     CYAN,
     RESET,
@@ -110,7 +111,6 @@ def parse_artist_from_text(text, track_name):
 
 
 def fetch_public_track_info(url):
-    """Read public Spotify page metadata without Spotify API credentials or Premium."""
     normalized_url = normalize_spotify_url(url)
     oembed_title = ""
     oembed_author = ""
@@ -149,6 +149,111 @@ def fetch_public_track_info(url):
         "album": "",
         "source": "public Spotify page",
     }
+
+
+def fetch_public_playlist_tracks(playlist_url):
+    """
+    Extract track list (names and artists) from a public Spotify playlist page.
+    Returns list of dicts: [{'name': ..., 'artists': [...]}, ...]
+    """
+    normalized_url = normalize_spotify_url(playlist_url)
+    page = fetch_url(normalized_url)
+    # Spotify embeds track data in a <script> tag with id "initial-state" or inline JSON.
+    # Simplified approach: look for the "initialData" or embedded list.
+    # We'll parse the JSON inside the script.
+    tracks = []
+
+    # Try to find the JSON data containing tracks
+    # Pattern: "tracks": { "items": [ ... ] }
+    # Extract the large JSON object
+    script_pattern = r'<script[^>]*id="initial-state"[^>]*>([\s\S]*?)</script>'
+    match = re.search(script_pattern, page)
+    if match:
+        try:
+            data = json.loads(match.group(1))
+            # Navigate to tracks
+            # The structure can vary; look for "entities" -> "items" or "playlist" -> "tracks"
+            # Common path: data['entities']['items'] or data['playlist']['tracks']['items']
+            if 'entities' in data and 'items' in data['entities']:
+                for item in data['entities']['items']:
+                    track = item.get('track', {})
+                    if track:
+                        tracks.append({
+                            'name': track.get('name', 'Unknown'),
+                            'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                        })
+            elif 'playlist' in data and 'tracks' in data['playlist'] and 'items' in data['playlist']['tracks']:
+                for item in data['playlist']['tracks']['items']:
+                    track = item.get('track', {})
+                    if track:
+                        tracks.append({
+                            'name': track.get('name', 'Unknown'),
+                            'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                        })
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Fallback: look for <meta> tags and oembed for playlist metadata? Not for tracks.
+    # If JSON extraction failed, use a more resilient method: request the embed page.
+    if not tracks:
+        # Use embed endpoint which returns JSON with track list
+        embed_url = f"https://open.spotify.com/embed/playlist/{extract_spotify_id(playlist_url, 'playlist')}"
+        embed_data = fetch_url(embed_url)
+        # The embed page contains a JSON script
+        embed_match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({[\s\S]+?});', embed_data)
+        if embed_match:
+            try:
+                embed_json = json.loads(embed_match.group(1))
+                # Navigate to tracks
+                if 'context' in embed_json and 'tracks' in embed_json['context']:
+                    for item in embed_json['context']['tracks'].get('items', []):
+                        track = item.get('track', {})
+                        if track:
+                            tracks.append({
+                                'name': track.get('name', 'Unknown'),
+                                'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                            })
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    if not tracks:
+        raise ValueError("Could not extract playlist tracks from public Spotify page. The playlist may be private or require API credentials.")
+
+    return tracks
+
+
+def fetch_public_album_tracks(album_url):
+    """
+    Extract track list from a public Spotify album page.
+    Similar to playlist extraction but for album endpoint.
+    """
+    album_id = extract_spotify_id(album_url, 'album')
+    if not album_id:
+        raise ValueError("Invalid album URL")
+
+    embed_url = f"https://open.spotify.com/embed/album/{album_id}"
+    page = fetch_url(embed_url)
+    tracks = []
+    # Look for __INITIAL_STATE__ JSON
+    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({[\s\S]+?});', page)
+    if match:
+        try:
+            data = json.loads(match.group(1))
+            # Navigate to tracks
+            if 'context' in data and 'tracks' in data['context']:
+                for item in data['context']['tracks'].get('items', []):
+                    track = item.get('track', {})
+                    if track:
+                        tracks.append({
+                            'name': track.get('name', 'Unknown'),
+                            'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                        })
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    if not tracks:
+        raise ValueError("Could not extract album tracks from public Spotify page. The album may be private or require API credentials.")
+    return tracks
 
 
 def is_premium_required_error(error):
@@ -239,50 +344,6 @@ class SpotifyDownloader:
             print_error(f"Download error: {error}", "Check FFmpeg, network access, and the YouTube result.")
             return False
 
-    def fetch_playlist_tracks(self, playlist_id):
-        if self.spotify is None:
-            raise ValueError("Spotify API credentials are required to read playlist track lists.")
-        tracks = []
-        results = self.spotify.playlist_tracks(playlist_id)
-        while results:
-            for item in results.get("items", []):
-                track = item.get("track")
-                if track:
-                    tracks.append({
-                        "name": track["name"],
-                        "artists": [artist["name"] for artist in track["artists"]],
-                    })
-            results = self.spotify.next(results) if results.get("next") else None
-        return tracks
-
-    def download_playlist(self, url):
-        playlist_id = extract_spotify_id(url, "playlist")
-        if not playlist_id:
-            print_error("Invalid Spotify playlist URL", "Use a link containing spotify.com/playlist/.")
-            return
-        if self.spotify is None:
-            print_error(
-                "Playlist downloads need Spotify API access.",
-                "Single-track downloads work without Premium/API access. Playlist track lists are not public enough to read reliably.",
-            )
-            return
-        try:
-            playlist = self.spotify.playlist(playlist_id)
-            print_info(f"Playlist: {playlist['name']} by {playlist['owner']['display_name']}")
-            print_info(f"Total tracks: {playlist['tracks']['total']}")
-            if not confirm("Download all?"):
-                return
-            print_info("Fetching playlist tracks...")
-            self.download_track_list(self.fetch_playlist_tracks(playlist_id), "Playlist")
-        except Exception as error:
-            if is_premium_required_error(error):
-                print_error(
-                    "Spotify blocked playlist metadata for this app.",
-                    "Use single-track links, or API credentials from a Spotify app that can access playlist endpoints.",
-                )
-                return
-            print_error(f"Error fetching playlist: {error}", "Check the playlist link, credentials, and network connection.")
-
     def get_track_info(self, track_id, url):
         if self.spotify is not None:
             try:
@@ -327,36 +388,90 @@ class SpotifyDownloader:
         except Exception as error:
             print_error(f"Error fetching track: {error}", "Check the track link and network connection.")
 
+    def download_playlist(self, url):
+        playlist_id = extract_spotify_id(url, "playlist")
+        if not playlist_id:
+            print_error("Invalid Spotify playlist URL", "Use a link containing spotify.com/playlist/.")
+            return
+        tracks = []
+        try:
+            # Try API first (requires API credentials, may need Premium)
+            if self.spotify is not None:
+                playlist = self.spotify.playlist(playlist_id)
+                print_info(f"Playlist: {playlist['name']} by {playlist['owner']['display_name']}")
+                print_info(f"Total tracks: {playlist['tracks']['total']}")
+                if not confirm("Download all?"):
+                    return
+                print_info("Fetching playlist tracks via API...")
+                tracks = self.fetch_playlist_tracks_via_api(playlist_id)
+            else:
+                raise Exception("No API credentials")
+        except Exception as error:
+            if is_premium_required_error(error):
+                print_info("Spotify API blocked (Premium required). Falling back to public web scraping.")
+            else:
+                print_warning(f"API failed ({error}). Falling back to public web scraping.")
+            # Fallback to public scraping
+            try:
+                tracks = fetch_public_playlist_tracks(url)
+                print_success(f"Found {len(tracks)} tracks via public scraping.")
+                if not confirm("Download all tracks from this playlist?"):
+                    return
+            except Exception as scrape_error:
+                print_error(f"Failed to extract playlist tracks: {scrape_error}", "Playlist may be private or require API credentials.")
+                return
+        self.download_track_list(tracks, "Playlist")
+
+    def fetch_playlist_tracks_via_api(self, playlist_id):
+        if self.spotify is None:
+            raise ValueError("Spotify API not available")
+        tracks = []
+        results = self.spotify.playlist_tracks(playlist_id)
+        while results:
+            for item in results.get("items", []):
+                track = item.get("track")
+                if track:
+                    tracks.append({
+                        "name": track["name"],
+                        "artists": [artist["name"] for artist in track["artists"]],
+                    })
+            results = self.spotify.next(results) if results.get("next") else None
+        return tracks
+
     def download_album(self, url):
         album_id = extract_spotify_id(url, "album")
         if not album_id:
             print_error("Invalid Spotify album URL", "Use a link containing spotify.com/album/.")
             return
-        if self.spotify is None:
-            print_error(
-                "Album downloads need Spotify API access.",
-                "Single-track downloads work without Premium/API access. Album track lists are not public enough to read reliably.",
-            )
-            return
+        tracks = []
         try:
-            album = self.spotify.album(album_id)
-            print_info(f"Album: {album['name']} by {album['artists'][0]['name']}")
-            print_info(f"Total tracks: {album['total_tracks']}")
-            if not confirm("Download all?"):
-                return
-            tracks = [
-                {"name": track["name"], "artists": [artist["name"] for artist in track["artists"]]}
-                for track in album["tracks"]["items"]
-            ]
-            self.download_track_list(tracks, "Album")
+            # Try API first
+            if self.spotify is not None:
+                album = self.spotify.album(album_id)
+                print_info(f"Album: {album['name']} by {album['artists'][0]['name']}")
+                print_info(f"Total tracks: {album['total_tracks']}")
+                if not confirm("Download all?"):
+                    return
+                tracks = [
+                    {"name": track["name"], "artists": [artist["name"] for artist in track["artists"]]}
+                    for track in album["tracks"]["items"]
+                ]
+            else:
+                raise Exception("No API credentials")
         except Exception as error:
             if is_premium_required_error(error):
-                print_error(
-                    "Spotify blocked album metadata for this app.",
-                    "Use single-track links, or API credentials from a Spotify app that can access album endpoints.",
-                )
+                print_info("Spotify API blocked (Premium required). Falling back to public web scraping.")
+            else:
+                print_warning(f"API failed ({error}). Falling back to public web scraping.")
+            try:
+                tracks = fetch_public_album_tracks(url)
+                print_success(f"Found {len(tracks)} tracks via public scraping.")
+                if not confirm("Download all tracks from this album?"):
+                    return
+            except Exception as scrape_error:
+                print_error(f"Failed to extract album tracks: {scrape_error}", "Album may be private or require API credentials.")
                 return
-            print_error(f"Error fetching album: {error}", "Check the album link, credentials, and network connection.")
+        self.download_track_list(tracks, "Album")
 
     def download_track_list(self, tracks, mode):
         total = len(tracks)
