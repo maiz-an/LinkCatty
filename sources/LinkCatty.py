@@ -31,7 +31,7 @@ def settings_menu(config):
     while True:
         clear_screen()
         print_banner()
-        print("                    ⚙️  SETTINGS")
+        print("                        ⚙️  SETTINGS")
         print("=" * 61)
         print(f"1. Download folder   [{config['download_dir']}]")
         print("2. YouTube settings")
