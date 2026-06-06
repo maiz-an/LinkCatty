@@ -31,16 +31,15 @@ def settings_menu(config):
     while True:
         clear_screen()
         print_banner()
-        print("\n" + "═" * 55)
-        print("            ⚙️  SETTINGS")
-        print("═" * 55)
+        print("                    ⚙️  SETTINGS")
+        print("=" * 61)
         print(f"1. Download folder   [{config['download_dir']}]")
         print("2. YouTube settings")
         print("3. Spotify settings")
         print("4. Spotify API credentials")
         print("5. Clear download history")
-        print("6.   Back to main menu")
-        print("═" * 55)
+        print("6. Back to main menu")
+        print("=" * 61)
         choice = input("Select (1-6): ").strip()
 
         if choice == "1":
