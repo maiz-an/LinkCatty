@@ -1,6 +1,6 @@
 <!-- Banner / Logo (optional) -->
 <p align="center">
-  <img src="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/assets/logo.png" alt="LinkCatty Logo" width="200"/>
+  <img src="https://linkcatty.vercel.app/linkcatty.svg" alt="LinkCatty Logo" width="160"/>
 </p>
 
 <h1 align="center">🚀 LinkCatty – Universal Downloader</h1>
