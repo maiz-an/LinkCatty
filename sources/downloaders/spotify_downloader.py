@@ -542,7 +542,7 @@ def run(config):
     while True:
         clear_screen()
         print_banner()
-        print("                   🎵 Spotify Downloader121233")
+        print("                🎵 Spotify Downloader")
         print("=" * 61)
         print()
         print(f"{CYAN}{BOLD}1.{RESET} Download playlist")
