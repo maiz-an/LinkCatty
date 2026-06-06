@@ -400,7 +400,8 @@ def run(config):
             ffmpeg = get_ffmpeg_path()
             if ffmpeg:
                 opts['ffmpeg_location'] = ffmpeg
-            start_spinner("Downloading with custom format")
+            print_info(f"Started download with custom format ID: {fmt}")
+            start_spinner() 
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
             stop_spinner()
