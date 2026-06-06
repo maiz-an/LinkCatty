@@ -152,109 +152,136 @@ def fetch_public_track_info(url):
 
 
 def fetch_public_playlist_tracks(playlist_url):
-    """
-    Extract track list (names and artists) from a public Spotify playlist page.
-    Returns list of dicts: [{'name': ..., 'artists': [...]}, ...]
-    """
-    normalized_url = normalize_spotify_url(playlist_url)
-    page = fetch_url(normalized_url)
-    # Spotify embeds track data in a <script> tag with id "initial-state" or inline JSON.
-    # Simplified approach: look for the "initialData" or embedded list.
-    # We'll parse the JSON inside the script.
+    """Extract track list from a public Spotify playlist using the embed page."""
+    playlist_id = extract_spotify_id(playlist_url, "playlist")
+    if not playlist_id:
+        raise ValueError("Invalid playlist URL")
+    
+    embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
+    embed_html = fetch_url(embed_url)
+    
+    # Find the JSON data inside the script tag with id "initial-state"
+    # Spotify embed uses a <script> tag containing window.__INITIAL_STATE__
+    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.+?});', embed_html, re.DOTALL)
+    if not match:
+        raise ValueError("Could not find playlist data. The playlist may be private or deleted.")
+    
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        raise ValueError("Invalid JSON in playlist data")
+    
+    # Navigate to tracks – structure may vary, try common paths
     tracks = []
-
-    # Try to find the JSON data containing tracks
-    # Pattern: "tracks": { "items": [ ... ] }
-    # Extract the large JSON object
-    script_pattern = r'<script[^>]*id="initial-state"[^>]*>([\s\S]*?)</script>'
-    match = re.search(script_pattern, page)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            # Navigate to tracks
-            # The structure can vary; look for "entities" -> "items" or "playlist" -> "tracks"
-            # Common path: data['entities']['items'] or data['playlist']['tracks']['items']
-            if 'entities' in data and 'items' in data['entities']:
-                for item in data['entities']['items']:
-                    track = item.get('track', {})
-                    if track:
-                        tracks.append({
-                            'name': track.get('name', 'Unknown'),
-                            'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                        })
-            elif 'playlist' in data and 'tracks' in data['playlist'] and 'items' in data['playlist']['tracks']:
-                for item in data['playlist']['tracks']['items']:
-                    track = item.get('track', {})
-                    if track:
-                        tracks.append({
-                            'name': track.get('name', 'Unknown'),
-                            'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                        })
-        except (json.JSONDecodeError, KeyError):
-            pass
-
-    # Fallback: look for <meta> tags and oembed for playlist metadata? Not for tracks.
-    # If JSON extraction failed, use a more resilient method: request the embed page.
+    # Path 1: data['context']['tracks']['items']
+    if 'context' in data and 'tracks' in data['context']:
+        items = data['context']['tracks'].get('items', [])
+        for item in items:
+            track = item.get('track', {})
+            if track:
+                tracks.append({
+                    'name': track.get('name', 'Unknown'),
+                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                })
+    # Path 2: data['initialPayload']['tracks'] – older format
+    elif 'initialPayload' in data and 'tracks' in data['initialPayload']:
+        items = data['initialPayload']['tracks'].get('items', [])
+        for item in items:
+            track = item.get('track', {})
+            if track:
+                tracks.append({
+                    'name': track.get('name', 'Unknown'),
+                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                })
+    else:
+        # Fallback: search for any "track" objects recursively
+        # This is a last resort; better to keep simple paths
+        def find_tracks(obj, depth=0):
+            if depth > 5:
+                return
+            if isinstance(obj, dict):
+                if 'track' in obj and isinstance(obj['track'], dict):
+                    t = obj['track']
+                    tracks.append({
+                        'name': t.get('name', 'Unknown'),
+                        'artists': [a.get('name', 'Unknown') for a in t.get('artists', [])]
+                    })
+                else:
+                    for v in obj.values():
+                        find_tracks(v, depth+1)
+            elif isinstance(obj, list):
+                for item in obj:
+                    find_tracks(item, depth+1)
+        find_tracks(data)
+    
     if not tracks:
-        # Use embed endpoint which returns JSON with track list
-        embed_url = f"https://open.spotify.com/embed/playlist/{extract_spotify_id(playlist_url, 'playlist')}"
-        embed_data = fetch_url(embed_url)
-        # The embed page contains a JSON script
-        embed_match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({[\s\S]+?});', embed_data)
-        if embed_match:
-            try:
-                embed_json = json.loads(embed_match.group(1))
-                # Navigate to tracks
-                if 'context' in embed_json and 'tracks' in embed_json['context']:
-                    for item in embed_json['context']['tracks'].get('items', []):
-                        track = item.get('track', {})
-                        if track:
-                            tracks.append({
-                                'name': track.get('name', 'Unknown'),
-                                'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                            })
-            except (json.JSONDecodeError, KeyError):
-                pass
-
-    if not tracks:
-        raise ValueError("Could not extract playlist tracks from public Spotify page. The playlist may be private or require API credentials.")
-
+        raise ValueError("No tracks found. The playlist may be empty or private.")
+    
     return tracks
 
 
 def fetch_public_album_tracks(album_url):
-    """
-    Extract track list from a public Spotify album page.
-    Similar to playlist extraction but for album endpoint.
-    """
-    album_id = extract_spotify_id(album_url, 'album')
+    """Extract track list from a public Spotify album using the embed page."""
+    album_id = extract_spotify_id(album_url, "album")
     if not album_id:
         raise ValueError("Invalid album URL")
-
+    
     embed_url = f"https://open.spotify.com/embed/album/{album_id}"
-    page = fetch_url(embed_url)
+    embed_html = fetch_url(embed_url)
+    
+    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.+?});', embed_html, re.DOTALL)
+    if not match:
+        raise ValueError("Could not find album data. The album may be private or deleted.")
+    
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        raise ValueError("Invalid JSON in album data")
+    
     tracks = []
-    # Look for __INITIAL_STATE__ JSON
-    match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({[\s\S]+?});', page)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            # Navigate to tracks
-            if 'context' in data and 'tracks' in data['context']:
-                for item in data['context']['tracks'].get('items', []):
-                    track = item.get('track', {})
-                    if track:
-                        tracks.append({
-                            'name': track.get('name', 'Unknown'),
-                            'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
-                        })
-        except (json.JSONDecodeError, KeyError):
-            pass
-
+    # Common path: data['context']['tracks']['items']
+    if 'context' in data and 'tracks' in data['context']:
+        items = data['context']['tracks'].get('items', [])
+        for item in items:
+            track = item.get('track', {})
+            if track:
+                tracks.append({
+                    'name': track.get('name', 'Unknown'),
+                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                })
+    elif 'initialPayload' in data and 'tracks' in data['initialPayload']:
+        items = data['initialPayload']['tracks'].get('items', [])
+        for item in items:
+            track = item.get('track', {})
+            if track:
+                tracks.append({
+                    'name': track.get('name', 'Unknown'),
+                    'artists': [a.get('name', 'Unknown') for a in track.get('artists', [])]
+                })
+    else:
+        # fallback recursive search
+        def find_tracks(obj, depth=0):
+            if depth > 5:
+                return
+            if isinstance(obj, dict):
+                if 'track' in obj and isinstance(obj['track'], dict):
+                    t = obj['track']
+                    tracks.append({
+                        'name': t.get('name', 'Unknown'),
+                        'artists': [a.get('name', 'Unknown') for a in t.get('artists', [])]
+                    })
+                else:
+                    for v in obj.values():
+                        find_tracks(v, depth+1)
+            elif isinstance(obj, list):
+                for item in obj:
+                    find_tracks(item, depth+1)
+        find_tracks(data)
+    
     if not tracks:
-        raise ValueError("Could not extract album tracks from public Spotify page. The album may be private or require API credentials.")
+        raise ValueError("No tracks found. The album may be empty or private.")
+    
     return tracks
-
 
 def is_premium_required_error(error):
     message = str(error).lower()
