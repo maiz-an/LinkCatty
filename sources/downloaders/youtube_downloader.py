@@ -375,7 +375,7 @@ def run(config):
     while True:
         clear_screen()
         print_banner()
-        print("                   🎬 YouTube Downloader")
+        print(f"{BOLD}                   🎬 YouTube Downloader")
         print("=" * 61)
         print()
         print(f"{CYAN}{BOLD}1.{RESET} Download video (best quality)")
