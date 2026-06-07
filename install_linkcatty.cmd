@@ -73,7 +73,7 @@ for /l %%i in (0,1,15) do (
 :: Download FFmpeg
 set /a DOWNLOADED+=1
 set /a PERCENT=!DOWNLOADED! * 100 / 17
-<nul set /p "=Progress: [17/17] !PERCENT!%% - Downloading FFmpeg... "
+<nul set /p "=Progress: [17/17] - Downloading FFmpeg... "
 mkdir "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin" 2>nul
 set "FFMPEG_ZIP=%TEMP%\ffmpeg_win64.zip"
 set "FFMPEG_EXTRACT=%TEMP%\ffmpeg_extract"
