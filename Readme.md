@@ -65,7 +65,7 @@ Run `linkcatty` – you’ll see the main menu:
 
 ```
 =============================================================
-                      🐈‍⬛ MAIN MENU
+                      🎯 MAIN MENU
 =============================================================
 1. 📹 YouTube Downloader
 2. 🎵 Spotify Downloader
