@@ -60,7 +60,7 @@ def print_banner():
     print(logo)
 
 def print_main_menu():
-    print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
+    print(f"{BOLD}{WHITE}                       🐈‍⬛ MAIN MENU{RESET}")
     print(f"{BOLD}{CYAN}{'=' * 61}{RESET}")
     print(f"")
     print(f"{CYAN}{BOLD}1.{RESET}{BOLD} YouTube Downloader")
