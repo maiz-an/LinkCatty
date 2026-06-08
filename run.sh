@@ -1,5 +1,6 @@
 #!/bin/bash
 # LinkCatty Launcher for Linux/macOS
+# Production-ready: smart Python detection, no-op on re-runs, cross-platform
 
 # -------------------------------------------------------------------
 # Check for uninstall flag
@@ -18,12 +19,17 @@ if [[ "$*" == *"--uninstall"* ]]; then
             chmod +x "$UNINSTALL_FILE"
             "$UNINSTALL_FILE"
         else
-            echo "Failed to download uninstaller. Please download manually from GitHub."
+            echo "Failed to download uninstaller."
             read -p "Press Enter to exit..."
         fi
     fi
     exit 0
 fi
+
+# -------------------------------------------------------------------
+# Resolve script directory (works even when called via symlink)
+# -------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo "============================================================"
@@ -31,20 +37,22 @@ echo "                    LinkCatty Launcher"
 echo "============================================================"
 echo ""
 
+# -------------------------------------------------------------------
+# [1/3] Check for updates
+# -------------------------------------------------------------------
 echo "[1/3] Checking for updates..."
 
 REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-LOCAL_VERSION_FILE="./sources/version.txt"
+LOCAL_VERSION_FILE="$SCRIPT_DIR/sources/version.txt"
+DEPS_MARKER="$SCRIPT_DIR/sources/.deps_installed"
 
-# Read local version (strip CR and spaces)
 if [ -f "$LOCAL_VERSION_FILE" ]; then
     LOCAL_VER=$(tr -d '\r\n' < "$LOCAL_VERSION_FILE" | xargs)
 else
     LOCAL_VER="0.0.0"
 fi
 
-# Download remote version
-REMOTE_VER=$(curl -s "$REMOTE_VERSION_URL" | tr -d '\r\n' | xargs)
+REMOTE_VER=$(curl -sf --max-time 5 "$REMOTE_VERSION_URL" | tr -d '\r\n' | xargs)
 if [ -z "$REMOTE_VER" ]; then
     REMOTE_VER="$LOCAL_VER"
 fi
@@ -90,38 +98,33 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     TOTAL=${#FILE_PATHS[@]}
 
     # Backup user data
-    [ -f "./sources/settings.json" ] && cp "./sources/settings.json" "/tmp/settings_backup.json"
-    [ -f "./sources/download_history.json" ] && cp "./sources/download_history.json" "/tmp/download_history_backup.json"
-    [ -f "./sources/PortablePython.zip" ] && cp "./sources/PortablePython.zip" "/tmp/PortablePython_backup.zip"
+    [ -f "$SCRIPT_DIR/sources/settings.json" ] && cp "$SCRIPT_DIR/sources/settings.json" "/tmp/settings_backup.json"
+    [ -f "$SCRIPT_DIR/sources/download_history.json" ] && cp "$SCRIPT_DIR/sources/download_history.json" "/tmp/download_history_backup.json"
 
     for i in "${!FILE_PATHS[@]}"; do
         FILE_PATH="${FILE_PATHS[$i]}"
         FILE_URL="${FILE_URLS[$i]}"
         PERCENT=$(( (i+1) * 100 / TOTAL ))
         printf "\rProgress: [%d/%d] %d%%  " "$((i+1))" "$TOTAL" "$PERCENT"
-        mkdir -p "$(dirname "$FILE_PATH")"
-        curl -s -L -o "$FILE_PATH" "$FILE_URL"
+        mkdir -p "$(dirname "$SCRIPT_DIR/$FILE_PATH")"
+        curl -s -L -o "$SCRIPT_DIR/$FILE_PATH" "$FILE_URL"
     done
     echo ""
 
     # Restore user data
-    [ -f "/tmp/settings_backup.json" ] && cp "/tmp/settings_backup.json" "./sources/settings.json"
-    [ -f "/tmp/download_history_backup.json" ] && cp "/tmp/download_history_backup.json" "./sources/download_history.json"
-    [ -f "/tmp/PortablePython_backup.zip" ] && cp "/tmp/PortablePython_backup.zip" "./sources/PortablePython.zip"
-    rm -f "/tmp/settings_backup.json" "/tmp/download_history_backup.json" "/tmp/PortablePython_backup.zip"
+    [ -f "/tmp/settings_backup.json" ] && cp "/tmp/settings_backup.json" "$SCRIPT_DIR/sources/settings.json"
+    [ -f "/tmp/download_history_backup.json" ] && cp "/tmp/download_history_backup.json" "$SCRIPT_DIR/sources/download_history.json"
+    rm -f "/tmp/settings_backup.json" "/tmp/download_history_backup.json"
 
-    # ----- Write the new version file cleanly -----
-    # Use printf to avoid extra newline and spaces
-    printf "%s" "$REMOTE_VER" > "./sources/version.txt"
+    printf "%s" "$REMOTE_VER" > "$SCRIPT_DIR/sources/version.txt"
 
-    # Verify
-    VERIFY_VER=$(tr -d '\r\n' < "./sources/version.txt" | xargs)
-    if [ "$VERIFY_VER" != "$REMOTE_VER" ]; then
-        # Force delete and retry with echo
-        rm -f "./sources/version.txt"
-        echo "$REMOTE_VER" > "./sources/version.txt"
-    fi
+    # Invalidate deps marker so deps reinstall after update
+    rm -f "$DEPS_MARKER"
 
+    # Make sure run.sh is executable after update
+    chmod +x "$SCRIPT_DIR/run.sh" 2>/dev/null
+
+    echo ""
     echo "[3/3] Update completed. Restarting..."
     sleep 2
     exec "$0"
@@ -129,98 +132,156 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
 fi
 
 # -------------------------------------------------------------------
-# Normal launch (unchanged)
+# [2/3] Python setup - NO portable python on Mac/Linux
+#        Find system Python 3 (3.8+) or guide user to install it
 # -------------------------------------------------------------------
-echo "[2/3] Extracting Portable Python..."
-PORTABLE_DIR="./sources/portable_python"
-if [ ! -d "$PORTABLE_DIR" ] || [ -z "$(ls -A "$PORTABLE_DIR")" ]; then
-    if [ ! -f "./sources/PortablePython.zip" ]; then
-        echo "❌ Error: sources/PortablePython.zip not found!"
-        read -p "Press Enter to exit..."
-        exit 1
-    fi
-    mkdir -p "$PORTABLE_DIR"
-    unzip -q "./sources/PortablePython.zip" -d "$PORTABLE_DIR"
-    SUBDIR=$(find "$PORTABLE_DIR" -maxdepth 1 -type d | tail -n +2 | head -n1)
-    if [ -n "$SUBDIR" ] && [ -f "$SUBDIR/python.exe" -o -f "$SUBDIR/bin/python" ]; then
-        mv "$SUBDIR"/* "$PORTABLE_DIR/" 2>/dev/null
-        rmdir "$SUBDIR" 2>/dev/null
-    fi
-fi
-echo "Portable Python ready."
+echo "[2/3] Setting up Python..."
 
-# Find python
+UNAME="$(uname -s)"
 PYTHON_EXE=""
-if [ -f "$PORTABLE_DIR/bin/python3" ]; then
-    PYTHON_EXE="$PORTABLE_DIR/bin/python3"
-elif [ -f "$PORTABLE_DIR/bin/python" ]; then
-    PYTHON_EXE="$PORTABLE_DIR/bin/python"
-elif [ -f "$PORTABLE_DIR/python.exe" ]; then
-    PYTHON_EXE="$PORTABLE_DIR/python.exe"
-else
-    PYTHON_EXE=$(find "$PORTABLE_DIR" -name "python3" -o -name "python" -o -name "python.exe" | head -n1)
-fi
+
+# Search for python3 / python in PATH, verify it's actually Python 3.8+
+find_python() {
+    for cmd in python3 python python3.13 python3.12 python3.11 python3.10 python3.9 python3.8; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            PY_VER=$("$cmd" -c "import sys; v=sys.version_info; print(v.major*100+v.minor)" 2>/dev/null)
+            if [ -n "$PY_VER" ] && [ "$PY_VER" -ge 308 ]; then
+                echo "$cmd"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+PYTHON_EXE=$(find_python)
 
 if [ -z "$PYTHON_EXE" ]; then
-    echo "ERROR: Python not found."
+    echo ""
+    echo "ERROR: Python 3.8+ not found!"
+    echo ""
+    if [ "$UNAME" = "Darwin" ]; then
+        echo "Install Python on macOS with one of:"
+        echo "  brew install python          (Homebrew)"
+        echo "  https://www.python.org/downloads/"
+    elif [ "$UNAME" = "Linux" ]; then
+        echo "Install Python on Linux with:"
+        echo "  sudo apt install python3      (Debian/Ubuntu)"
+        echo "  sudo dnf install python3      (Fedora/RHEL)"
+        echo "  sudo pacman -S python         (Arch)"
+    fi
+    echo ""
     read -p "Press Enter to exit..."
     exit 1
 fi
 
-# Add to PATH
-[ -d "$PORTABLE_DIR/bin" ] && export PATH="$PORTABLE_DIR/bin:$PATH"
-[ -d "$PORTABLE_DIR/Scripts" ] && export PATH="$PORTABLE_DIR/Scripts:$PATH"
+echo "Using Python: $PYTHON_EXE ($($PYTHON_EXE --version 2>&1))"
 
-# FFmpeg (macOS/Linux)
-UNAME=$(uname)
+# Add user scripts dir to PATH so installed tools (yt-dlp etc.) are usable
+USER_SCRIPTS=$("$PYTHON_EXE" -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>/dev/null)
+if [ -n "$USER_SCRIPTS" ] && [ -d "$USER_SCRIPTS" ]; then
+    export PATH="$USER_SCRIPTS:$PATH"
+fi
+# Also add --user scripts location
+USER_BASE=$("$PYTHON_EXE" -m site --user-base 2>/dev/null)
+if [ -n "$USER_BASE" ]; then
+    export PATH="$USER_BASE/bin:$PATH"
+fi
+
+# ── FFmpeg: download once per OS/arch, never again
 if [ "$UNAME" = "Darwin" ]; then
-    FFMPEG_DIR="./sources/FFmpeg/macos"
+    FFMPEG_DIR="$SCRIPT_DIR/sources/FFmpeg/macos"
     FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
     if [ ! -f "$FFMPEG_BIN" ]; then
-        echo "📥 Downloading FFmpeg for macOS..."
+        echo "Downloading FFmpeg for macOS (first run only)..."
         mkdir -p "$FFMPEG_DIR"
-        curl -L -o "$FFMPEG_DIR/ffmpeg.zip" "https://evermeet.cx/ffmpeg/ffmpeg-7.0.1.zip"
-        unzip -q "$FFMPEG_DIR/ffmpeg.zip" -d "$FFMPEG_DIR"
-        rm "$FFMPEG_DIR/ffmpeg.zip"
-        chmod +x "$FFMPEG_BIN"
-    fi
-    export PATH="$FFMPEG_DIR:$PATH"
-elif [ "$UNAME" = "Linux" ]; then
-    FFMPEG_DIR="./sources/FFmpeg/linux"
-    FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
-    if [ ! -f "$FFMPEG_BIN" ]; then
-        echo "📥 Downloading FFmpeg for Linux..."
-        mkdir -p "$FFMPEG_DIR"
-        curl -L -o "$FFMPEG_DIR/ffmpeg.tar.xz" "https://johnvansickle.com/ffmpeg/releases/ffmpeg-git-amd64-static.tar.xz"
-        tar -xf "$FFMPEG_DIR/ffmpeg.tar.xz" -C "$FFMPEG_DIR"
-        rm "$FFMPEG_DIR/ffmpeg.tar.xz"
-        EXTRACTED_DIR=$(find "$FFMPEG_DIR" -maxdepth 1 -type d -name "ffmpeg-*" | head -n1)
-        if [ -n "$EXTRACTED_DIR" ]; then
-            mv "$EXTRACTED_DIR/ffmpeg" "$FFMPEG_BIN"
-            rm -rf "$EXTRACTED_DIR"
-            chmod +x "$FFMPEG_BIN"
+        ARCH_RAW="$(uname -m)"
+        if [ "$ARCH_RAW" = "arm64" ]; then
+            # Apple Silicon
+            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
+                "https://evermeet.cx/ffmpeg/ffmpeg-7.0.1.zip" 2>&1 || \
+            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
+                "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/macos-arm64.zip" 2>&1
+        else
+            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
+                "https://evermeet.cx/ffmpeg/ffmpeg-7.0.1.zip" 2>&1 || \
+            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
+                "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/macos-x64.zip" 2>&1
+        fi
+        if [ -f "$FFMPEG_DIR/ffmpeg.zip" ]; then
+            unzip -q "$FFMPEG_DIR/ffmpeg.zip" -d "$FFMPEG_DIR"
+            rm -f "$FFMPEG_DIR/ffmpeg.zip"
+            chmod +x "$FFMPEG_BIN" 2>/dev/null
         fi
     fi
-    export PATH="$FFMPEG_DIR:$PATH"
+    [ -f "$FFMPEG_BIN" ] && export PATH="$FFMPEG_DIR:$PATH" || echo "Warning: FFmpeg not available."
+
+elif [ "$UNAME" = "Linux" ]; then
+    ARCH_RAW="$(uname -m)"
+    FFMPEG_DIR="$SCRIPT_DIR/sources/FFmpeg/linux"
+    FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
+    if [ ! -f "$FFMPEG_BIN" ]; then
+        echo "Downloading FFmpeg for Linux (first run only)..."
+        mkdir -p "$FFMPEG_DIR"
+        if [ "$ARCH_RAW" = "aarch64" ] || [ "$ARCH_RAW" = "arm64" ]; then
+            FFMPEG_URL="https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/linux-arm64.zip"
+        else
+            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-git-amd64-static.tar.xz"
+        fi
+        curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg_dl" "$FFMPEG_URL"
+        if [[ "$FFMPEG_URL" == *.tar.xz ]]; then
+            tar -xf "$FFMPEG_DIR/ffmpeg_dl" -C "$FFMPEG_DIR" 2>/dev/null
+            EXTRACTED=$(find "$FFMPEG_DIR" -maxdepth 2 -name "ffmpeg" -type f | head -n1)
+            if [ -n "$EXTRACTED" ]; then
+                cp "$EXTRACTED" "$FFMPEG_BIN"
+                rm -rf "$FFMPEG_DIR"/ffmpeg-*/ "$FFMPEG_DIR/ffmpeg_dl"
+            fi
+        else
+            unzip -q "$FFMPEG_DIR/ffmpeg_dl" -d "$FFMPEG_DIR" 2>/dev/null
+            EXTRACTED=$(find "$FFMPEG_DIR" -maxdepth 2 -name "ffmpeg" -type f | head -n1)
+            [ -n "$EXTRACTED" ] && mv "$EXTRACTED" "$FFMPEG_BIN"
+            rm -f "$FFMPEG_DIR/ffmpeg_dl"
+        fi
+        chmod +x "$FFMPEG_BIN" 2>/dev/null
+    fi
+    [ -f "$FFMPEG_BIN" ] && export PATH="$FFMPEG_DIR:$PATH" || echo "Warning: FFmpeg not available."
 fi
 
-# Install/upgrade packages (auto-upgrade pip first)
-echo "[3/3] Installing packages..."
-$PYTHON_EXE -m pip --version >/dev/null 2>&1
-if [ $? -eq 0 ]; then
-    $PYTHON_EXE -m pip install --quiet --upgrade pip
-    $PYTHON_EXE -m pip install --quiet --upgrade yt-dlp spotipy spotdl deno
+# -------------------------------------------------------------------
+# [3/3] Install dependencies (only if not already done)
+# -------------------------------------------------------------------
+echo "[3/3] Checking dependencies..."
+
+if [ -f "$DEPS_MARKER" ]; then
+    echo "Dependencies already installed. Skipping."
+else
+    echo "Installing packages (first run or after update)..."
+    # Upgrade pip
+    "$PYTHON_EXE" -m pip install --quiet --upgrade pip --no-warn-script-location 2>/dev/null || true
+    # Install deps
+    if "$PYTHON_EXE" -m pip install --quiet --upgrade yt-dlp spotipy spotdl \
+        --no-warn-script-location --no-cache-dir; then
+        # Re-source user scripts after install
+        USER_BASE=$("$PYTHON_EXE" -m site --user-base 2>/dev/null)
+        [ -n "$USER_BASE" ] && export PATH="$USER_BASE/bin:$PATH"
+        printf "%s" "$LOCAL_VER" > "$DEPS_MARKER"
+        echo "Packages installed successfully."
+    else
+        echo "ERROR: Failed to install some packages. Check your internet connection."
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
 fi
 
-# Launch
 echo ""
-echo "🚀 Launching LinkCatty..."
+echo "Launching LinkCatty..."
 echo ""
-$PYTHON_EXE "./sources/LinkCatty.py"
+
+"$PYTHON_EXE" "$SCRIPT_DIR/sources/LinkCatty.py"
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
     echo ""
-    echo "❌ Application exited with error code $EXIT_CODE"
+    echo "Application exited with error code $EXIT_CODE"
 fi
 read -p "Press Enter to exit..."
 exit $EXIT_CODE

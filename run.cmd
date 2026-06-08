@@ -35,6 +35,9 @@ echo                    LinkCatty Launcher
 echo ============================================================
 echo.
 
+:: -------------------------------------------------------------------
+:: [1/3] Check for updates
+:: -------------------------------------------------------------------
 echo [1/3] Checking for updates...
 set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
@@ -55,7 +58,7 @@ if exist "%TEMP_FILE%" (
 if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     echo.
     echo ============================================================
-    echo                     UPDATE AVAILABLE!
+    echo                      UPDATE AVAILABLE!
     echo ============================================================
     echo   Current version : %LOCAL_VER%
     echo   Latest version  : %REMOTE_VER%
@@ -78,7 +81,6 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
 
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
-    if exist "%~dp0sources\PortablePython.zip" copy "%~dp0sources\PortablePython.zip" "%TEMP%\PortablePython_backup.zip" >nul
 
     set "DOWNLOADED=0"
     for /l %%i in (0,1,11) do (
@@ -91,8 +93,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
 
     if exist "%TEMP%\settings_backup.json" copy "%TEMP%\settings_backup.json" "%~dp0sources\settings.json" >nul 2>&1
     if exist "%TEMP%\download_history_backup.json" copy "%TEMP%\download_history_backup.json" "%~dp0sources\download_history.json" >nul 2>&1
-    if exist "%TEMP%\PortablePython_backup.zip" copy "%TEMP%\PortablePython_backup.zip" "%~dp0sources\PortablePython.zip" >nul 2>&1
-    del "%TEMP%\settings_backup.json" "%TEMP%\download_history_backup.json" "%TEMP%\PortablePython_backup.zip" 2>nul
+    del "%TEMP%\settings_backup.json" "%TEMP%\download_history_backup.json" 2>nul
 
     powershell -command "& { [System.IO.File]::WriteAllText('%~dp0sources\version.txt', '%REMOTE_VER%', [System.Text.UTF8Encoding]::new($false)) }" >nul 2>&1
 
@@ -103,72 +104,145 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     exit /b 0
 )
 
-echo [2/3] Extracting Portable Python...
-set "PORTABLE_DIR=%~dp0sources\portable_python"
-if not exist "%PORTABLE_DIR%\python.exe" (
-    if not exist "%PORTABLE_DIR%\Scripts\python.exe" (
-        if not exist "%~dp0sources\PortablePython.zip" (
-            echo ERROR: sources\PortablePython.zip not found!
-            pause
-            exit /b 1
-        )
-        mkdir "%PORTABLE_DIR%" 2>nul
-        powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%~dp0sources\PortablePython.zip', '%PORTABLE_DIR%') }" >nul 2>&1
-        if errorlevel 1 (
-            echo Extraction failed.
-            pause
-            exit /b 1
-        )
-        pushd "%PORTABLE_DIR%"
-        for /d %%d in (*) do (
-            if exist "%%d\python.exe" (
-                move "%%d\*" . >nul 2>&1
-                rmdir "%%d" 2>nul
-            )
-        )
-        popd
-    )
-)
-echo Portable Python ready.
+:: -------------------------------------------------------------------
+:: [2/3] Python setup - find or install Python ONCE
+:: -------------------------------------------------------------------
+echo [2/3] Setting up Python...
 
+set "PORTABLE_DIR=%~dp0sources\portable_python"
 set "PYTHON_EXE="
+set "PYTHON_SCRIPTS="
+set "DEPS_MARKER=%~dp0sources\.deps_installed"
+
+:: ── Check if portable python already extracted and working
 if exist "%PORTABLE_DIR%\python.exe" (
     set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
-) else if exist "%PORTABLE_DIR%\Scripts\python.exe" (
+    set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
+    echo Using portable Python.
+    goto :SetupDeps
+)
+if exist "%PORTABLE_DIR%\Scripts\python.exe" (
     set "PYTHON_EXE=%PORTABLE_DIR%\Scripts\python.exe"
-) else (
-    where python >nul 2>&1
-    if not errorlevel 1 (
-        set "PYTHON_EXE=python"
-        echo Using system Python.
-    ) else (
-        echo ERROR: Python not found.
-        pause
-        exit /b 1
+    set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
+    echo Using portable Python.
+    goto :SetupDeps
+)
+
+:: ── Try to extract portable python if zip present
+if exist "%~dp0sources\PortablePython.zip" (
+    echo Extracting portable Python...
+    if not exist "%PORTABLE_DIR%" mkdir "%PORTABLE_DIR%"
+    powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%~dp0sources\PortablePython.zip', '%PORTABLE_DIR%') }" >nul 2>&1
+    :: Flatten subdirectory if needed
+    pushd "%PORTABLE_DIR%"
+    for /d %%d in (*) do (
+        if exist "%%d\python.exe" (
+            move "%%d\*" . >nul 2>&1
+            rmdir "%%d" 2>nul
+        ) else if exist "%%d\Scripts\python.exe" (
+            move "%%d\*" . >nul 2>&1
+            rmdir "%%d" 2>nul
+        )
+    )
+    popd
+    :: Re-check after extraction
+    if exist "%PORTABLE_DIR%\python.exe" (
+        set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
+        set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
+        echo Portable Python ready.
+        :: Delete deps marker so deps get installed fresh with this python
+        del "%DEPS_MARKER%" 2>nul
+        goto :SetupDeps
+    )
+    if exist "%PORTABLE_DIR%\Scripts\python.exe" (
+        set "PYTHON_EXE=%PORTABLE_DIR%\Scripts\python.exe"
+        set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
+        echo Portable Python ready.
+        del "%DEPS_MARKER%" 2>nul
+        goto :SetupDeps
     )
 )
 
-set "SCRIPT_DIR=%PORTABLE_DIR%\Scripts"
-if not exist "%SCRIPT_DIR%" set "SCRIPT_DIR=%PORTABLE_DIR%\bin"
-if exist "%SCRIPT_DIR%" set "PATH=%SCRIPT_DIR%;%PATH%"
+:: ── Fall back to system Python
+:: Try python, python3, py launcher in order
+for %%p in (python python3) do (
+    if not defined PYTHON_EXE (
+        %%p --version >nul 2>&1
+        if not errorlevel 1 (
+            set "PYTHON_EXE=%%p"
+        )
+    )
+)
+if not defined PYTHON_EXE (
+    py --version >nul 2>&1
+    if not errorlevel 1 set "PYTHON_EXE=py"
+)
 
+if not defined PYTHON_EXE (
+    echo.
+    echo ERROR: Python not found!
+    echo.
+    echo Please install Python from https://www.python.org/downloads/
+    echo Make sure to check "Add Python to PATH" during installation.
+    echo.
+    pause
+    exit /b 1
+)
+echo Using system Python.
+
+:: ── Get system Python's Scripts directory and add to PATH
+for /f "usebackq delims=" %%s in (`%PYTHON_EXE% -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2^>nul`) do (
+    set "PYTHON_SCRIPTS=%%s"
+)
+
+:SetupDeps
+:: Add Python scripts dir to PATH so installed tools are accessible
+if defined PYTHON_SCRIPTS (
+    if exist "!PYTHON_SCRIPTS!" (
+        set "PATH=!PYTHON_SCRIPTS!;%PATH%"
+    )
+)
+
+:: ── FFmpeg
 set "FFMPEG_DIR=%~dp0sources\FFmpeg\windows\ffmpeg\bin"
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     set "PATH=%FFMPEG_DIR%;%PATH%"
 ) else (
-    echo Warning: FFmpeg not found.
+    echo Warning: FFmpeg not found in sources. Some features may not work.
 )
 
-echo [3/3] Installing packages...
-"%PYTHON_EXE%" -m pip --version >nul 2>&1
-if not errorlevel 1 (
-    "%PYTHON_EXE%" -m pip install --quiet --upgrade pip
-    "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy spotdl deno
+:: -------------------------------------------------------------------
+:: [3/3] Install dependencies (only if not already done)
+:: -------------------------------------------------------------------
+echo [3/3] Checking dependencies...
+
+if exist "%DEPS_MARKER%" (
+    echo Dependencies already installed. Skipping.
+) else (
+    echo Installing packages ^(first run or update^)...
+    "%PYTHON_EXE%" -m pip --version >nul 2>&1
+    if errorlevel 1 (
+        echo WARNING: pip not available. Trying to bootstrap...
+        "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>&1
+    )
+    :: Upgrade pip silently, suppressing PATH warnings
+    "%PYTHON_EXE%" -m pip install --quiet --upgrade pip --no-warn-script-location >nul 2>&1
+    :: Install deps, suppress PATH/cache warnings
+    "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy spotdl --no-warn-script-location --no-cache-dir
+    if errorlevel 1 (
+        echo ERROR: Failed to install some packages. Check your internet connection.
+        pause
+        exit /b 1
+    )
+    :: Write marker so we skip install next time
+    echo %REMOTE_VER%> "%DEPS_MARKER%"
+    echo Packages installed successfully.
 )
 
 echo.
 echo Launching LinkCatty...
 echo.
+
 "%PYTHON_EXE%" "%~dp0sources\LinkCatty.py"
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% neq 0 (
