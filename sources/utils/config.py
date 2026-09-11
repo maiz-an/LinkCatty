@@ -26,7 +26,11 @@ DEFAULT_CONFIG = {
         "audio_quality": "320k",
         "auto_retry": True,
         "max_retries": 3,
-        "quiet_mode": True
+        "quiet_mode": True,
+        # New: automatic multi-pass retry for failed/missing tracks.
+        "threads": 4,               # parallel downloads on the first pass
+        "max_retry_passes": 4,      # total attempts (1 initial + retries)
+        "retry_delay_seconds": 15   # cooldown between passes (rate-limit safe)
     },
     "common": {
         "enable_logging": True,

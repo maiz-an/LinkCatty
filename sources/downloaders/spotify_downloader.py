@@ -3,8 +3,11 @@ import shutil
 import subprocess
 import re
 import json
+import time
+import threading
 import urllib.request
 import urllib.parse
+from datetime import datetime
 from pathlib import Path
 
 from utils.ffmpeg import get_ffmpeg_path
@@ -24,6 +27,7 @@ from utils.ui import (
     print_error,
     print_info,
     print_success,
+    progress_bar,
     start_spinner,
     stop_spinner,
 )
@@ -164,17 +168,55 @@ def _display_playlist_info(info: dict) -> None:
     print("─" * 61)
 
 
-def _display_download_result(item_type: str, name: str | None,
-                              out_folder: str, downloaded: int) -> None:
+def _display_download_result(item_type: str, name: str | None, out_folder: str,
+                              downloaded: int, expected: int,
+                              failed_report: str | None) -> None:
     print("\n" + "─" * 61)
-    print("✅ DOWNLOAD COMPLETE")
+    if failed_report is None:
+        print("✅ DOWNLOAD COMPLETE — everything downloaded")
+    else:
+        print("⚠️  DOWNLOAD FINISHED WITH MISSING TRACKS")
     print("─" * 61)
     if name:
         label = {"track": "🎶 Track", "album": "💿 Album", "playlist": "📋 Playlist"}[item_type]
         print(f"{label}    : {name}")
     print(f"📁 Saved to  : {out_folder}")
-    print(f"🎵 Files     : {downloaded} audio file(s)")
+    print(f"🎵 Files     : {downloaded}/{expected} audio file(s)")
+    if failed_report is not None:
+        missing = max(expected - downloaded, 0)
+        print(f"❌ Missing   : {missing}")
+        print(f"📝 Failed list saved to : {failed_report}")
     print("─" * 61)
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Progress bar (custom, spotdl-style, but stable/predictable)
+#
+#  We deliberately don't try to parse spotdl's own Rich TUI output –
+#  it repaints in place with ANSI codes and its format isn't a stable
+#  contract. Instead we redirect spotdl's raw output to a log file
+#  (kept for debugging) and drive our own bar off something we fully
+#  control: the number of audio files that actually landed on disk.
+# ─────────────────────────────────────────────────────────────────────
+
+def _progress_loop(out_dir: str, expected_total: int, stop_event: threading.Event,
+                    label: str, interval: float = 1.0) -> None:
+    start = time.time()
+    expected_total = max(expected_total, 1)
+    while not stop_event.is_set():
+        count = _count_audio_files(out_dir)
+        elapsed = max(time.time() - start, 0.001)
+        rate = count / elapsed
+        remaining = max(expected_total - count, 0)
+        suffix = f"{count}/{expected_total} tracks"
+        if rate > 0 and remaining > 0:
+            eta = int(remaining / rate)
+            suffix += f" · ETA {eta}s"
+        progress_bar(count, expected_total, prefix=label, suffix=suffix)
+        stop_event.wait(interval)
+    count = _count_audio_files(out_dir)
+    progress_bar(count, expected_total, prefix=label, suffix=f"{count}/{expected_total} tracks")
+    print()  # move off the \r line once the pass is done
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -262,17 +304,20 @@ class SpotifyDownloader:
             meta["artist"] = parts[1].strip() if len(parts) > 1 else None
         return meta
 
-    # ── core download ─────────────────────────────────────────────────
+    # ── core download (with automatic retry passes) ────────────────────
 
     def _spotdl_download(self, url: str, item_type: str,
-                          meta_name: str | None = None) -> tuple:
+                          meta_name: str | None = None,
+                          expected_total: int | None = None) -> tuple:
         """
-        Run spotdl CLI and return (success, out_folder, file_count).
+        Run spotdl, then automatically re-run against only the tracks
+        that are still missing, using spotdl's own --archive file so
+        already-downloaded songs are always skipped. Repeats up to
+        `max_retry_passes` times (config), with a cooldown between
+        passes to ride out YouTube/Spotify rate limits.
 
-        Metadata is fetched via the free client above.
-        The CLI handles its own Spotify token internally (also free).
-        Credentials are passed to the CLI only if the user explicitly
-        configured them (optional speed/reliability improvement).
+        Returns (final_count, out_dir, expected_total, failed_report_path).
+        failed_report_path is None when everything downloaded cleanly.
         """
         quality  = self.spotify_config.get("audio_quality", "320k").replace("k", "")
         base_dir = str(self.download_dir)
@@ -280,31 +325,91 @@ class SpotifyDownloader:
         if item_type in ("album", "playlist"):
             folder_name = _safe_name(meta_name) if meta_name else f"{{{item_type}}}"
             out_dir  = os.path.join(base_dir, folder_name)
-            template = os.path.join(out_dir, "{title} - {artists}.{ext}")
         else:
             out_dir  = base_dir
-            template = os.path.join(out_dir, "{title} - {artists}.{ext}")
+        template = os.path.join(out_dir, "{title} - {artists}.{ext}")
+        os.makedirs(out_dir, exist_ok=True)
 
-        cmd = ["spotdl", url, "--output", template, "--bitrate", f"{quality}k"]
-        # Only pass credentials to CLI if user configured them
-        if self.client_id and self.client_secret:
-            cmd += ["--client-id", self.client_id, "--client-secret", self.client_secret]
+        expected_total = expected_total or 1
+
+        archive_file = os.path.join(out_dir, ".spotdl_archive.spotdl")
+        errors_file  = os.path.join(out_dir, ".spotdl_errors.txt")
+        log_file     = os.path.join(out_dir, ".spotdl_log.txt")
+
+        max_passes = int(self.spotify_config.get("max_retry_passes", 4))
+        cooldown   = int(self.spotify_config.get("retry_delay_seconds", 15))
+        base_threads = int(self.spotify_config.get("threads", 4))
 
         print_info(f"Output folder : {out_dir}")
-        print()
 
-        with subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True, bufsize=1,
-        ) as proc:
-            for line in proc.stdout:
-                print(line, end="")
-            proc.wait()
+        errors = []
+        for attempt in range(1, max_passes + 1):
+            # Ease off on later passes: fewer parallel threads + more
+            # internal retries, since leftovers are usually the ones
+            # that hit rate limits or transient network errors.
+            threads = base_threads if attempt == 1 else max(1, base_threads // 2)
+            max_retries = 5 if attempt == 1 else 8
 
-        actual = _find_output_folder(self.download_dir, meta_name)
-        count  = _count_audio_files(actual)
-        return count > 0, actual, count
+            if os.path.exists(errors_file):
+                os.remove(errors_file)  # capture only this pass's errors
+
+            cmd = [
+                "spotdl", url,
+                "--output", template,
+                "--bitrate", f"{quality}k",
+                "--threads", str(threads),
+                "--max-retries", str(max_retries),
+                "--archive", archive_file,
+                "--save-errors", errors_file,
+                "--overwrite", "skip",
+            ]
+            if self.client_id and self.client_secret:
+                cmd += ["--client-id", self.client_id, "--client-secret", self.client_secret]
+
+            label = f"⬇ Pass {attempt}/{max_passes}"
+            print_info(f"{label} — downloading…" if attempt == 1 else
+                       f"{label} — retrying {len(errors)} missing track(s)…")
+
+            stop_event = threading.Event()
+            progress_thread = threading.Thread(
+                target=_progress_loop,
+                args=(out_dir, expected_total, stop_event, label),
+                daemon=True,
+            )
+            progress_thread.start()
+
+            try:
+                with open(log_file, "a", encoding="utf-8") as logf:
+                    logf.write(f"\n\n===== Pass {attempt} — {datetime.now()} =====\n")
+                    proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, text=True)
+                    proc.wait()
+            finally:
+                stop_event.set()
+                progress_thread.join()
+
+            count = _count_audio_files(out_dir)
+            errors = _read_errors_file(errors_file)
+
+            if count >= expected_total or not errors:
+                break
+
+            if attempt < max_passes:
+                print_warning(
+                    f"{len(errors)} track(s) missing after pass {attempt}. "
+                    f"Cooling down {cooldown}s before retrying (rate-limit safe)…"
+                )
+                time.sleep(cooldown)
+
+        final_count = _count_audio_files(out_dir)
+        final_errors = _read_errors_file(errors_file)
+
+        failed_report_path = None
+        if final_errors or final_count < expected_total:
+            failed_report_path = _write_failed_report(
+                out_dir, meta_name, final_errors, expected_total, final_count
+            )
+
+        return final_count, out_dir, expected_total, failed_report_path
 
     # ── public entry-points ───────────────────────────────────────────
 
@@ -313,40 +418,37 @@ class SpotifyDownloader:
         _display_track_info(meta)
         if not confirm("Proceed with download?"):
             return
-        success, out_folder, n = self._spotdl_download(url, "track")
-        if success:
-            _display_download_result("track", meta.get("title"), out_folder, n)
-            log_download("Spotify", url, artist=meta.get("artist", "spotdl"),
-                         mode="Single", status="Success")
-        else:
-            print_error("Download failed – no audio file was created.")
-            log_download("Spotify", url, artist="spotdl", mode="Single", status="Failed")
+        count, out_folder, expected, failed_report = self._spotdl_download(
+            url, "track", expected_total=1
+        )
+        _display_download_result("track", meta.get("title"), out_folder, count, expected, failed_report)
+        status = "Success" if failed_report is None else "Partial"
+        log_download("Spotify", url, artist=meta.get("artist", "spotdl"),
+                     mode="Single", status=status)
 
     def download_album(self, url: str) -> None:
         meta = self._get_album_meta(url)
         _display_album_info(meta)
         if not confirm("Download all tracks?"):
             return
-        success, out_folder, n = self._spotdl_download(url, "album", meta_name=meta["name"])
-        if success:
-            _display_download_result("album", meta["name"], out_folder, n)
-            log_download("Spotify", url, artist="spotdl", mode="Album", status="Success")
-        else:
-            print_error("Album download failed – no tracks were saved.")
-            log_download("Spotify", url, artist="spotdl", mode="Album", status="Failed")
+        count, out_folder, expected, failed_report = self._spotdl_download(
+            url, "album", meta_name=meta["name"], expected_total=meta.get("track_count")
+        )
+        _display_download_result("album", meta["name"], out_folder, count, expected, failed_report)
+        status = "Success" if failed_report is None else "Partial"
+        log_download("Spotify", url, artist="spotdl", mode="Album", status=status)
 
     def download_playlist(self, url: str) -> None:
         meta = self._get_playlist_meta(url)
         _display_playlist_info(meta)
         if not confirm("Download all tracks?"):
             return
-        success, out_folder, n = self._spotdl_download(url, "playlist", meta_name=meta["name"])
-        if success:
-            _display_download_result("playlist", meta["name"], out_folder, n)
-            log_download("Spotify", url, artist="spotdl", mode="Playlist", status="Success")
-        else:
-            print_error("Playlist download failed – no tracks were saved.")
-            log_download("Spotify", url, artist="spotdl", mode="Playlist", status="Failed")
+        count, out_folder, expected, failed_report = self._spotdl_download(
+            url, "playlist", meta_name=meta["name"], expected_total=meta.get("track_count")
+        )
+        _display_download_result("playlist", meta["name"], out_folder, count, expected, failed_report)
+        status = "Success" if failed_report is None else "Partial"
+        log_download("Spotify", url, artist="spotdl", mode="Playlist", status=status)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -379,34 +481,65 @@ def _safe_name(name: str | None) -> str | None:
     return re.sub(r'[\\/*?:"<>|]', "", name).strip() or None
 
 
-def _find_output_folder(download_dir: Path, meta_name: str | None) -> str:
-    base = str(download_dir)
-    safe = _safe_name(meta_name)
-    if safe:
-        candidate = os.path.join(base, safe)
-        if os.path.isdir(candidate):
-            return candidate
-    try:
-        subdirs = [
-            os.path.join(base, d)
-            for d in os.listdir(base)
-            if os.path.isdir(os.path.join(base, d))
-        ]
-        if subdirs:
-            return max(subdirs, key=os.path.getmtime)
-    except Exception:
-        pass
-    return base
-
-
 def _count_audio_files(folder: str) -> int:
     exts = {".mp3", ".m4a", ".opus", ".ogg", ".flac", ".wav"}
     count = 0
+    if not os.path.isdir(folder):
+        return 0
     for root, _, files in os.walk(folder):
         for f in files:
             if Path(f).suffix.lower() in exts:
                 count += 1
     return count
+
+
+def _read_errors_file(path: str) -> list:
+    """Read spotdl's --save-errors output, one reported issue per line."""
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return [line.strip() for line in f if line.strip()]
+    except Exception:
+        return []
+
+
+def _write_failed_report(out_dir: str, meta_name: str | None, errors: list,
+                          expected_total: int, final_count: int) -> str:
+    """
+    Write a plain-text report of everything that didn't make it, inside
+    the download folder itself, so it's easy to find next to the audio
+    files. Returns the report's absolute path.
+    """
+    report_path = os.path.join(out_dir, "failed_downloads.txt")
+    missing = max(expected_total - final_count, 0)
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("LinkCatty — failed / missing tracks report\n")
+        f.write(f"Playlist or album : {meta_name or 'Unknown'}\n")
+        f.write(f"Generated         : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Expected tracks   : {expected_total}\n")
+        f.write(f"Downloaded tracks : {final_count}\n")
+        f.write(f"Missing tracks    : {missing}\n")
+        f.write("-" * 60 + "\n")
+        if errors:
+            f.write("Reported issues (from spotdl):\n\n")
+            for line in errors:
+                f.write(line + "\n")
+        else:
+            f.write(
+                "No specific error message was captured for the missing\n"
+                "track(s) — only a count mismatch was detected. This\n"
+                "usually means a track is region-locked, was removed from\n"
+                "Spotify/YouTube, or has no usable match on YouTube Music.\n"
+            )
+        f.write("\n" + "-" * 60 + "\n")
+        f.write(
+            "Tip: re-run the same playlist/album download again later.\n"
+            "LinkCatty keeps a hidden archive file (.spotdl_archive.spotdl)\n"
+            "in this folder, so already-downloaded tracks are skipped and\n"
+            "only the ones listed above are retried.\n"
+        )
+    return report_path
 
 
 def extract_spotify_id(url: str, item_type: str) -> str | None:
