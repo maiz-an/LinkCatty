@@ -62,7 +62,31 @@ def get_video_format(video_quality):
     return quality_map.get(video_quality, "bestvideo+bestaudio/best")
 
 
-def get_browser_cookie_option():
+def _show_session_header(section_title: str) -> None:
+    """Clear the leftover menu text and redraw just the banner + a
+    section title, so an info panel isn't stacked underneath the
+    numbered menu the user already picked from."""
+    clear_screen()
+    print_banner()
+    print(f"{BOLD}                   {section_title}{RESET}")
+    print("=" * 61)
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Browser-cookie fallback — resolved once per process, not once per
+#  video. Without this, a playlist that hits a bot-check on several
+#  videos would prompt "close your browser" over and over, once per
+#  failing video.
+# ─────────────────────────────────────────────────────────────────────
+_COOKIE_OPTION = None       # None = not resolved yet
+_COOKIE_ATTEMPTED = False   # True once we've tried (success or not)
+
+
+def get_browser_cookie_option(force_retry: bool = False):
+    global _COOKIE_OPTION, _COOKIE_ATTEMPTED
+    if _COOKIE_ATTEMPTED and not force_retry:
+        return _COOKIE_OPTION
+
     print_info("YouTube requires authentication. Close Chrome/Firefox/Edge completely first.")
     pause("Press Enter after closing your browser...")
     for browser in ("chrome", "firefox", "edge", "brave"):
@@ -70,10 +94,14 @@ def get_browser_cookie_option():
             with YoutubeDL({"quiet": True, "cookiesfrombrowser": (browser,)}) as test:
                 test.extract_info("https://youtube.com", download=False)
             print_info(f"Successfully loaded cookies from {browser}")
-            return (browser,)
+            _COOKIE_OPTION = (browser,)
+            _COOKIE_ATTEMPTED = True
+            return _COOKIE_OPTION
         except Exception:
             continue
     print_warning("Could not load cookies from a supported browser.")
+    _COOKIE_OPTION = None
+    _COOKIE_ATTEMPTED = True
     return None
 
 
@@ -109,8 +137,18 @@ def build_download_options(output_dir, mode, config):
     return options
 
 
-def download_single_video(video_url, output_dir, mode, config):
+def download_single_video(video_url, output_dir, mode, config, quiet_box=False):
+    global download_completed_shown
+    download_completed_shown = False  # reset per call — was a one-shot global bug
     options = build_download_options(output_dir, mode, config)
+    if quiet_box:
+        options["__quiet_box__"] = True  # read by progress_hook
+
+    # If a previous video in this session already resolved cookies
+    # (or already found none work), reuse that instead of re-probing.
+    if _COOKIE_OPTION is not None:
+        options["cookiesfrombrowser"] = _COOKIE_OPTION
+
     try:
         with YoutubeDL(options) as ydl:
             ydl.download([video_url])
@@ -119,6 +157,10 @@ def download_single_video(video_url, output_dir, mode, config):
         error_message = str(error)
         if "Sign in to confirm" not in error_message and "bot" not in error_message:
             return False, error_message
+        if _COOKIE_ATTEMPTED and _COOKIE_OPTION is None:
+            # Already tried once this session and no browser worked —
+            # don't re-prompt for every subsequent video.
+            return False, "Blocked (sign-in required) — no working browser cookies found earlier this session."
         print_warning("Direct download blocked. Trying browser cookies.")
 
     cookie_option = get_browser_cookie_option()
@@ -148,6 +190,10 @@ def progress_hook(data):
         sys.stdout.flush()
     elif data["status"] == "finished" and not download_completed_shown:
         download_completed_shown = True
+        info = data.get("info_dict") or {}
+        if info.get("__quiet_box__"):
+            print()  # just move off the \r progress line, no big box
+            return
         filepath = data.get("filepath", "Unknown")
         time.sleep(0.5)
         if filepath and filepath != "Unknown" and Path(filepath).exists():
@@ -243,6 +289,23 @@ def display_playlist_info(info):
     print("─" * 61)
 
 
+def _write_failed_report(playlist_folder: Path, playlist_title: str,
+                          total: int, success_count: int, failed_videos: list) -> Path:
+    report_path = playlist_folder / "failed_downloads.txt"
+    from datetime import datetime
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("LinkCatty — failed / missing videos report\n")
+        f.write(f"Playlist          : {playlist_title}\n")
+        f.write(f"Generated         : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Expected videos   : {total}\n")
+        f.write(f"Downloaded videos : {success_count}\n")
+        f.write(f"Missing videos    : {len(failed_videos)}\n")
+        f.write("-" * 60 + "\n")
+        for url, title, error in failed_videos:
+            f.write(f"{title}\n  URL   : {url or '(no video id)'}\n  Error : {error}\n\n")
+    return report_path
+
+
 def download_playlist(playlist_info, mode, config):
     full_info = playlist_info.get("full_info")
     if not full_info or "entries" not in full_info:
@@ -266,39 +329,60 @@ def download_playlist(playlist_info, mode, config):
         print_error(f"Could not create playlist folder: {error}")
         return
 
+    youtube_config = config["youtube"]
+    max_passes = int(youtube_config.get("max_retry_passes", 3))
+    cooldown = int(youtube_config.get("retry_delay_seconds", 10))
+
+    pending = list(entries)  # entries still to attempt this pass
     success_count = 0
-    failed_videos = []
-    for index, entry in enumerate(entries, 1):
-        video_id = entry.get("id")
-        if not video_id:
-            failed_videos.append(("", entry.get("title", f"Video {index}"), "Missing video ID"))
-            continue
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        video_title = entry.get("title", f"Video {index}")
-        print(f"\n{'─' * 61}")
-        print_info(f"[{index}/{total}] Downloading: {video_title[:50]}")
-        success, error = download_single_video(video_url, str(playlist_folder), mode, config)
-        if success:
-            success_count += 1
-            print_success(f"[{index}/{total}] Completed: {video_title[:50]}")
-            log_download("YouTube", video_title, mode=mode, status="Success")
-        else:
-            failed_videos.append((video_url, video_title, error or "Unknown error"))
-            print_error(f"[{index}/{total}] Failed: {video_title[:50]} - {(error or 'Unknown error')[:100]}")
-            log_download("YouTube", video_title, mode=mode, status="Failed", error=error or "")
-        time.sleep(0.5)
+    last_failed = []
+
+    for attempt in range(1, max_passes + 1):
+        batch = pending
+        pending = []
+        last_failed = []
+        label = f"Pass {attempt}/{max_passes}"
+
+        for index, entry in enumerate(batch, 1):
+            video_id = entry.get("id")
+            video_title = entry.get("title", f"Video {index}")
+            if not video_id:
+                last_failed.append(("", video_title, "Missing video ID"))
+                continue
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
+            print(f"\n{'─' * 61}")
+            print_info(f"[{label}] [{index}/{len(batch)}] Downloading: {video_title[:50]}")
+            success, error = download_single_video(
+                video_url, str(playlist_folder), mode, config, quiet_box=True
+            )
+            if success:
+                success_count += 1
+                print_success(f"[{index}/{len(batch)}] Completed: {video_title[:50]}")
+                log_download("YouTube", video_title, mode=mode, status="Success")
+            else:
+                last_failed.append((video_url, video_title, error or "Unknown error"))
+                print_error(f"[{index}/{len(batch)}] Failed: {video_title[:50]} - {(error or 'Unknown error')[:100]}")
+                log_download("YouTube", video_title, mode=mode, status="Failed", error=error or "")
+            time.sleep(0.3)
+
+        if not last_failed:
+            break
+
+        if attempt < max_passes:
+            print_warning(
+                f"{len(last_failed)} video(s) missing after pass {attempt}. "
+                f"Cooling down {cooldown}s before retrying…"
+            )
+            time.sleep(cooldown)
+            # Only re-attempt entries that actually had a video id.
+            failed_ids = {u.split("v=")[-1] for u, _, _ in last_failed if u}
+            pending = [e for e in entries if e.get("id") in failed_ids]
 
     print("\n" + "═" * 61)
-    print_success(f"Playlist download finished: {success_count} successful, {len(failed_videos)} failed")
-    if failed_videos:
-        fail_log = playlist_folder / "_failed_videos.txt"
-        try:
-            with open(fail_log, "w", encoding="utf-8") as file:
-                for url, title, error in failed_videos:
-                    file.write(f"{url} | {title} | {error}\n")
-            print_info(f"Failed URLs saved to: {fail_log}")
-        except OSError as error:
-            print_error(f"Could not save failed URL log: {error}")
+    print_success(f"Playlist download finished: {success_count}/{total} successful, {len(last_failed)} still missing")
+    if last_failed:
+        report_path = _write_failed_report(playlist_folder, playlist_title, total, success_count, last_failed)
+        print_info(f"Failed videos report saved to: {report_path}")
     print("═" * 61)
 
 
@@ -310,10 +394,12 @@ def download_content(url, mode, config):
         return
 
     if info["type"] == "playlist":
+        _show_session_header("📂 YouTube Downloader — Playlist")
         display_playlist_info(info)
         download_playlist(info, mode, config)
         return
 
+    _show_session_header("📹 YouTube Downloader — Video")
     display_video_info(info)
     if not confirm("\n🚀 Download this video?"):
         print_info("Download cancelled")

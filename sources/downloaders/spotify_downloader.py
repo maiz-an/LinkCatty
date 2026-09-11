@@ -53,11 +53,28 @@ except ImportError:
 _DENO_READY = False
 
 
+def _deno_already_available() -> bool:
+    """
+    spotdl keeps its own private copy of Deno inside its app directory
+    (NOT on the system PATH) when it self-installs via --download-deno.
+    A plain `shutil.which("deno")` check only sees a system-wide/PATH
+    install, so it misses spotdl's own copy — which meant this used to
+    re-run `--download-deno` on every single launch. Ask spotdl itself
+    where it thinks Deno is (it checks both locations) before falling
+    back to a PATH-only check on older spotdl versions.
+    """
+    try:
+        from spotdl.utils.deno import get_deno_path
+        return get_deno_path() is not None
+    except Exception:
+        return bool(shutil.which("deno"))
+
+
 def _ensure_deno(spotdl_path: str) -> None:
     global _DENO_READY
     if _DENO_READY:
         return
-    if shutil.which("deno"):
+    if _deno_already_available():
         _DENO_READY = True
         return
     print_info("Deno not found – installing automatically (one-time setup)…")
@@ -70,7 +87,7 @@ def _ensure_deno(spotdl_path: str) -> None:
             text=True,
         )
         proc.communicate(input="y\n", timeout=90)
-        if shutil.which("deno"):
+        if _deno_already_available():
             print_success("Deno installed successfully.")
         else:
             print_warning("Deno may not have installed correctly. Some downloads could fail.")
@@ -132,6 +149,16 @@ def _get_free_client():
 # ─────────────────────────────────────────────────────────────────────
 #  Display helpers
 # ─────────────────────────────────────────────────────────────────────
+
+def _show_session_header(section_title: str) -> None:
+    """Clear the leftover menu text and redraw just the banner + a
+    section title, so the info panel below it isn't stacked underneath
+    the numbered menu the user already picked from."""
+    clear_screen()
+    print_banner()
+    print(f"{BOLD}                   {section_title}{RESET}")
+    print("=" * 61)
+
 
 def _display_track_info(info: dict) -> None:
     print("\n" + "─" * 61)
@@ -319,7 +346,10 @@ class SpotifyDownloader:
         Returns (final_count, out_dir, expected_total, failed_report_path).
         failed_report_path is None when everything downloaded cleanly.
         """
+        audio_format = self.spotify_config.get("audio_format", "mp3").lower()
         quality  = self.spotify_config.get("audio_quality", "320k").replace("k", "")
+        # FLAC/WAV are lossless — a bitrate target doesn't apply to them.
+        bitrate_arg = "disable" if audio_format in ("flac", "wav") else f"{quality}k"
         base_dir = str(self.download_dir)
 
         if item_type in ("album", "playlist"):
@@ -356,7 +386,8 @@ class SpotifyDownloader:
             cmd = [
                 "spotdl", url,
                 "--output", template,
-                "--bitrate", f"{quality}k",
+                "--format", audio_format,
+                "--bitrate", bitrate_arg,
                 "--threads", str(threads),
                 "--max-retries", str(max_retries),
                 "--archive", archive_file,
@@ -414,7 +445,10 @@ class SpotifyDownloader:
     # ── public entry-points ───────────────────────────────────────────
 
     def download_single_track(self, url: str) -> None:
+        start_spinner("🎶 Fetching track info")
         meta = self._get_track_meta(url)
+        stop_spinner()
+        _show_session_header("🎵 Spotify Downloader — Track")
         _display_track_info(meta)
         if not confirm("Proceed with download?"):
             return
@@ -427,7 +461,10 @@ class SpotifyDownloader:
                      mode="Single", status=status)
 
     def download_album(self, url: str) -> None:
+        start_spinner("💿 Fetching album info")
         meta = self._get_album_meta(url)
+        stop_spinner()
+        _show_session_header("💿 Spotify Downloader — Album")
         _display_album_info(meta)
         if not confirm("Download all tracks?"):
             return
@@ -439,7 +476,10 @@ class SpotifyDownloader:
         log_download("Spotify", url, artist="spotdl", mode="Album", status=status)
 
     def download_playlist(self, url: str) -> None:
+        start_spinner("📂 Fetching playlist info")
         meta = self._get_playlist_meta(url)
+        stop_spinner()
+        _show_session_header("📂 Spotify Downloader — Playlist")
         _display_playlist_info(meta)
         if not confirm("Download all tracks?"):
             return

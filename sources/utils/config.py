@@ -23,6 +23,7 @@ DEFAULT_CONFIG = {
     "spotify": {
         "client_id": "",
         "client_secret": "",
+        "audio_format": "mp3",       # mp3, flac, m4a, opus, ogg, wav
         "audio_quality": "320k",
         "auto_retry": True,
         "max_retries": 3,

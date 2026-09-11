@@ -117,9 +117,25 @@ def youtube_settings(config):
 def spotify_settings(config):
     spotify = config["spotify"]
     print("\n🎧 Spotify Settings")
-    print(f"Audio quality [{spotify['audio_quality']}]: 1. 320k  2. 192k")
-    audio_choice = menu_choice("Choice (1/2): ", "12")
-    spotify["audio_quality"] = "320k" if audio_choice == "1" else "192k"
+
+    print(f"\nAudio format (current: {spotify.get('audio_format', 'mp3')})")
+    print("1. MP3   (compressed, small size, universal)")
+    print("2. FLAC  (lossless, full original quality, larger files)")
+    print("3. M4A   (compressed, Apple-friendly)")
+    print("4. OPUS  (compressed, best quality-per-KB)")
+    print("5. OGG   (compressed, open format)")
+    print("6. WAV   (uncompressed, largest files)")
+    format_map = {"1": "mp3", "2": "flac", "3": "m4a", "4": "opus", "5": "ogg", "6": "wav"}
+    format_choice = menu_choice("Select (1-6): ", "123456")
+    spotify["audio_format"] = format_map[format_choice]
+
+    if spotify["audio_format"] in ("flac", "wav"):
+        print_info(f"{spotify['audio_format'].upper()} is lossless — the bitrate setting below is ignored.")
+    else:
+        print(f"\nAudio quality [{spotify['audio_quality']}]: 1. 320k  2. 192k")
+        audio_choice = menu_choice("Choice (1/2): ", "12")
+        spotify["audio_quality"] = "320k" if audio_choice == "1" else "192k"
+
     spotify["auto_retry"] = confirm("Auto-retry failed downloads?", spotify.get("auto_retry", True))
     spotify["quiet_mode"] = confirm("Quiet mode?", spotify.get("quiet_mode", True))
     save_config(config)
