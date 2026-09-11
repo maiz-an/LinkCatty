@@ -6,6 +6,7 @@ from .ffmpeg import get_ffmpeg_path
 # Now inside sources/utils/
 BASE_DIR = Path(__file__).parent.parent  # sources folder
 CONFIG_FILE = BASE_DIR / "settings.json"
+VERSION_FILE = BASE_DIR / "version.txt"
 
 # Download folder stays in root (user's files)
 ROOT_DIR = BASE_DIR.parent
@@ -38,6 +39,22 @@ DEFAULT_CONFIG = {
         "history_limit": 100
     }
 }
+
+def get_version():
+    """Return the current LinkCatty version as a plain string.
+
+    Reads `sources/version.txt` (written by the installer / updater).
+    Falls back to "dev" when the file is missing or empty so the UI
+    still renders something sensible in a dev checkout.
+    """
+    try:
+        if VERSION_FILE.exists():
+            value = VERSION_FILE.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+    except Exception:
+        pass
+    return "dev"
 
 def load_config():
     config = deepcopy(DEFAULT_CONFIG)

@@ -11,6 +11,7 @@ if platform.system() == "Windows":
     os.system("")  # This enables ANSI escape sequences
 RESET = "\033[0m"
 BOLD = "\033[1m"
+DIM = "\033[2m"
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -47,8 +48,23 @@ def clear_screen():
     if shutil.which('clear'):
         os.system('clear')
 
-def print_banner():
-    """Print the LinkCatty logo with colors."""
+def _resolve_version(version=None):
+    """Get a version string without creating an import cycle.
+
+    Prefers an explicit argument. Otherwise asks utils.config (which reads
+    sources/version.txt). Falls back to None if anything goes wrong, so a
+    broken/missing version file can never break the banner.
+    """
+    if version is not None:
+        return version
+    try:
+        from .config import get_version
+        return get_version()
+    except Exception:
+        return None
+
+def print_banner(version=None):
+    """Print the LinkCatty logo with colors, and a small version tag below."""
     logo = f"""
 =============================================================
 
@@ -58,6 +74,14 @@ def print_banner():
 
 ============================================================="""
     print(logo)
+
+    resolved = _resolve_version(version)
+    if not resolved:
+        return
+
+    tag = resolved if resolved.lower().startswith("v") else f"v{resolved}"
+    # DIM + centered within the 61-char banner width → visually "very small".
+    print(f"{DIM}{tag.center(61)}{RESET}")
 
 def print_main_menu():
     print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
