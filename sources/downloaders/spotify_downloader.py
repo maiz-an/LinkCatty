@@ -146,7 +146,7 @@ def _get_free_client():
 def _show_session_header(section_title: str) -> None:
     clear_screen()
     print_banner()
-    print(f"{BOLD}                   {section_title}{RESET}")
+    print(f"{BOLD}               {section_title}{RESET}")
     print("=" * 61)
 
 
