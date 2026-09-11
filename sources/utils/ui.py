@@ -7,8 +7,7 @@ import shutil
 
 # ANSI color codes (Windows 10+ supports them, older Windows will fallback)
 if platform.system() == "Windows":
-    # Enable ANSI support for Windows 10+
-    os.system("")  # This enables ANSI escape sequences
+    os.system("")  # Enables ANSI escape sequences
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -23,23 +22,19 @@ WHITE = "\033[97m"
 _spinner_running = False
 _spinner_text = ""
 
+
 def set_console_width(width=62):
-    """Attempt to set console width to the specified number of characters."""
     system = platform.system()
     try:
         if system == "Windows":
-            # Use mode command to set columns and rows (rows optional)
             os.system(f"mode con cols={width} lines=30")
         else:
-            # For macOS/Linux: use stty or escape sequence
-            # Option 1: stty (works on most Unix terminals)
             os.system(f"stty cols {width}")
-            # Option 2: fallback escape sequence for xterm-like terminals
-            # (works in many terminal emulators)
             sys.stdout.write(f"\x1b[8;30;{width}t")
             sys.stdout.flush()
     except Exception:
-        pass  # Silently fail if unsupported
+        pass
+
 
 def clear_screen():
     if os.name == 'nt':
@@ -48,13 +43,8 @@ def clear_screen():
     if shutil.which('clear'):
         os.system('clear')
 
-def _resolve_version(version=None):
-    """Get a version string without creating an import cycle.
 
-    Prefers an explicit argument. Otherwise asks utils.config (which reads
-    sources/version.txt). Falls back to None if anything goes wrong, so a
-    broken/missing version file can never break the banner.
-    """
+def _resolve_version(version=None):
     if version is not None:
         return version
     try:
@@ -63,8 +53,8 @@ def _resolve_version(version=None):
     except Exception:
         return None
 
+
 def print_banner(version=None):
-    """Print the LinkCatty logo with colors, and a small version tag below."""
     logo = f"""
 =============================================================
 
@@ -74,14 +64,12 @@ def print_banner(version=None):
 
 ============================================================="""
     print(logo)
-
     resolved = _resolve_version(version)
     if not resolved:
         return
-
     tag = resolved if resolved.lower().startswith("v") else f"v{resolved}"
-    # DIM + centered within the 61-char banner width → visually "very small".
     print(f"{DIM}{tag.center(61)}{RESET}")
+
 
 def print_main_menu():
     print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
@@ -95,27 +83,31 @@ def print_main_menu():
     print(f"")
     print(f"{'=' * 61}{RESET}")
 
+
 def print_error(message, suggestion=None):
-    """Print a formatted error message with optional suggestion."""
     print(f"\n{RED}{BOLD}❌ ERROR:{RESET} {message}")
     if suggestion:
         print(f"{YELLOW}💡 {suggestion}{RESET}")
 
+
 def print_success(message):
     print(f"\n{GREEN}{BOLD}✅ {message}{RESET}")
+
 
 def print_info(message):
     print(f"{CYAN}ℹ️  {message}{RESET}")
 
+
 def print_warning(message):
     print(f"{YELLOW}⚠️  {message}{RESET}")
 
+
 def pause(message="\nPress Enter to continue..."):
-    """Pause after a screen message without letting Ctrl+C crash a submenu."""
     try:
         input(message)
     except (KeyboardInterrupt, EOFError):
         print()
+
 
 def read_key():
     """Read one keypress when possible; fall back to Enter-based input."""
@@ -146,22 +138,47 @@ def read_key():
     except KeyboardInterrupt:
         return "\x03"
 
-def menu_choice(prompt, valid_choices, back_choices=None):
-    """Read a single-key menu choice and validate it."""
+
+def menu_choice(prompt, valid_choices, back_choices=None, allow_empty=False):
+    """Read a single-key menu choice and validate it.
+
+    Returns
+    -------
+    str
+        The chosen key when it is in `valid_choices` or `back_choices`.
+    ""
+        If `allow_empty=True` and the user pressed Enter alone — callers
+        use this as "keep current value / skip this step".
+    None
+        If the user pressed Ctrl+C.
+    """
     valid = {str(choice) for choice in valid_choices}
     back = set(back_choices or [])
     while True:
         print(prompt, end="", flush=True)
         choice = read_key()
-        print(choice if choice not in ("\r", "\n", "\x03") else "")
+
+        # Enter (bare) ------------------------------------------------
+        if choice in ("\r", "\n"):
+            print()
+            if allow_empty:
+                return ""
+            continue
+
+        # Ctrl+C ------------------------------------------------------
         if choice == "\x03":
+            print()
             return None
+
+        print(choice)
         if choice in valid or choice in back:
             return choice
-        print_error(
-            f"Invalid choice: {choice or '<empty>'}",
-            f"Press one of: {', '.join(sorted(valid | back))}"
-        )
+
+        hint = f"Press one of: {', '.join(sorted(valid | back))}"
+        if allow_empty:
+            hint += "  (Enter = keep current, 0 = cancel)"
+        print_error(f"Invalid choice: {choice}", hint)
+
 
 def confirm(prompt, default=False):
     """Read a y/n answer as a single-key option."""
@@ -169,20 +186,23 @@ def confirm(prompt, default=False):
     while True:
         print(prompt + suffix, end="", flush=True)
         choice = read_key().lower()
-        print(choice if choice not in ("\r", "\n", "\x03") else "")
-        if choice == "\x03":
-            return False
-        if choice in ("\r", "\n", ""):
+        if choice in ("\r", "\n"):
+            print()
             return default
+        if choice == "\x03":
+            print()
+            return False
+        print(choice)
         if choice in ("y", "n"):
             return choice == "y"
         print_error("Invalid answer", "Press y or n")
 
+
 def start_spinner(text="Processing"):
-    """Start an animated spinner in a separate thread."""
     global _spinner_running, _spinner_text
     _spinner_running = True
     _spinner_text = text
+
     def _spin():
         chars = "⣾⣽⣻⢿⡿⣟⣯⣷"
         idx = 0
@@ -193,15 +213,17 @@ def start_spinner(text="Processing"):
             idx = (idx + 1) % len(chars)
         sys.stdout.write("\r" + " " * (len(_spinner_text) + 2) + "\r")
         sys.stdout.flush()
+
     threading.Thread(target=_spin, daemon=True).start()
+
 
 def stop_spinner():
     global _spinner_running
     _spinner_running = False
     time.sleep(0.2)
 
+
 def progress_bar(current, total, prefix="", suffix="", length=40):
-    """Display a colored progress bar."""
     percent = current / total
     filled = int(length * percent)
     bar = f"{GREEN}{'█' * filled}{RESET}{'░' * (length - filled)}"

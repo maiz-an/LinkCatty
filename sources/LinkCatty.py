@@ -27,6 +27,13 @@ from utils.ui import (
 
 set_console_width(62)
 
+_HINT = "Press Enter to keep the current value, or type a number to change it."
+_HINT2 = "Type 0 at any prompt to cancel — no changes will be saved."
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Settings menu
+# ─────────────────────────────────────────────────────────────────────
 
 def settings_menu(config):
     from utils.logger import clear_history
@@ -54,10 +61,9 @@ def settings_menu(config):
                 return
 
             if choice == "1":
-                new_dir = input("New download folder (absolute path): ").strip()
+                new_dir = input("New download folder (absolute path, Enter to keep): ").strip()
                 if not new_dir:
-                    print_error("Download folder was not changed",
-                                "Enter a full folder path or choose Back.")
+                    print_info("Download folder unchanged.")
                 else:
                     path = Path(new_dir).expanduser().resolve()
                     path.mkdir(parents=True, exist_ok=True)
@@ -74,15 +80,20 @@ def settings_menu(config):
             elif choice == "4":
                 print("\n🔑 Spotify API Credentials")
                 print("Get them from: https://developer.spotify.com/dashboard/")
-                client_id = input("Client ID: ").strip()
-                client_secret = input("Client Secret: ").strip()
-                if client_id and client_secret:
+                client_id = input("Client ID (Enter to keep): ").strip()
+                client_secret = input("Client Secret (Enter to keep): ").strip()
+                changed = False
+                if client_id:
                     config["spotify"]["client_id"] = client_id
+                    changed = True
+                if client_secret:
                     config["spotify"]["client_secret"] = client_secret
+                    changed = True
+                if changed:
                     save_config(config)
                     print_success("Credentials saved.")
                 else:
-                    print_error("Both Client ID and Client Secret are required.")
+                    print_info("Credentials unchanged.")
 
             elif choice == "5":
                 if confirm("Clear all download history?"):
@@ -105,8 +116,6 @@ def settings_menu(config):
                     print_info("Cancelled.")
                 else:
                     fresh = reset_to_defaults()
-                    # Swap in place so the running session picks up the
-                    # new values immediately (no restart needed).
                     config.clear()
                     config.update(fresh)
                     print_success("Settings restored to defaults.")
@@ -122,54 +131,186 @@ def settings_menu(config):
         pause()
 
 
+# ─────────────────────────────────────────────────────────────────────
+#  YouTube settings
+# ─────────────────────────────────────────────────────────────────────
+
 def youtube_settings(config):
     youtube = config["youtube"]
     print("\n▶️  YouTube Settings")
-    print(f"Audio quality (for MP3) [{youtube['audio_quality']}]: 1. 320k  2. 192k")
-    audio_choice = menu_choice("Choice (1/2): ", "12")
-    youtube["audio_quality"] = "320k" if audio_choice == "1" else "192k"
+    print_info(_HINT)
+    print_info(_HINT2)
+    print()
 
-    print(f"\nVideo quality (current: {youtube['video_quality']})")
+    # Stage changes in a draft so 0 = truly non-destructive.
+    draft = dict(youtube)
+
+    # ── audio quality ─────────────────────────────────────────────
+    current = draft.get("audio_quality", "320k")
+    print(f"Audio quality for MP3 (current: {current})")
+    print("1. 320k")
+    print("2. 192k")
+    choice = menu_choice(
+        "Select (1-2) [Enter=keep, 0=cancel]: ",
+        "12", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["audio_quality"] = "320k" if choice == "1" else "192k"
+
+    # ── video quality ─────────────────────────────────────────────
+    current = draft.get("video_quality", "best")
+    print(f"\nVideo quality (current: {current})")
     print("1. Best (highest MP4)")
     print("2. 1080p")
     print("3. 720p")
     print("4. 480p")
     print("5. 360p")
     quality_map = {"1": "best", "2": "1080p", "3": "720p", "4": "480p", "5": "360p"}
-    youtube["video_quality"] = quality_map[menu_choice("Select (1-5): ", "12345")]
-    youtube["auto_retry"] = confirm("Auto-retry failed downloads?", youtube.get("auto_retry", True))
-    youtube["quiet_mode"] = confirm("Quiet mode (less output)?", youtube.get("quiet_mode", True))
+    choice = menu_choice(
+        "Select (1-5) [Enter=keep, 0=cancel]: ",
+        "12345", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["video_quality"] = quality_map[choice]
+
+    # ── auto-retry ────────────────────────────────────────────────
+    current = draft.get("auto_retry", True)
+    print(f"\nAuto-retry failed downloads? (current: {'yes' if current else 'no'})")
+    print("1. Yes")
+    print("2. No")
+    choice = menu_choice(
+        "Select (1-2) [Enter=keep, 0=cancel]: ",
+        "12", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["auto_retry"] = (choice == "1")
+
+    # ── quiet mode ────────────────────────────────────────────────
+    current = draft.get("quiet_mode", True)
+    print(f"\nQuiet mode (less output)? (current: {'yes' if current else 'no'})")
+    print("1. Yes")
+    print("2. No")
+    choice = menu_choice(
+        "Select (1-2) [Enter=keep, 0=cancel]: ",
+        "12", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["quiet_mode"] = (choice == "1")
+
+    # ── commit ────────────────────────────────────────────────────
+    youtube.clear()
+    youtube.update(draft)
     save_config(config)
     print_success("YouTube settings saved.")
 
 
+# ─────────────────────────────────────────────────────────────────────
+#  Spotify settings
+# ─────────────────────────────────────────────────────────────────────
+
 def spotify_settings(config):
     spotify = config["spotify"]
     print("\n🎧 Spotify Settings")
+    print_info(_HINT)
+    print_info(_HINT2)
+    print()
 
-    print(f"\nAudio format (current: {spotify.get('audio_format', 'mp3')})")
+    draft = dict(spotify)
+
+    # ── audio format ──────────────────────────────────────────────
+    current = draft.get("audio_format", "mp3")
+    print(f"Audio format (current: {current})")
     print("1. MP3   (compressed, small size, universal)")
     print("2. FLAC  (lossless, full original quality, larger files)")
     print("3. M4A   (compressed, Apple-friendly)")
     print("4. OPUS  (compressed, best quality-per-KB)")
     print("5. OGG   (compressed, open format)")
     print("6. WAV   (uncompressed, largest files)")
-    format_map = {"1": "mp3", "2": "flac", "3": "m4a", "4": "opus", "5": "ogg", "6": "wav"}
-    format_choice = menu_choice("Select (1-6): ", "123456")
-    spotify["audio_format"] = format_map[format_choice]
+    format_map = {"1": "mp3", "2": "flac", "3": "m4a",
+                  "4": "opus", "5": "ogg", "6": "wav"}
+    choice = menu_choice(
+        "Select (1-6) [Enter=keep, 0=cancel]: ",
+        "123456", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["audio_format"] = format_map[choice]
 
-    if spotify["audio_format"] in ("flac", "wav"):
-        print_info(f"{spotify['audio_format'].upper()} is lossless — the bitrate setting below is ignored.")
+    # ── audio quality (skipped for lossless formats) ──────────────
+    if draft["audio_format"] in ("flac", "wav"):
+        print_info(
+            f"{draft['audio_format'].upper()} is lossless — bitrate setting "
+            f"is ignored."
+        )
     else:
-        print(f"\nAudio quality [{spotify['audio_quality']}]: 1. 320k  2. 192k")
-        audio_choice = menu_choice("Choice (1/2): ", "12")
-        spotify["audio_quality"] = "320k" if audio_choice == "1" else "192k"
+        current = draft.get("audio_quality", "320k")
+        print(f"\nAudio quality (current: {current})")
+        print("1. 320k")
+        print("2. 192k")
+        choice = menu_choice(
+            "Select (1-2) [Enter=keep, 0=cancel]: ",
+            "12", back_choices={"0"}, allow_empty=True,
+        )
+        if choice is None or choice == "0":
+            print_info("Cancelled — no changes saved.")
+            return
+        if choice != "":
+            draft["audio_quality"] = "320k" if choice == "1" else "192k"
 
-    spotify["auto_retry"] = confirm("Auto-retry failed downloads?", spotify.get("auto_retry", True))
-    spotify["quiet_mode"] = confirm("Quiet mode?", spotify.get("quiet_mode", True))
+    # ── auto-retry ────────────────────────────────────────────────
+    current = draft.get("auto_retry", True)
+    print(f"\nAuto-retry failed downloads? (current: {'yes' if current else 'no'})")
+    print("1. Yes")
+    print("2. No")
+    choice = menu_choice(
+        "Select (1-2) [Enter=keep, 0=cancel]: ",
+        "12", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["auto_retry"] = (choice == "1")
+
+    # ── quiet mode ────────────────────────────────────────────────
+    current = draft.get("quiet_mode", True)
+    print(f"\nQuiet mode? (current: {'yes' if current else 'no'})")
+    print("1. Yes")
+    print("2. No")
+    choice = menu_choice(
+        "Select (1-2) [Enter=keep, 0=cancel]: ",
+        "12", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["quiet_mode"] = (choice == "1")
+
+    # ── commit ────────────────────────────────────────────────────
+    spotify.clear()
+    spotify.update(draft)
     save_config(config)
     print_success("Spotify settings saved.")
 
+
+# ─────────────────────────────────────────────────────────────────────
+#  Main loop
+# ─────────────────────────────────────────────────────────────────────
 
 def main():
     config = load_config()
