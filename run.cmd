@@ -3,9 +3,9 @@ chcp 65001 >nul 2>&1
 title LinkCatty
 setlocal enabledelayedexpansion
 
-:: -------------------------------------------------------------------
+
 :: Check for uninstall flag
-:: -------------------------------------------------------------------
+
 echo %* | findstr /i "\-\-uninstall" >nul
 if not errorlevel 1 (
     if exist "%~dp0uninstall_linkcatty.cmd" (
@@ -36,9 +36,9 @@ echo                    LinkCatty Launcher
 echo ============================================================
 echo.
 
-:: -------------------------------------------------------------------
+
 :: [1/3] Check for updates
-:: -------------------------------------------------------------------
+
 echo [1/3] Checking for updates...
 set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
@@ -105,9 +105,9 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     exit /b 0
 )
 
-:: -------------------------------------------------------------------
+
 :: [2/3] Python setup - find or install Python ONCE
-:: -------------------------------------------------------------------
+
 echo [2/3] Setting up Python...
 
 set "PORTABLE_DIR=%~dp0sources\portable_python"
@@ -206,9 +206,9 @@ if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     echo Warning: FFmpeg not found in sources. Some features may not work.
 )
 
-:: -------------------------------------------------------------------
+
 :: [3/3] Install dependencies (only if not already done)
-:: -------------------------------------------------------------------
+
 echo [3/3] Checking dependencies...
 
 if exist "%DEPS_MARKER%" (
