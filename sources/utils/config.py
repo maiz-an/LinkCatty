@@ -15,11 +15,25 @@ DEFAULT_DOWNLOAD_DIR = str(ROOT_DIR / "downloads")
 DEFAULT_CONFIG = {
     "download_dir": DEFAULT_DOWNLOAD_DIR,
     "youtube": {
-        "audio_quality": "320k",   # for MP3 only
-        "video_quality": "best",   # new: best, 2160p, 1440p, 1080p, 720p, 480p, 360p
+        "audio_quality": "320k",       # for MP3 only
+        "video_quality": "best",       # best, 2160p, 1440p, 1080p, 720p, 480p, 360p
         "auto_retry": True,
         "max_retries": 3,
-        "quiet_mode": True
+        "quiet_mode": True,
+
+        # ── parallel downloads + retry passes ─────────────────────────
+        "parallel_downloads": 3,       # concurrent yt-dlp instances
+        "max_retry_passes": 3,         # total attempts per playlist
+        "retry_delay_seconds": 8,      # cooldown between retry passes
+
+        # ── metadata sidecars (one file per video) ────────────────────
+        "save_metadata": True,         # writes  <title>.info.json
+        "save_thumbnail": True,        # writes  <title>.webp / .jpg
+        "save_description": False,     # writes  <title>.description
+
+        # ── embed metadata directly into the media file ───────────────
+        "embed_metadata": True,        # ID3 / MP4 tags (title, artist, etc.)
+        "embed_thumbnail": False,      # cover art inside the file
     },
     "spotify": {
         "client_id": "",
@@ -29,10 +43,18 @@ DEFAULT_CONFIG = {
         "auto_retry": True,
         "max_retries": 3,
         "quiet_mode": True,
-        # New: automatic multi-pass retry for failed/missing tracks.
-        "threads": 4,               # parallel downloads on the first pass
-        "max_retry_passes": 4,      # total attempts (1 initial + retries)
-        "retry_delay_seconds": 15   # cooldown between passes (rate-limit safe)
+
+        # ── multi-pass retry + pacing ─────────────────────────────────
+        "threads": 2,
+        "max_retry_passes": 4,
+        "retry_delay_seconds": 8,
+
+        # ── parallel batching (speed) ─────────────────────────────────
+        "parallel_batches": 3,
+        "batch_size": 10,
+        "batch_cooldown_min": 1,
+        "batch_cooldown_max": 3,
+        "blocked_cooldown_seconds": 45
     },
     "common": {
         "enable_logging": True,
@@ -58,7 +80,16 @@ def get_version():
 
 def load_config():
     config = deepcopy(DEFAULT_CONFIG)
-    if CONFIG_FILE.exists():
+
+    if not CONFIG_FILE.exists():
+        # First run: write the defaults to disk so users have a real
+        # settings.json to edit. save_config() strips ffmpeg_path, so
+        # we pass the clean copy, not the runtime one.
+        try:
+            save_config(config)
+        except Exception as e:
+            print(f"⚠️ Could not create default settings.json: {e}")
+    else:
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 user_config = json.load(f)
@@ -74,6 +105,7 @@ def load_config():
                         config[section] = values
         except Exception as e:
             print(f"⚠️ Could not read settings.json. Defaults loaded instead: {e}")
+
     config['ffmpeg_path'] = get_ffmpeg_path()
     return config
 
