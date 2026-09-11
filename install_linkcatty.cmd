@@ -67,6 +67,7 @@ for /l %%i in (0,1,15) do (
     for %%f in ("!FILE_PATH!") do set "FILE_DIR=%%~dpf"
     if not exist "%TEMP_DIR%\!FILE_DIR!" mkdir "%TEMP_DIR%\!FILE_DIR!" 2>nul
     powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '!FILE_URL!' -OutFile '%TEMP_DIR%\!FILE_PATH!' }" >nul 2>&1
+    powershell -command "& { $p = '%TEMP_DIR%\!FILE_PATH!'; if (Test-Path -LiteralPath $p) { $fs = [System.IO.File]::OpenRead($p); $b = New-Object byte[] 3; $n = $fs.Read($b, 0, 3); $fs.Close(); if ($n -eq 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $a = [System.IO.File]::ReadAllBytes($p); $s = New-Object byte[] ($a.Length - 3); [Array]::Copy($a, 3, $s, 0, $a.Length - 3); [System.IO.File]::WriteAllBytes($p, $s) } } }" >nul 2>&1
     echo Done
 )
 
@@ -77,6 +78,7 @@ set /a PERCENT=!DOWNLOADED! * 100 / 17
 mkdir "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin" 2>nul
 set "FFMPEG_ZIP=%TEMP%\ffmpeg_win64.zip"
 set "FFMPEG_EXTRACT=%TEMP%\ffmpeg_extract"
+if exist "%FFMPEG_EXTRACT%" rmdir /s /q "%FFMPEG_EXTRACT%" 2>nul
 powershell -command "& {Invoke-WebRequest -Uri '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%'}" >nul 2>&1
 if errorlevel 1 (
     echo FAILED
@@ -111,8 +113,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Rename run.cmd to linkcatty.bat
+:: Rename run.cmd to linkcatty.bat (and strip any lingering BOM defensively)
 if exist "%INSTALL_DIR%\run.cmd" move "%INSTALL_DIR%\run.cmd" "%INSTALL_DIR%\linkcatty.bat" >nul
+powershell -command "& { $p = '%INSTALL_DIR%\linkcatty.bat'; if (Test-Path -LiteralPath $p) { $fs = [System.IO.File]::OpenRead($p); $b = New-Object byte[] 3; $n = $fs.Read($b, 0, 3); $fs.Close(); if ($n -eq 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $a = [System.IO.File]::ReadAllBytes($p); $s = New-Object byte[] ($a.Length - 3); [Array]::Copy($a, 3, $s, 0, $a.Length - 3); [System.IO.File]::WriteAllBytes($p, $s) } } }" >nul 2>&1
 
 :: Clean temp
 rmdir /s /q "%TEMP_DIR%" 2>nul

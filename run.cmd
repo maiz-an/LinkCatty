@@ -17,6 +17,7 @@ if not errorlevel 1 (
         set "UNINSTALL_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
         powershell -command "& {Invoke-WebRequest -Uri '!UNINSTALL_URL!' -OutFile '!UNINSTALL_FILE!'}" >nul 2>&1
+        powershell -command "& { $p = '!UNINSTALL_FILE!'; if (Test-Path -LiteralPath $p) { $fs = [System.IO.File]::OpenRead($p); $b = New-Object byte[] 3; $n = $fs.Read($b, 0, 3); $fs.Close(); if ($n -eq 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $a = [System.IO.File]::ReadAllBytes($p); $s = New-Object byte[] ($a.Length - 3); [Array]::Copy($a, 3, $s, 0, $a.Length - 3); [System.IO.File]::WriteAllBytes($p, $s) } } }" >nul 2>&1
         if exist "!UNINSTALL_FILE!" (
             start "" "!UNINSTALL_FILE!"
         ) else (
@@ -133,7 +134,6 @@ if exist "%~dp0sources\PortablePython.zip" (
     echo Extracting portable Python...
     if not exist "%PORTABLE_DIR%" mkdir "%PORTABLE_DIR%"
     powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%~dp0sources\PortablePython.zip', '%PORTABLE_DIR%') }" >nul 2>&1
-    :: Flatten subdirectory if needed
     pushd "%PORTABLE_DIR%"
     for /d %%d in (*) do (
         if exist "%%d\python.exe" (
@@ -145,12 +145,10 @@ if exist "%~dp0sources\PortablePython.zip" (
         )
     )
     popd
-    :: Re-check after extraction
     if exist "%PORTABLE_DIR%\python.exe" (
         set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
         set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
         echo Portable Python ready.
-        :: Delete deps marker so deps get installed fresh with this python
         del "%DEPS_MARKER%" 2>nul
         goto :SetupDeps
     )
@@ -164,7 +162,6 @@ if exist "%~dp0sources\PortablePython.zip" (
 )
 
 :: ── Fall back to system Python
-:: Try python, python3, py launcher in order
 for %%p in (python python3) do (
     if not defined PYTHON_EXE (
         %%p --version >nul 2>&1
@@ -190,13 +187,11 @@ if not defined PYTHON_EXE (
 )
 echo Using system Python.
 
-:: ── Get system Python's Scripts directory and add to PATH
 for /f "usebackq delims=" %%s in (`%PYTHON_EXE% -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2^>nul`) do (
     set "PYTHON_SCRIPTS=%%s"
 )
 
 :SetupDeps
-:: Add Python scripts dir to PATH so installed tools are accessible
 if defined PYTHON_SCRIPTS (
     if exist "!PYTHON_SCRIPTS!" (
         set "PATH=!PYTHON_SCRIPTS!;%PATH%"
@@ -225,16 +220,13 @@ if exist "%DEPS_MARKER%" (
         echo WARNING: pip not available. Trying to bootstrap...
         "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>&1
     )
-    :: Upgrade pip silently, suppressing PATH warnings
     "%PYTHON_EXE%" -m pip install --quiet --upgrade pip --no-warn-script-location >nul 2>&1
-    :: Install deps, suppress PATH/cache warnings
     "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy spotdl --no-warn-script-location --no-cache-dir
     if errorlevel 1 (
         echo ERROR: Failed to install some packages. Check your internet connection.
         pause
         exit /b 1
     )
-    :: Write marker so we skip install next time
     echo %REMOTE_VER%> "%DEPS_MARKER%"
     echo Packages installed successfully.
 )
@@ -262,4 +254,5 @@ for /f "tokens=1,2 delims=|" %%a in ("!entry!") do (
 for %%f in ("%FILE_PATH%") do set "FILE_DIR=%%~dpf"
 if not exist "%~dp0!FILE_DIR!" mkdir "%~dp0!FILE_DIR!" 2>nul
 powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '!FILE_URL!' -OutFile '%~dp0!FILE_PATH!' }" >nul 2>&1
+powershell -command "& { $p = '%~dp0!FILE_PATH!'; if (Test-Path -LiteralPath $p) { $fs = [System.IO.File]::OpenRead($p); $b = New-Object byte[] 3; $n = $fs.Read($b, 0, 3); $fs.Close(); if ($n -eq 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $a = [System.IO.File]::ReadAllBytes($p); $s = New-Object byte[] ($a.Length - 3); [Array]::Copy($a, 3, $s, 0, $a.Length - 3); [System.IO.File]::WriteAllBytes($p, $s) } } }" >nul 2>&1
 exit /b
