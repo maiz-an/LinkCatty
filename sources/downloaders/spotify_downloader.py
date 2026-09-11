@@ -371,19 +371,25 @@ def _song_artist(song) -> str | None:
 #  computes a live ETA from files-on-disk vs. elapsed time. All print
 #  calls made from the main thread go through .say() so they land
 #  ABOVE the bar instead of stomping on it.
+#
+#  FIX: the start-time attribute is now called `_start_time` so it no
+#  longer collides with the class method `start()`. Previously
+#  `self.start = time.time()` shadowed the method with a float, so
+#  `reporter.start()` raised "'float' object is not callable" right
+#  after the "Output folder : ..." line.
 # ─────────────────────────────────────────────────────────────────────
 
 class _ProgressReporter:
     BAR_WIDTH = 40
 
     def __init__(self, out_dir: str, total: int, label: str):
-        self.out_dir = out_dir
-        self.total   = max(int(total), 1)
-        self.label   = label
-        self.start   = time.time()
-        self._stop   = threading.Event()
-        self._thread = None
-        self._lock   = threading.Lock()
+        self.out_dir        = out_dir
+        self.total          = max(int(total), 1)
+        self.label          = label
+        self._start_time    = time.time()
+        self._stop          = threading.Event()
+        self._thread        = None
+        self._lock          = threading.Lock()
         self._last_line_len = 0
 
     # ── lifecycle ─────────────────────────────────────────────────
@@ -426,7 +432,7 @@ class _ProgressReporter:
 
     def _render(self):
         count     = _count_audio_files(self.out_dir)
-        elapsed   = max(time.time() - self.start, 0.001)
+        elapsed   = max(time.time() - self._start_time, 0.001)
         remaining = max(self.total - count, 0)
         pct       = (count / self.total) * 100 if self.total else 0.0
         filled    = int(self.BAR_WIDTH * count / self.total) if self.total else 0
