@@ -1,0 +1,3110 @@
+{
+  "https://open.spotify.com/track/6kYoY0PhBelP64UMnhsEZx": {
+    "url": "https://open.spotify.com/track/6kYoY0PhBelP64UMnhsEZx",
+    "title": "Agar Tum Saath Ho (From \"Tamasha\")",
+    "artist": "Alka Yagnik",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/4bD9z9qa4qg9BhryvYWB7c": {
+    "url": "https://open.spotify.com/track/4bD9z9qa4qg9BhryvYWB7c",
+    "title": "Kabira",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/1hQia6rxgfM1ly2hE3StWp": {
+    "url": "https://open.spotify.com/track/1hQia6rxgfM1ly2hE3StWp",
+    "title": "Ishq Wala Love",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/32DWojMZeZebVrfBkhAkKy": {
+    "url": "https://open.spotify.com/track/32DWojMZeZebVrfBkhAkKy",
+    "title": "Barso Re",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/5a2Hoi1wuhCA6Ob7pbOlpW": {
+    "url": "https://open.spotify.com/track/5a2Hoi1wuhCA6Ob7pbOlpW",
+    "title": "Sun Saathiya",
+    "artist": "Divya Kumar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/4BTPzhEsyW3blWcxcuhLM0": {
+    "url": "https://open.spotify.com/track/4BTPzhEsyW3blWcxcuhLM0",
+    "title": "Mitwa",
+    "artist": "Shankar-Ehsaan-Loy",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/7cWnks0lsRtpAi87COOiXK": {
+    "url": "https://open.spotify.com/track/7cWnks0lsRtpAi87COOiXK",
+    "title": "O Re Piya",
+    "artist": "Salim–Sulaiman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/0FBQ4NrrHUbR9kus7rzrOj": {
+    "url": "https://open.spotify.com/track/0FBQ4NrrHUbR9kus7rzrOj",
+    "title": "Dil Diyan Gallan",
+    "artist": "Atif Aslam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/1q6pMQBRILzkz0g4rKEXdM": {
+    "url": "https://open.spotify.com/track/1q6pMQBRILzkz0g4rKEXdM",
+    "title": "Kaun Tujhe (From \"M.S.Dhoni - The Untold Story\")",
+    "artist": "Palak Muchhal",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/6FjbAnaPRPwiP3sciEYctO": {
+    "url": "https://open.spotify.com/track/6FjbAnaPRPwiP3sciEYctO",
+    "title": "Raabta",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/2dDHtDrDaxTB7QR6EoCSne": {
+    "url": "https://open.spotify.com/track/2dDHtDrDaxTB7QR6EoCSne",
+    "title": "Saibo",
+    "artist": "Sachin-Jigar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/6pP4YH81WuWHvAwyRvAu8Y": {
+    "url": "https://open.spotify.com/track/6pP4YH81WuWHvAwyRvAu8Y",
+    "title": "Ajab Si (From \"Om Shanti Om\")",
+    "artist": "KK",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T15:59:50"
+  },
+  "https://open.spotify.com/track/6fScgF2Y63ScU73nYju0ny": {
+    "url": "https://open.spotify.com/track/6fScgF2Y63ScU73nYju0ny",
+    "title": "O Saathi",
+    "artist": "Atif Aslam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/5PvwPy5eRO8BPwpRzCHK3D": {
+    "url": "https://open.spotify.com/track/5PvwPy5eRO8BPwpRzCHK3D",
+    "title": "Sunn Raha Hai",
+    "artist": "Ankit Tiwari",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/5OMUXgfXsSukZ0zxelpC3b": {
+    "url": "https://open.spotify.com/track/5OMUXgfXsSukZ0zxelpC3b",
+    "title": "Raanjhanaa (From \"Raanjhanaa\")",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/1gwO79MdYdumgIjxq8eCxB": {
+    "url": "https://open.spotify.com/track/1gwO79MdYdumgIjxq8eCxB",
+    "title": "Bahara",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/6mTvwBzWTGDOVeCNQEqtOE": {
+    "url": "https://open.spotify.com/track/6mTvwBzWTGDOVeCNQEqtOE",
+    "title": "Soch Na Sake",
+    "artist": "Amaal Mallik",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/72zHuDxFQTjbL51qJQSA7j": {
+    "url": "https://open.spotify.com/track/72zHuDxFQTjbL51qJQSA7j",
+    "title": "Ranjha (From \"Shershaah\")",
+    "artist": "Jasleen Royal",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/4iFPsNzNV7V9KJgcOX7TEO": {
+    "url": "https://open.spotify.com/track/4iFPsNzNV7V9KJgcOX7TEO",
+    "title": "Tu Jaane Na",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/0u8wprNfOdcWpUlWnfMcpP": {
+    "url": "https://open.spotify.com/track/0u8wprNfOdcWpUlWnfMcpP",
+    "title": "Bol Na Halke Halke",
+    "artist": "Shankar-Ehsaan-Loy",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/0gPgdRfB4jdGrlyXS0Vx78": {
+    "url": "https://open.spotify.com/track/0gPgdRfB4jdGrlyXS0Vx78",
+    "title": "Khuda Jaane",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/7Imk0IG6S5GA5iYWkjmMW5": {
+    "url": "https://open.spotify.com/track/7Imk0IG6S5GA5iYWkjmMW5",
+    "title": "Chahun Main Ya Naa (From \"Aashiqui 2\")",
+    "artist": "Palak Muchhal",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/0GQngE2rOYvlKwEQjTAsP8": {
+    "url": "https://open.spotify.com/track/0GQngE2rOYvlKwEQjTAsP8",
+    "title": "Subhanallah",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/1hA697u7e1jX2XM8sWA6Uy": {
+    "url": "https://open.spotify.com/track/1hA697u7e1jX2XM8sWA6Uy",
+    "title": "Apna Bana Le",
+    "artist": "Sachin-Jigar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:10"
+  },
+  "https://open.spotify.com/track/1O5mTSQa0sCce9ghhDqIZl": {
+    "url": "https://open.spotify.com/track/1O5mTSQa0sCce9ghhDqIZl",
+    "title": "Jashn-E-Bahaaraa",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/0rxEPf4Y6uBmV3hkrV340a": {
+    "url": "https://open.spotify.com/track/0rxEPf4Y6uBmV3hkrV340a",
+    "title": "Isq Risk",
+    "artist": "Sohail Sen",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/0voD3biKAPCQsWrg5jKDzz": {
+    "url": "https://open.spotify.com/track/0voD3biKAPCQsWrg5jKDzz",
+    "title": "Shukran Allah",
+    "artist": "Salim–Sulaiman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/29YePgOxuPLfU7uZKxKf6w": {
+    "url": "https://open.spotify.com/track/29YePgOxuPLfU7uZKxKf6w",
+    "title": "Sawaar Loon",
+    "artist": "Monali Thakur",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/3AJ6uSlFH1VIgIQRQhrUSl": {
+    "url": "https://open.spotify.com/track/3AJ6uSlFH1VIgIQRQhrUSl",
+    "title": "Raat Bhar (From \"Heropanti\")",
+    "artist": "Arijit Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/665b3Nss3OQmhTUdB5hBXw": {
+    "url": "https://open.spotify.com/track/665b3Nss3OQmhTUdB5hBXw",
+    "title": "Bheegi Si Bhaagi Si",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/6ZoCBDOB308GqUdt2AJrV2": {
+    "url": "https://open.spotify.com/track/6ZoCBDOB308GqUdt2AJrV2",
+    "title": "Dildaara (Stand By Me)",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/6EB454nVg2u6sbeCvWAPej": {
+    "url": "https://open.spotify.com/track/6EB454nVg2u6sbeCvWAPej",
+    "title": "Yaanji - From \"Vikram Vedha\"",
+    "artist": "Sam C.S.",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/4Uh41d7PlFHP2gCinJEWlr": {
+    "url": "https://open.spotify.com/track/4Uh41d7PlFHP2gCinJEWlr",
+    "title": "Yaayum",
+    "artist": "Shabir Sulthan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/1bxzr3JK05fMTcweGAZUHp": {
+    "url": "https://open.spotify.com/track/1bxzr3JK05fMTcweGAZUHp",
+    "title": "Chuttamalle (From \"Devara Part 1\")",
+    "artist": "Shilpa Rao",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/7fec0UcxeHVe6kHIez2GSs": {
+    "url": "https://open.spotify.com/track/7fec0UcxeHVe6kHIez2GSs",
+    "title": "Orasaadha - Madras Gig",
+    "artist": "Vivek - Mervin",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/3gnWw0LToxswxfC6Eb8GBp": {
+    "url": "https://open.spotify.com/track/3gnWw0LToxswxfC6Eb8GBp",
+    "title": "Kadhal Aasai",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:27"
+  },
+  "https://open.spotify.com/track/1s7oOCT8vauUh01PbJD6ps": {
+    "url": "https://open.spotify.com/track/1s7oOCT8vauUh01PbJD6ps",
+    "title": "Calm Down (with Selena Gomez)",
+    "artist": "Rema",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/13wIQbwSuQ4YFvDvtQgSVc": {
+    "url": "https://open.spotify.com/track/13wIQbwSuQ4YFvDvtQgSVc",
+    "title": "Vaarayo Vaarayo",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/4ejvQHab2yU7Dyi3TLw6BX": {
+    "url": "https://open.spotify.com/track/4ejvQHab2yU7Dyi3TLw6BX",
+    "title": "Ennamo Yeadho (From \"KO\")",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/68lbSrXDORS51pmyjZv712": {
+    "url": "https://open.spotify.com/track/68lbSrXDORS51pmyjZv712",
+    "title": "SWIM",
+    "artist": "BTS",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/0rk2X5TAhraBC5aCIXK2Rq": {
+    "url": "https://open.spotify.com/track/0rk2X5TAhraBC5aCIXK2Rq",
+    "title": "Samjhawan",
+    "artist": "Jawad Ahmad",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/5PUXKVVVQ74C3gl5vKy9Li": {
+    "url": "https://open.spotify.com/track/5PUXKVVVQ74C3gl5vKy9Li",
+    "title": "Heeriye (feat. Arijit Singh)",
+    "artist": "Jasleen Royal",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/0ayku1IzLHuA3cHY4HxOCN": {
+    "url": "https://open.spotify.com/track/0ayku1IzLHuA3cHY4HxOCN",
+    "title": "Aavan Jaavan (From \"WAR 2\")",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/4MU4Kfkd9EnkArK2ocQyqK": {
+    "url": "https://open.spotify.com/track/4MU4Kfkd9EnkArK2ocQyqK",
+    "title": "Zaalima",
+    "artist": "Arijit Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/7LfIX3DCzl3AtGJWlCKOKK": {
+    "url": "https://open.spotify.com/track/7LfIX3DCzl3AtGJWlCKOKK",
+    "title": "Tum Hi Ho (From \"Aashiqui 2)",
+    "artist": "Arijit Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/5bVmOD7UKfP2iLFUGMtdnS": {
+    "url": "https://open.spotify.com/track/5bVmOD7UKfP2iLFUGMtdnS",
+    "title": "Mast Magan (From \"2 States)",
+    "artist": "Arijit Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/7qiZfU4dY1lWllzX7mPBI3": {
+    "url": "https://open.spotify.com/track/7qiZfU4dY1lWllzX7mPBI3",
+    "title": "Shape of You",
+    "artist": "Ed Sheeran",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/0JpZRszoyOq1gnFn9BPLdZ": {
+    "url": "https://open.spotify.com/track/0JpZRszoyOq1gnFn9BPLdZ",
+    "title": "Mudher Kanave",
+    "artist": "Bombay Jayashri",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:44"
+  },
+  "https://open.spotify.com/track/6wdyJnmcSeBXUyR6H5gGKd": {
+    "url": "https://open.spotify.com/track/6wdyJnmcSeBXUyR6H5gGKd",
+    "title": "Suttum Vizhi",
+    "artist": "Sriram Parthasarathy",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/7dFqLUWUZ7CKsEAFwf3d4H": {
+    "url": "https://open.spotify.com/track/7dFqLUWUZ7CKsEAFwf3d4H",
+    "title": "Yaaro Manathile",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/5gUuhtkbrISUIlqjD3oYgv": {
+    "url": "https://open.spotify.com/track/5gUuhtkbrISUIlqjD3oYgv",
+    "title": "Zara Zara",
+    "artist": "Bombay Jayashri",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/6wqwVre9LoGnsUUzukxUy3": {
+    "url": "https://open.spotify.com/track/6wqwVre9LoGnsUUzukxUy3",
+    "title": "Neelothi (From \"Sirai\")",
+    "artist": "Sooraj Santhosh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/2A0JZsrJ1Nor5wtoOr9OOR": {
+    "url": "https://open.spotify.com/track/2A0JZsrJ1Nor5wtoOr9OOR",
+    "title": "Eppadi Vandhaayo (From \"Aaromaley\")",
+    "artist": "Siddhu Kumar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/5EjBg3FGNH0EgO8CjFAkDn": {
+    "url": "https://open.spotify.com/track/5EjBg3FGNH0EgO8CjFAkDn",
+    "title": "Naan Un",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/2ESscisnKdryn50fPeHd7O": {
+    "url": "https://open.spotify.com/track/2ESscisnKdryn50fPeHd7O",
+    "title": "Suno- Na Sangemarmar (From \"Youngistaan)",
+    "artist": "Arijit Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/41FncNLI1u5Bc2nHRaFUh8": {
+    "url": "https://open.spotify.com/track/41FncNLI1u5Bc2nHRaFUh8",
+    "title": "Aaj Phir (From \"Hate Story 2)",
+    "artist": "Arijit Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/2k4JdMWCH2PIZiGPVsznE5": {
+    "url": "https://open.spotify.com/track/2k4JdMWCH2PIZiGPVsznE5",
+    "title": "Kannukulla",
+    "artist": "Sai Abhyankkar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/36N5awamOX6XX5pQn3aFXZ": {
+    "url": "https://open.spotify.com/track/36N5awamOX6XX5pQn3aFXZ",
+    "title": "Soni Soni (From \"Ishq Vishk Rebound\")",
+    "artist": "Darshan Raval",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/5QWuignQQWDlbtQsjKX0Kq": {
+    "url": "https://open.spotify.com/track/5QWuignQQWDlbtQsjKX0Kq",
+    "title": "Yedi (From \"Nilavuku En Mel Ennadi Kobam\")",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/4ebGjbay0OmsBNUwo0M6u6": {
+    "url": "https://open.spotify.com/track/4ebGjbay0OmsBNUwo0M6u6",
+    "title": "What Jhumka ?",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:00:57"
+  },
+  "https://open.spotify.com/track/7Kfy0ek81opWOWmfgJFIax": {
+    "url": "https://open.spotify.com/track/7Kfy0ek81opWOWmfgJFIax",
+    "title": "Enna Solla Pogirai",
+    "artist": "Shankar Mahadevan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/5FihcmME7NlwW8KbYOaHVH": {
+    "url": "https://open.spotify.com/track/5FihcmME7NlwW8KbYOaHVH",
+    "title": "The Breakup Song",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/72HdutlIHBZJ7WT1xVAAZT": {
+    "url": "https://open.spotify.com/track/72HdutlIHBZJ7WT1xVAAZT",
+    "title": "Kajra Re",
+    "artist": "Shankar-Ehsaan-Loy",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/1tGARsb4HC2pheoOYsC64I": {
+    "url": "https://open.spotify.com/track/1tGARsb4HC2pheoOYsC64I",
+    "title": "Desi Girl",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/0xttqqTj7ZAGyVkfOYxQ4F": {
+    "url": "https://open.spotify.com/track/0xttqqTj7ZAGyVkfOYxQ4F",
+    "title": "Nee Paartha Vizhigal - The Touch of Love",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/5KJSI1MjQeXEBHBYMjgP41": {
+    "url": "https://open.spotify.com/track/5KJSI1MjQeXEBHBYMjgP41",
+    "title": "Innum Konjam Neram",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/0hs52k0bAXIBQ2SzGx5mzI": {
+    "url": "https://open.spotify.com/track/0hs52k0bAXIBQ2SzGx5mzI",
+    "title": "Hey Minnale (From \"Amaran\")",
+    "artist": "Haricharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/3QjFIgGhcrPS4VjkIYOddf": {
+    "url": "https://open.spotify.com/track/3QjFIgGhcrPS4VjkIYOddf",
+    "title": "Sirukki Vaasam",
+    "artist": "Santhosh Narayanan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/1tsvjUpHeho8hX0ynlDwLO": {
+    "url": "https://open.spotify.com/track/1tsvjUpHeho8hX0ynlDwLO",
+    "title": "Kalloorum - From \"Veera Dheera Sooran\"",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/0cgwdBXXlPfXJXWf3wMs32": {
+    "url": "https://open.spotify.com/track/0cgwdBXXlPfXJXWf3wMs32",
+    "title": "Vaa Vaathi",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/2109dBho14Lqh2wr8goqAP": {
+    "url": "https://open.spotify.com/track/2109dBho14Lqh2wr8goqAP",
+    "title": "Enna Solla - The New Life of Tamizh",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/67quQQ4RDcXiWW5Qvz62Ku": {
+    "url": "https://open.spotify.com/track/67quQQ4RDcXiWW5Qvz62Ku",
+    "title": "The Youth Of Power Paandi - Paarthen",
+    "artist": "Sean Roldan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:15"
+  },
+  "https://open.spotify.com/track/7fUS9gftrrgtaHJUwFnbEt": {
+    "url": "https://open.spotify.com/track/7fUS9gftrrgtaHJUwFnbEt",
+    "title": "Thuli Thuli",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/7f88cYg6oaAaSJMfF2GANl": {
+    "url": "https://open.spotify.com/track/7f88cYg6oaAaSJMfF2GANl",
+    "title": "Minnalvala",
+    "artist": "Jakes Bejoy",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/1AzNN19lPYC68iacrbWL8X": {
+    "url": "https://open.spotify.com/track/1AzNN19lPYC68iacrbWL8X",
+    "title": "Mudhal Nee Mudivum Nee Title Track (From \"Mudhal Nee Mudivum Nee\")",
+    "artist": "Darbuka Siva",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/5cfKBuE5XKtlaNOVjQwA9H": {
+    "url": "https://open.spotify.com/track/5cfKBuE5XKtlaNOVjQwA9H",
+    "title": "Kadhaippoma (From \"Oh My Kadavule\")",
+    "artist": "Leon James",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/7dbzO881X6TVJST6EKhnDg": {
+    "url": "https://open.spotify.com/track/7dbzO881X6TVJST6EKhnDg",
+    "title": "Maruvaarthai",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/3hglFJgXWPZUlHLfiDO35b": {
+    "url": "https://open.spotify.com/track/3hglFJgXWPZUlHLfiDO35b",
+    "title": "Inkem Inkem Inkem Kaavaale",
+    "artist": "Gopi Sundar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/3kfu3KKaiTAfohtpWq1tew": {
+    "url": "https://open.spotify.com/track/3kfu3KKaiTAfohtpWq1tew",
+    "title": "Vinmeen",
+    "artist": "Nivas K Prasanna",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/3JXi13LlcYzagKRNokd3Zt": {
+    "url": "https://open.spotify.com/track/3JXi13LlcYzagKRNokd3Zt",
+    "title": "Aathadi Aathadi",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/5hA3rXEanTpROJ2thUL6vw": {
+    "url": "https://open.spotify.com/track/5hA3rXEanTpROJ2thUL6vw",
+    "title": "Halena",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/5PNZX8yqzqqAMPpl3UAoaP": {
+    "url": "https://open.spotify.com/track/5PNZX8yqzqqAMPpl3UAoaP",
+    "title": "Moongil Thottam",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/0MW1wdJlIjfAubzXjKqHUg": {
+    "url": "https://open.spotify.com/track/0MW1wdJlIjfAubzXjKqHUg",
+    "title": "Munbe Vaa",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/668ZUFIUNRyIqOORiCfFY3": {
+    "url": "https://open.spotify.com/track/668ZUFIUNRyIqOORiCfFY3",
+    "title": "Kan Irandil",
+    "artist": "Vijay Antony",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:30"
+  },
+  "https://open.spotify.com/track/0joXv5niso2T8YXWOlIe1X": {
+    "url": "https://open.spotify.com/track/0joXv5niso2T8YXWOlIe1X",
+    "title": "Titli",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/4Va9qUpMta6PavfMwYI8MI": {
+    "url": "https://open.spotify.com/track/4Va9qUpMta6PavfMwYI8MI",
+    "title": "Unnaale Unnaale",
+    "artist": "Karthik",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/7heMX7gyHP0mhTlNgd7Lxd": {
+    "url": "https://open.spotify.com/track/7heMX7gyHP0mhTlNgd7Lxd",
+    "title": "The Humma Song",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/6975wBRCT77an1aJzDrIqQ": {
+    "url": "https://open.spotify.com/track/6975wBRCT77an1aJzDrIqQ",
+    "title": "Naan Pizhai",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/5h6O8kOSivahcPg4Rlgp15": {
+    "url": "https://open.spotify.com/track/5h6O8kOSivahcPg4Rlgp15",
+    "title": "Banarasiya (From \"Raanjhanaa\")",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/5orNEFkFG4RP24goF02AuD": {
+    "url": "https://open.spotify.com/track/5orNEFkFG4RP24goF02AuD",
+    "title": "Kashmir Main Tu Kanyakumari",
+    "artist": "Vishal-Shekhar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/77YznMZunm9ccc12ouoOL7": {
+    "url": "https://open.spotify.com/track/77YznMZunm9ccc12ouoOL7",
+    "title": "Anbae Anbae (From \"Jeans\")",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/6LgkoexFvjZ5V9qG8mYV3l": {
+    "url": "https://open.spotify.com/track/6LgkoexFvjZ5V9qG8mYV3l",
+    "title": "Pachai Nirame",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/6bdpj89aYEBjhpsenXAsmO": {
+    "url": "https://open.spotify.com/track/6bdpj89aYEBjhpsenXAsmO",
+    "title": "Enna Sona",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/3ySVdXje5nm31d7vL3jNV3": {
+    "url": "https://open.spotify.com/track/3ySVdXje5nm31d7vL3jNV3",
+    "title": "Galliyan",
+    "artist": "Ankit Tiwari",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/5EYZZvmNAH5VZCwuzYJqoA": {
+    "url": "https://open.spotify.com/track/5EYZZvmNAH5VZCwuzYJqoA",
+    "title": "Chand Sifarish",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/4RixtPhUXlci9ad4qIMj23": {
+    "url": "https://open.spotify.com/track/4RixtPhUXlci9ad4qIMj23",
+    "title": "Kuch Kuch Hota Hai",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:01:46"
+  },
+  "https://open.spotify.com/track/5L9fLNHSj5SuGvJRljdWJb": {
+    "url": "https://open.spotify.com/track/5L9fLNHSj5SuGvJRljdWJb",
+    "title": "Koi Mil Gaya",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/5yDC62x6y5vZc32PzULCeU": {
+    "url": "https://open.spotify.com/track/5yDC62x6y5vZc32PzULCeU",
+    "title": "Saajanji Ghar Aaye",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/6f3C6rJo7zvmfr1h5SRvxg": {
+    "url": "https://open.spotify.com/track/6f3C6rJo7zvmfr1h5SRvxg",
+    "title": "Ladki Badi Anjani Hai",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/0eGtFJBfYUKF2CvNZJEu3M": {
+    "url": "https://open.spotify.com/track/0eGtFJBfYUKF2CvNZJEu3M",
+    "title": "Kabhi Khushi Kabhie Gham",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/1uzkWkIaWaxzHJgJ4Fy5rO": {
+    "url": "https://open.spotify.com/track/1uzkWkIaWaxzHJgJ4Fy5rO",
+    "title": "Bole Chudiyan",
+    "artist": "Jatin-Lalit",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/6SDH3mp9sQCNJDfDDpQTTo": {
+    "url": "https://open.spotify.com/track/6SDH3mp9sQCNJDfDDpQTTo",
+    "title": "You Are My Soniya",
+    "artist": "Sandesh Shandilya",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/1CK7tnXhsr0Br5ZzbZdBzh": {
+    "url": "https://open.spotify.com/track/1CK7tnXhsr0Br5ZzbZdBzh",
+    "title": "Deewana Hai Dekho",
+    "artist": "Sandesh Shandilya",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/4pCXTYAPgdzMTCsDdDwjy3": {
+    "url": "https://open.spotify.com/track/4pCXTYAPgdzMTCsDdDwjy3",
+    "title": "Oorum Blood",
+    "artist": "Sai Abhyankkar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/7DswdgrPTR2xDB1vCBToi4": {
+    "url": "https://open.spotify.com/track/7DswdgrPTR2xDB1vCBToi4",
+    "title": "Mutta Kalakki (From \"Youth\")",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/6H1hnJRQOGQ9djPL3jNu9G": {
+    "url": "https://open.spotify.com/track/6H1hnJRQOGQ9djPL3jNu9G",
+    "title": "Imaye Imaye",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/5GENwU66wYztXVqEOLubyF": {
+    "url": "https://open.spotify.com/track/5GENwU66wYztXVqEOLubyF",
+    "title": "Golden Sparrow (From \"Nilavuku En Mel Ennadi Kobam\")",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/5FfUDeZeJlB50vY0Eoj26C": {
+    "url": "https://open.spotify.com/track/5FfUDeZeJlB50vY0Eoj26C",
+    "title": "Karuppu Perazhaga",
+    "artist": "Sichith",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:03"
+  },
+  "https://open.spotify.com/track/1ae6GtlSKSGfUnKDVmx1cw": {
+    "url": "https://open.spotify.com/track/1ae6GtlSKSGfUnKDVmx1cw",
+    "title": "Eppo Nee",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/102YVYHLNfgkfQP3qvDqsD": {
+    "url": "https://open.spotify.com/track/102YVYHLNfgkfQP3qvDqsD",
+    "title": "Koodamela Koodavechi",
+    "artist": "D. Imman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/7hMKAmUlUUYa5qEiHWK4bk": {
+    "url": "https://open.spotify.com/track/7hMKAmUlUUYa5qEiHWK4bk",
+    "title": "Pookkal Pookkum",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/322xF47eamMLy7tFWtJHzF": {
+    "url": "https://open.spotify.com/track/322xF47eamMLy7tFWtJHzF",
+    "title": "Un Mela Aasadhaan",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/0j5PDjpBsLIEQdRVSoXFBv": {
+    "url": "https://open.spotify.com/track/0j5PDjpBsLIEQdRVSoXFBv",
+    "title": "Kanaa Kaangiren",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/72YaGdQ4YJbGfUtdjfOu6B": {
+    "url": "https://open.spotify.com/track/72YaGdQ4YJbGfUtdjfOu6B",
+    "title": "Kanna Veesi",
+    "artist": "Siddhu Kumar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/20IW0u1ZTzvEDAhhVjVMsq": {
+    "url": "https://open.spotify.com/track/20IW0u1ZTzvEDAhhVjVMsq",
+    "title": "Un Vizhigalil",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/6Ro16W3cg8dg7um9aRLWAj": {
+    "url": "https://open.spotify.com/track/6Ro16W3cg8dg7um9aRLWAj",
+    "title": "Yaar Indha Saalai Oram",
+    "artist": "G. V. Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/1VxCdnd46iCgHP5zXGCXPe": {
+    "url": "https://open.spotify.com/track/1VxCdnd46iCgHP5zXGCXPe",
+    "title": "Nira - From \"Takkar\"",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/1zzejMGRYKP5XOa3FmzXfa": {
+    "url": "https://open.spotify.com/track/1zzejMGRYKP5XOa3FmzXfa",
+    "title": "Katchi Sera - From \"Think Indie\"",
+    "artist": "Sai Abhyankkar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/7Clk6LNRqRDeP9zEMjTJX0": {
+    "url": "https://open.spotify.com/track/7Clk6LNRqRDeP9zEMjTJX0",
+    "title": "Thean Kudika",
+    "artist": "Teejay",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/1PaxAUxLEVpi75l0nDtwu1": {
+    "url": "https://open.spotify.com/track/1PaxAUxLEVpi75l0nDtwu1",
+    "title": "Sakkarakatti",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:17"
+  },
+  "https://open.spotify.com/track/3IpEJ86hrMfUcoXCk9U4h3": {
+    "url": "https://open.spotify.com/track/3IpEJ86hrMfUcoXCk9U4h3",
+    "title": "Kangal Irandal",
+    "artist": "James Vasanthan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/2tMoOS9grHtn4upzb4LwMG": {
+    "url": "https://open.spotify.com/track/2tMoOS9grHtn4upzb4LwMG",
+    "title": "Adiye - From \"Bachelor\"",
+    "artist": "Dhibu Ninan Thomas",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/4UxNXDaE5bCaNhiPEtHsHx": {
+    "url": "https://open.spotify.com/track/4UxNXDaE5bCaNhiPEtHsHx",
+    "title": "Aura 10/10 (From \"Meesaya Murukku 2\")",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/0zsA45R0SQPfqC5TyDOqY8": {
+    "url": "https://open.spotify.com/track/0zsA45R0SQPfqC5TyDOqY8",
+    "title": "Neeyum Naanum Anbe",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/3THVNKs3bdQekA02kK1hWD": {
+    "url": "https://open.spotify.com/track/3THVNKs3bdQekA02kK1hWD",
+    "title": "Kadhale Kadhale",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/4ja3CIVQYIrBZpCgLHyt7o": {
+    "url": "https://open.spotify.com/track/4ja3CIVQYIrBZpCgLHyt7o",
+    "title": "Aye Aye Aye",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/0DvOnDwiLulHMdLieKFQiy": {
+    "url": "https://open.spotify.com/track/0DvOnDwiLulHMdLieKFQiy",
+    "title": "Va Va Va Vannila",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/7mIlbe9TP4eqC1oGIYC8Jh": {
+    "url": "https://open.spotify.com/track/7mIlbe9TP4eqC1oGIYC8Jh",
+    "title": "Chennai City Gangsta",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/7yk8CT3m3KI8u6DEWc3dFk": {
+    "url": "https://open.spotify.com/track/7yk8CT3m3KI8u6DEWc3dFk",
+    "title": "Enna Nadanthalum",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/7frWUq8m2KNHx82TS6R5Rz": {
+    "url": "https://open.spotify.com/track/7frWUq8m2KNHx82TS6R5Rz",
+    "title": "Takkunu Takkunu",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/52itZ0w0CydihB2JCZEIft": {
+    "url": "https://open.spotify.com/track/52itZ0w0CydihB2JCZEIft",
+    "title": "Pee Loon",
+    "artist": "Pritam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/4fOd87EwMLT1YlIKas0Zz3": {
+    "url": "https://open.spotify.com/track/4fOd87EwMLT1YlIKas0Zz3",
+    "title": "Oxygen",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:35"
+  },
+  "https://open.spotify.com/track/6fGJY9dTvjOYbXSzwqRfs4": {
+    "url": "https://open.spotify.com/track/6fGJY9dTvjOYbXSzwqRfs4",
+    "title": "Azhage",
+    "artist": "Hiphop Tamizha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/55DvuLzTRspLQYVD32drd7": {
+    "url": "https://open.spotify.com/track/55DvuLzTRspLQYVD32drd7",
+    "title": "Anjali Anjali",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/7MrdHOL2aoWfT16CncgNei": {
+    "url": "https://open.spotify.com/track/7MrdHOL2aoWfT16CncgNei",
+    "title": "Monica",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/3xMHXmedL5Rvfxmiar9Ryv": {
+    "url": "https://open.spotify.com/track/3xMHXmedL5Rvfxmiar9Ryv",
+    "title": "Chaleya",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/2kbxGCtWSV0f1ON720Bd4O": {
+    "url": "https://open.spotify.com/track/2kbxGCtWSV0f1ON720Bd4O",
+    "title": "Don'u Don'u Don'u - The Don's Romance",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/09Z6o1yu596HJAwWZxTz4m": {
+    "url": "https://open.spotify.com/track/09Z6o1yu596HJAwWZxTz4m",
+    "title": "Othaiyadi Pathayila",
+    "artist": "Dhibu Ninan Thomas",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/3V3QbgrOZKtFv5MXzAAdZr": {
+    "url": "https://open.spotify.com/track/3V3QbgrOZKtFv5MXzAAdZr",
+    "title": "Locha-E-Ulfat",
+    "artist": "Benny Dayal",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/1D35BJlymlh6OLD75WupSF": {
+    "url": "https://open.spotify.com/track/1D35BJlymlh6OLD75WupSF",
+    "title": "Saiyaara (From \"Saiyaara\")",
+    "artist": "Tanishk Bagchi",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/6nSQEl7oZE22erC0RmvQ8a": {
+    "url": "https://open.spotify.com/track/6nSQEl7oZE22erC0RmvQ8a",
+    "title": "Thenmerku Paruva Kaatru",
+    "artist": "Vairamuthu",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/5fahAquD6MYSVLPek6WO5w": {
+    "url": "https://open.spotify.com/track/5fahAquD6MYSVLPek6WO5w",
+    "title": "Kadhal Illamal",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/6rxuAb1FQSwD8eZUIUrn2O": {
+    "url": "https://open.spotify.com/track/6rxuAb1FQSwD8eZUIUrn2O",
+    "title": "Ulundhu Vithakkaiyilae",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/5Gd3pzjK9F7caWRS1fMD68": {
+    "url": "https://open.spotify.com/track/5Gd3pzjK9F7caWRS1fMD68",
+    "title": "Melliname",
+    "artist": "Harish Raghavendra",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:02:52"
+  },
+  "https://open.spotify.com/track/5anRo1ZiyrQ79IFT5jyATP": {
+    "url": "https://open.spotify.com/track/5anRo1ZiyrQ79IFT5jyATP",
+    "title": "Un Per Solla (From \"Minsara Kanna\")",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/5AanlkXLVIJlaOH1RkSg6T": {
+    "url": "https://open.spotify.com/track/5AanlkXLVIJlaOH1RkSg6T",
+    "title": "Sona Sona",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/0kkkNUhAlQwm2WyMMt63qo": {
+    "url": "https://open.spotify.com/track/0kkkNUhAlQwm2WyMMt63qo",
+    "title": "Malare",
+    "artist": "Vidyasagar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/292FiGxrQ1W4VWZ1Cxdk4o": {
+    "url": "https://open.spotify.com/track/292FiGxrQ1W4VWZ1Cxdk4o",
+    "title": "Unnodu Vazhatha",
+    "artist": "Bharadwaj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/6erhWA07TRTqtISu5ODMlL": {
+    "url": "https://open.spotify.com/track/6erhWA07TRTqtISu5ODMlL",
+    "title": "Sotta Sotta",
+    "artist": "Srinivas",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/1WWghzUi9exJcJsIsPtyDe": {
+    "url": "https://open.spotify.com/track/1WWghzUi9exJcJsIsPtyDe",
+    "title": "Chinna Chinna Mazhai Thuligal",
+    "artist": "M. G. Sreekumar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/3Z9b4rZakWkg5rOv6Xl6D6": {
+    "url": "https://open.spotify.com/track/3Z9b4rZakWkg5rOv6Xl6D6",
+    "title": "Parthen Rasithen",
+    "artist": "Yugendran",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/2eljKywWS6ukBH3E0cJPeo": {
+    "url": "https://open.spotify.com/track/2eljKywWS6ukBH3E0cJPeo",
+    "title": "Malare Oru Varthai",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/1SlCTrmWkJfc7KSEla2hoD": {
+    "url": "https://open.spotify.com/track/1SlCTrmWkJfc7KSEla2hoD",
+    "title": "Gulmuhar Malare",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/6VsFzxU0mO3P3RoZfcR7cC": {
+    "url": "https://open.spotify.com/track/6VsFzxU0mO3P3RoZfcR7cC",
+    "title": "Anbae Anbae (From \"Jeans\")",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/0xkVUkRIFnVfCSM8TckJWn": {
+    "url": "https://open.spotify.com/track/0xkVUkRIFnVfCSM8TckJWn",
+    "title": "Ottraikkannale",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/7f0cweWdJCX31DCz3QRVOf": {
+    "url": "https://open.spotify.com/track/7f0cweWdJCX31DCz3QRVOf",
+    "title": "Chudithar Aninthu",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:08"
+  },
+  "https://open.spotify.com/track/65dvxc4Kctq3JIJ2BkKKMj": {
+    "url": "https://open.spotify.com/track/65dvxc4Kctq3JIJ2BkKKMj",
+    "title": "Munbe Vaa",
+    "artist": "Naresh Iyer",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/6vztfVJ1lTWe23YMNv6Pk1": {
+    "url": "https://open.spotify.com/track/6vztfVJ1lTWe23YMNv6Pk1",
+    "title": "Hasili Fisiliye",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/2BB7wu5jJxxAEH9DKC5Mm4": {
+    "url": "https://open.spotify.com/track/2BB7wu5jJxxAEH9DKC5Mm4",
+    "title": "En Idhayam",
+    "artist": "Devi Sri Prasad",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/2DnfC8ghXPQgn1SKPCCL6S": {
+    "url": "https://open.spotify.com/track/2DnfC8ghXPQgn1SKPCCL6S",
+    "title": "Mun Andhi",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/6Xejo9F1hr17aXInilcKZ7": {
+    "url": "https://open.spotify.com/track/6Xejo9F1hr17aXInilcKZ7",
+    "title": "Minnalai Pidithu",
+    "artist": "Unni Menon",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/6t2mWm7Jpy7046xL5DkK0a": {
+    "url": "https://open.spotify.com/track/6t2mWm7Jpy7046xL5DkK0a",
+    "title": "April Maathathil",
+    "artist": "Unnikrishnan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/50x8RkAW34F6YOGHGDChvp": {
+    "url": "https://open.spotify.com/track/50x8RkAW34F6YOGHGDChvp",
+    "title": "Poopol Poopol",
+    "artist": "Tippu",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/1splovORLcosDKuQ2QsxLY": {
+    "url": "https://open.spotify.com/track/1splovORLcosDKuQ2QsxLY",
+    "title": "Love Pannu (Oru Punnagai Poove)",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/4f7u64vCU8VcQXNGTmbaCP": {
+    "url": "https://open.spotify.com/track/4f7u64vCU8VcQXNGTmbaCP",
+    "title": "Girl Friend",
+    "artist": "Karthik",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/4ZjCjaWmTi1UvMivQFao2O": {
+    "url": "https://open.spotify.com/track/4ZjCjaWmTi1UvMivQFao2O",
+    "title": "Apple Penne (From \"Roja Koottam\")",
+    "artist": "Srinivas",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/3FRLxtpSk9BxxnxdS6I4jq": {
+    "url": "https://open.spotify.com/track/3FRLxtpSk9BxxnxdS6I4jq",
+    "title": "Iragai Poley",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/0CkDv2V3FFhltON32OwE0x": {
+    "url": "https://open.spotify.com/track/0CkDv2V3FFhltON32OwE0x",
+    "title": "Manmadhane Nee",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:24"
+  },
+  "https://open.spotify.com/track/7F6S2iyZaDS7AThJaHftJI": {
+    "url": "https://open.spotify.com/track/7F6S2iyZaDS7AThJaHftJI",
+    "title": "Devathaiya Kandein",
+    "artist": "Harish Raghavendra",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/2P6cnymlCyV6CMk2DO84sa": {
+    "url": "https://open.spotify.com/track/2P6cnymlCyV6CMk2DO84sa",
+    "title": "Nenjodu",
+    "artist": "Unnikrishnan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/26drTTC70Sw1QFa2CpivJs": {
+    "url": "https://open.spotify.com/track/26drTTC70Sw1QFa2CpivJs",
+    "title": "Yaar Intha",
+    "artist": "Haricharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/1zZTvax6SvPuoudxmfZfqV": {
+    "url": "https://open.spotify.com/track/1zZTvax6SvPuoudxmfZfqV",
+    "title": "Azhagho Azhaghu",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/0MEwpeRcHZHFaWzM4eYH5H": {
+    "url": "https://open.spotify.com/track/0MEwpeRcHZHFaWzM4eYH5H",
+    "title": "Manjakkaattu Maina",
+    "artist": "Karthik",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/5VnXCd2798p4SQPGab6jTf": {
+    "url": "https://open.spotify.com/track/5VnXCd2798p4SQPGab6jTf",
+    "title": "Siragugal",
+    "artist": "Yuvan Shankar Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/5oxWMyPoNhQvDBofsFJLmX": {
+    "url": "https://open.spotify.com/track/5oxWMyPoNhQvDBofsFJLmX",
+    "title": "Mottukkale (From \"Rojakkottam\")",
+    "artist": "Hariharan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/6Uuj1jpuiblOsJuQFqtnDR": {
+    "url": "https://open.spotify.com/track/6Uuj1jpuiblOsJuQFqtnDR",
+    "title": "Pallangkuzhien",
+    "artist": "Unnikrishnan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/3Bh8VEMG1ugQgDHsuxJkat": {
+    "url": "https://open.spotify.com/track/3Bh8VEMG1ugQgDHsuxJkat",
+    "title": "Mayilrage",
+    "artist": "Madhusree",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/3r9TfIOkOIM2Uwr5IW0sxP": {
+    "url": "https://open.spotify.com/track/3r9TfIOkOIM2Uwr5IW0sxP",
+    "title": "Nadhiyae Nadhiyae",
+    "artist": "Unni Menon",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/2TE1zFMiFsH4aXfs4Omltb": {
+    "url": "https://open.spotify.com/track/2TE1zFMiFsH4aXfs4Omltb",
+    "title": "Pathinettu Vayathil (From \"Villain\")",
+    "artist": "Vidyasagar",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/4g9VvOS1WpFp2FZVSzvIZA": {
+    "url": "https://open.spotify.com/track/4g9VvOS1WpFp2FZVSzvIZA",
+    "title": "Poovukkul",
+    "artist": "Unnikrishnan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:38"
+  },
+  "https://open.spotify.com/track/7daqDwcy1W8UUdqgFAYB6P": {
+    "url": "https://open.spotify.com/track/7daqDwcy1W8UUdqgFAYB6P",
+    "title": "Enna Vilai (From \"Kadhalar Dhinam\")",
+    "artist": "Unni Menon",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/7HuBalVa3OJTPdphWMhLFR": {
+    "url": "https://open.spotify.com/track/7HuBalVa3OJTPdphWMhLFR",
+    "title": "Kadhal Sadugudu",
+    "artist": "S.P. Charan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/37oJGIPo6iCyXSrWuLjHbH": {
+    "url": "https://open.spotify.com/track/37oJGIPo6iCyXSrWuLjHbH",
+    "title": "Kaadhal kaditham",
+    "artist": "S. Janaki",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/5L5J4DpzVOvnsvre8gGsiL": {
+    "url": "https://open.spotify.com/track/5L5J4DpzVOvnsvre8gGsiL",
+    "title": "Meyyana Inbam - From \"Easan\"",
+    "artist": "Sukhwinder Singh",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/5zEu4APWiW6PzafT3811Xt": {
+    "url": "https://open.spotify.com/track/5zEu4APWiW6PzafT3811Xt",
+    "title": "Kavithaigal Sollava",
+    "artist": "Karthik Raja",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/6NwEpX2JUWHVKWfDDfcqC4": {
+    "url": "https://open.spotify.com/track/6NwEpX2JUWHVKWfDDfcqC4",
+    "title": "Idhazhin Oram - The Innocence of Love",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/20dLgt3WQuNIVvHvUmnar8": {
+    "url": "https://open.spotify.com/track/20dLgt3WQuNIVvHvUmnar8",
+    "title": "Kaathalae Kaathalae - Version 1",
+    "artist": "Govind Vasantha",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/6VP7HEaqHVFFW0ASZUkwMn": {
+    "url": "https://open.spotify.com/track/6VP7HEaqHVFFW0ASZUkwMn",
+    "title": "Neethanae (From \"Mersal\")",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/1qfanYrmrh7xDSvt15acZ3": {
+    "url": "https://open.spotify.com/track/1qfanYrmrh7xDSvt15acZ3",
+    "title": "Oru Maalai",
+    "artist": "Karthik",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/1WFRkjS6HJhl0ZkFSZnkhu": {
+    "url": "https://open.spotify.com/track/1WFRkjS6HJhl0ZkFSZnkhu",
+    "title": "Kadhal Anukkal",
+    "artist": "Vijay Prakash",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/3xUBt9lCoVPNpXhLlgFAST": {
+    "url": "https://open.spotify.com/track/3xUBt9lCoVPNpXhLlgFAST",
+    "title": "Manasellam Mazhaiye",
+    "artist": "Sonu Nigam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/43zT3oDEP3I5FiZWugfqCZ": {
+    "url": "https://open.spotify.com/track/43zT3oDEP3I5FiZWugfqCZ",
+    "title": "Adada Adada",
+    "artist": "Siddharth",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:03:53"
+  },
+  "https://open.spotify.com/track/65hrZPcYs8AlXbRl8375gO": {
+    "url": "https://open.spotify.com/track/65hrZPcYs8AlXbRl8375gO",
+    "title": "Azhagiye",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/0QBuP7vvKyoGAMlUBDJVWn": {
+    "url": "https://open.spotify.com/track/0QBuP7vvKyoGAMlUBDJVWn",
+    "title": "Ambikapathy",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/3B4Wf3Fo11BXSuVPi1dtDO": {
+    "url": "https://open.spotify.com/track/3B4Wf3Fo11BXSuVPi1dtDO",
+    "title": "Oh Oh - The First Love of Tamizh",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/6Xj9ehQuG38fS0dXfwaGoT": {
+    "url": "https://open.spotify.com/track/6Xj9ehQuG38fS0dXfwaGoT",
+    "title": "Vaaya Veera",
+    "artist": "Shakthisree Gopalan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/6qBLachpHaVUmpHKWyesmq": {
+    "url": "https://open.spotify.com/track/6qBLachpHaVUmpHKWyesmq",
+    "title": "Neeyum Naanum (From \"Naanum Rowdy Dhaan\")",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/4NQBqInyE7zvjIiP4j1dmy": {
+    "url": "https://open.spotify.com/track/4NQBqInyE7zvjIiP4j1dmy",
+    "title": "Sirikkadhey",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/5Nuv6312XkkZd82AnnSc9g": {
+    "url": "https://open.spotify.com/track/5Nuv6312XkkZd82AnnSc9g",
+    "title": "Pookkalae Sattru Oyivedungal",
+    "artist": "A.R. Rahman",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/48BbN48KQ6iamih9AQclkC": {
+    "url": "https://open.spotify.com/track/48BbN48KQ6iamih9AQclkC",
+    "title": "Enakenna Yaarum Illaye",
+    "artist": "Anirudh Ravichander",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/6Q5Qwg86SsmUhlWlVFc1Le": {
+    "url": "https://open.spotify.com/track/6Q5Qwg86SsmUhlWlVFc1Le",
+    "title": "Po Po Yen",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/2x1R5G71p2UsLEQtH6gtdL": {
+    "url": "https://open.spotify.com/track/2x1R5G71p2UsLEQtH6gtdL",
+    "title": "Thaarame Thaarame - From \"Kadaram Kondan\"",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/6voQcZ46RMVPfg6O7sBn5U": {
+    "url": "https://open.spotify.com/track/6voQcZ46RMVPfg6O7sBn5U",
+    "title": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+    "artist": "Girishh G",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/6KNTQ1qcrv1yBQrfh0kTvd": {
+    "url": "https://open.spotify.com/track/6KNTQ1qcrv1yBQrfh0kTvd",
+    "title": "Thalli Pogathey",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:08"
+  },
+  "https://open.spotify.com/track/0zDmCKN7OlRmNmeiiJAyOR": {
+    "url": "https://open.spotify.com/track/0zDmCKN7OlRmNmeiiJAyOR",
+    "title": "High on Love",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/2ZqzELrxZZyeTPSR7GZBH4": {
+    "url": "https://open.spotify.com/track/2ZqzELrxZZyeTPSR7GZBH4",
+    "title": "Yaar Azhaippadhu",
+    "artist": "Ghibran",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/5GWsajZGR8H7iOj8ufhLFB": {
+    "url": "https://open.spotify.com/track/5GWsajZGR8H7iOj8ufhLFB",
+    "title": "Kaadhal En Kaviye (From \"Salmon 3D - Tamil\")",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/43iLKMSX7iSgniaoMJLgUK": {
+    "url": "https://open.spotify.com/track/43iLKMSX7iSgniaoMJLgUK",
+    "title": "Aradhya (From \"Kushi\")",
+    "artist": "Sid Sriram",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/4saklk6nie3yiGePpBwUoc": {
+    "url": "https://open.spotify.com/track/4saklk6nie3yiGePpBwUoc",
+    "title": "Dynamite",
+    "artist": "BTS",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/5KawlOMHjWeUjQtnuRs22c": {
+    "url": "https://open.spotify.com/track/5KawlOMHjWeUjQtnuRs22c",
+    "title": "Boy With Luv (feat. Halsey)",
+    "artist": "BTS",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/1mWdTewIgB3gtBM3TOSFhB": {
+    "url": "https://open.spotify.com/track/1mWdTewIgB3gtBM3TOSFhB",
+    "title": "Butter",
+    "artist": "BTS",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/6O20JhBJPePEkBdrB5sqRx": {
+    "url": "https://open.spotify.com/track/6O20JhBJPePEkBdrB5sqRx",
+    "title": "Diamonds",
+    "artist": "Rihanna",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/6LWd4TAkJt6kfHIQatolHP": {
+    "url": "https://open.spotify.com/track/6LWd4TAkJt6kfHIQatolHP",
+    "title": "Oh Mama! TETEMA",
+    "artist": "Rayvanny",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/6DpNW0DW16l92pLLOg9dzw": {
+    "url": "https://open.spotify.com/track/6DpNW0DW16l92pLLOg9dzw",
+    "title": "Kannukkulle",
+    "artist": "Unni Menon",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/42AfGpnwmz05M3SQ41Wp6Y": {
+    "url": "https://open.spotify.com/track/42AfGpnwmz05M3SQ41Wp6Y",
+    "title": "Kannum Kannum",
+    "artist": "Harris Jayaraj",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/54peWQlqUWbYdvt8WidlgU": {
+    "url": "https://open.spotify.com/track/54peWQlqUWbYdvt8WidlgU",
+    "title": "Oodha Oodha",
+    "artist": "Deva",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:25"
+  },
+  "https://open.spotify.com/track/22l0qyOhl50I7bslggljTD": {
+    "url": "https://open.spotify.com/track/22l0qyOhl50I7bslggljTD",
+    "title": "Poongatrile",
+    "artist": "Unni Menon",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:39"
+  },
+  "https://open.spotify.com/track/4jWwMOU0jnFLb94O5Zo817": {
+    "url": "https://open.spotify.com/track/4jWwMOU0jnFLb94O5Zo817",
+    "title": "Kaalangathale",
+    "artist": "Devi Sri Prasad",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:39"
+  },
+  "https://open.spotify.com/track/32R7r1j2r13XwF62fT8sNt": {
+    "url": "https://open.spotify.com/track/32R7r1j2r13XwF62fT8sNt",
+    "title": "Manasellam Mazhaiye",
+    "artist": "Sonu Nigam",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:39"
+  },
+  "https://open.spotify.com/track/0SRAVp51T68Ai1IifysTeh": {
+    "url": "https://open.spotify.com/track/0SRAVp51T68Ai1IifysTeh",
+    "title": "Koi Mil Gaya",
+    "artist": "Udit Narayan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:39"
+  },
+  "https://open.spotify.com/track/0OXQa6GOzxeYWFopEmASw9": {
+    "url": "https://open.spotify.com/track/0OXQa6GOzxeYWFopEmASw9",
+    "title": "Kay Sera Sera",
+    "artist": "Shankar Mahadevan",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:39"
+  },
+  "https://open.spotify.com/track/1gg4LchDfgtzAgN91DaEf6": {
+    "url": "https://open.spotify.com/track/1gg4LchDfgtzAgN91DaEf6",
+    "title": "I Like you",
+    "artist": "Vasundhara Das",
+    "status": "success",
+    "attempts": 1,
+    "error_type": null,
+    "last_error": null,
+    "providers_tried": [
+      "youtube-music"
+    ],
+    "first_seen": "2026-09-11T15:59:46",
+    "last_attempt": "2026-09-11T16:04:39"
+  }
+}

@@ -1,10 +1,12 @@
 import os
+import sys
 import shutil
 import subprocess
 import re
 import json
 import time
 import random
+import threading
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -98,13 +100,6 @@ def _ensure_deno(spotdl_path: str) -> None:
 
 # ─────────────────────────────────────────────────────────────────────
 #  SpotifyClient – FREE MODE ONLY  (SpotipyFree / no credentials)
-#
-#  WHY: the official Spotify Web API (client_id + client_secret) now
-#  requires a premium developer subscription even for read-only calls.
-#  spotdl ships a free, unofficial client (SpotipyFree) that works for
-#  every user with zero credentials.  We always use that for metadata.
-#  The user's credentials (if any) are passed to the spotdl *CLI* only
-#  so spotdl can resolve playlist/album track lists during download.
 # ─────────────────────────────────────────────────────────────────────
 _FREE_CLIENT = None   # module-level singleton
 
@@ -122,9 +117,7 @@ def _get_free_client():
     if SpotifyClient is None:
         return None
 
-    # Reset class singleton so we can (re-)init cleanly
     if SpotifyClient._instance is not None:
-        # Already initialised elsewhere – just use it
         try:
             _FREE_CLIENT = SpotifyClient()
             return _FREE_CLIENT
@@ -151,9 +144,6 @@ def _get_free_client():
 # ─────────────────────────────────────────────────────────────────────
 
 def _show_session_header(section_title: str) -> None:
-    """Clear the leftover menu text and redraw just the banner + a
-    section title, so the info panel below it isn't stacked underneath
-    the numbered menu the user already picked from."""
     clear_screen()
     print_banner()
     print(f"{BOLD}                   {section_title}{RESET}")
@@ -224,14 +214,6 @@ def _display_download_result(item_type: str, name: str | None, out_folder: str,
 
 # ─────────────────────────────────────────────────────────────────────
 #  Error classification
-#
-#  spotdl's own retry loop can't tell the difference between "YouTube
-#  rate-limited us, try again in a bit" and "this song simply does not
-#  exist under this title on YouTube Music". Those need completely
-#  different fixes — a cooldown fixes the first, a different audio
-#  provider (or looser matching) fixes the second. We classify every
-#  error line we see so each retry pass can react appropriately
-#  instead of blindly repeating the exact same search.
 # ─────────────────────────────────────────────────────────────────────
 
 _ERROR_LABELS = {
@@ -272,18 +254,25 @@ def _classify_error(message: str) -> str:
 #  only, strict filtering). Each later pass widens the net a bit more
 #  for whatever is STILL missing: more audio-provider fallbacks first
 #  (youtube-music misses a lot of regional/film catalogue that a plain
-#  YouTube or slider-kz search finds fine), and only as a last resort
-#  loosens spotdl's own result filtering. This targets "no match"
-#  failures specifically, instead of just re-running the identical
-#  search and hoping.
+#  YouTube or piped search finds fine), and only as a last resort
+#  loosens spotdl's own result filtering.
+#
+#  FIX: valid spotdl providers are exactly:
+#       youtube, youtube-music, soundcloud, bandcamp, piped
+#       (the previous "slider-kz" entry was not a real provider).
+#  FIX: added a 5th and 6th pass that lean on non-YouTube providers so
+#       the "no match found" stragglers (old regional / film tracks)
+#       actually get retried against a different catalogue.
 # ─────────────────────────────────────────────────────────────────────
 
 _PASS_STRATEGIES = [
-    # (audio_providers, dont_filter_results, thread_divisor, max_retries)
-    (["youtube-music"], False, 1, 5),
-    (["youtube-music", "youtube"], False, 2, 6),
-    (["youtube-music", "youtube", "slider-kz", "soundcloud"], False, 3, 8),
-    (["youtube-music", "youtube", "slider-kz", "soundcloud"], True, 3, 8),
+    # (audio_providers,                                    dont_filter, thread_divisor, max_retries)
+    (["youtube-music"],                                         False, 1,  5),
+    (["youtube-music", "youtube"],                              False, 2,  6),
+    (["youtube-music", "youtube", "soundcloud", "piped"],       False, 3,  8),
+    (["youtube-music", "youtube", "soundcloud", "piped"],       True,  3,  8),
+    (["soundcloud", "piped", "bandcamp", "youtube"],            True,  3,  8),
+    (["soundcloud", "piped", "bandcamp"],                       True,  2, 10),
 ]
 
 
@@ -291,27 +280,17 @@ def _strategy_for_pass(pass_num: int, youtube_blocked: bool) -> tuple:
     idx = min(pass_num - 1, len(_PASS_STRATEGIES) - 1)
     providers, dont_filter, divisor, max_retries = _PASS_STRATEGIES[idx]
     if youtube_blocked:
-        # YouTube itself (both youtube-music and youtube run through
-        # Google's infrastructure) is actively blocking us — sending
-        # more requests at it just extends the block. Fall back to the
-        # providers that don't share that block.
+        # YouTube (both youtube-music and youtube) is actively blocking
+        # us — sending more requests just extends the block. Fall back
+        # to providers that don't share that infrastructure.
         providers = [p for p in providers if p not in ("youtube-music", "youtube")]
         if not providers:
-            providers = ["slider-kz", "soundcloud"]
+            providers = ["piped", "soundcloud", "bandcamp"]
     return providers, dont_filter, divisor, max_retries
 
 
 # ─────────────────────────────────────────────────────────────────────
 #  JSON track ledger
-#
-#  Replaces the old plain-text error dump. One JSON file lives inside
-#  the output folder and tracks the state of every individual track:
-#  whether it succeeded, how many attempts it's had, what the last
-#  error was and how we classified it, and which audio providers have
-#  already been tried against it. Because it's keyed by Spotify URL and
-#  saved after every batch, re-running the same playlist/album later
-#  (even in a brand-new session) picks up exactly where it left off
-#  instead of starting the whole retry ladder over from scratch.
 # ─────────────────────────────────────────────────────────────────────
 
 def _ledger_path(out_dir: str) -> str:
@@ -386,21 +365,96 @@ def _song_artist(song) -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Progress helper
+#  Single progress bar (FIX: one and only one bar for the whole run)
+#
+#  Runs in a daemon thread, repaints the same \r-line every 0.5 s and
+#  computes a live ETA from files-on-disk vs. elapsed time. All print
+#  calls made from the main thread go through .say() so they land
+#  ABOVE the bar instead of stomping on it.
 # ─────────────────────────────────────────────────────────────────────
 
-def _progress_snapshot(label: str, done: int, total: int, extra: str = "") -> None:
-    suffix = f"{done}/{total} tracks"
-    if extra:
-        suffix += f" · {extra}"
-    progress_bar(done, max(total, 1), prefix=label, suffix=suffix)
-    print()
+class _ProgressReporter:
+    BAR_WIDTH = 40
 
+    def __init__(self, out_dir: str, total: int, label: str):
+        self.out_dir = out_dir
+        self.total   = max(int(total), 1)
+        self.label   = label
+        self.start   = time.time()
+        self._stop   = threading.Event()
+        self._thread = None
+        self._lock   = threading.Lock()
+        self._last_line_len = 0
+
+    # ── lifecycle ─────────────────────────────────────────────────
+    def start(self):
+        # Print the initial bar immediately so the user sees something
+        # before the first subprocess even starts.
+        self._render()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        if self._thread:
+            self._thread.join()
+        self._render()
+        # move off the \r line once and for all
+        with self._lock:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    def set_label(self, label: str):
+        with self._lock:
+            self.label = label
+
+    # ── printing helper ───────────────────────────────────────────
+    def say(self, message: str):
+        """Print a message above the bar without destroying it."""
+        with self._lock:
+            # clear the current bar line
+            sys.stdout.write("\r" + " " * self._last_line_len + "\r")
+            sys.stdout.flush()
+            print(message)
+            self._last_line_len = 0
+        # next render tick (or an immediate render) will redraw
+
+    # ── internals ─────────────────────────────────────────────────
+    def _loop(self):
+        while not self._stop.wait(0.5):
+            self._render()
+
+    def _render(self):
+        count     = _count_audio_files(self.out_dir)
+        elapsed   = max(time.time() - self.start, 0.001)
+        remaining = max(self.total - count, 0)
+        pct       = (count / self.total) * 100 if self.total else 0.0
+        filled    = int(self.BAR_WIDTH * count / self.total) if self.total else 0
+        filled    = max(0, min(self.BAR_WIDTH, filled))
+        bar       = "█" * filled + "░" * (self.BAR_WIDTH - filled)
+
+        eta_str = ""
+        if count > 0 and remaining > 0:
+            rate = count / elapsed
+            if rate > 0:
+                eta_str = f" · ETA {int(remaining / rate)}s"
+
+        line = f"{self.label} |{bar}| {pct:5.1f}% {count}/{self.total} tracks{eta_str}"
+
+        with self._lock:
+            # \r + overwrite + pad with spaces if the line got shorter
+            pad = max(0, self._last_line_len - len(line))
+            sys.stdout.write("\r" + line + (" " * pad))
+            sys.stdout.flush()
+            self._last_line_len = len(line)
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Jittered sleep (avoids the "perfectly regular request pattern"
+#  that's easiest for a provider to flag as a bot)
+# ─────────────────────────────────────────────────────────────────────
 
 def _jitter_sleep(low: float, high: float) -> None:
-    """Sleep a randomised amount inside [low, high]. Randomising the
-    gap (instead of a fixed delay) avoids the kind of perfectly
-    regular request pattern that's easiest for a provider to flag."""
     if high <= 0:
         return
     low = max(0.0, min(low, high))
@@ -437,17 +491,15 @@ class SpotifyDownloader:
         _ensure_deno(self.spotdl_path)
 
         # ── pacing / anti-rate-limit settings (all overridable in config) ──
-        # batch_size: how many tracks spotdl is handed per subprocess call.
-        #   Small batch + a cooldown between batches ≈ "N second break every
-        #   N files". Set batch_size to 1 for a delay after every single
-        #   track instead.
-        self.batch_size = max(1, int(self.spotify_config.get("batch_size", 12)))
-        self.batch_cooldown_min = float(self.spotify_config.get("batch_cooldown_min", 10))
-        self.batch_cooldown_max = float(self.spotify_config.get("batch_cooldown_max", 15))
-        self.pass_cooldown_seconds = int(self.spotify_config.get("retry_delay_seconds", 15))
+        self.batch_size              = max(1, int(self.spotify_config.get("batch_size", 12)))
+        self.batch_cooldown_min      = float(self.spotify_config.get("batch_cooldown_min", 10))
+        self.batch_cooldown_max      = float(self.spotify_config.get("batch_cooldown_max", 15))
+        self.pass_cooldown_seconds   = int(self.spotify_config.get("retry_delay_seconds", 15))
         self.blocked_cooldown_seconds = int(self.spotify_config.get("blocked_cooldown_seconds", 60))
-        self.max_passes = int(self.spotify_config.get("max_retry_passes", 4))
-        self.base_threads = int(self.spotify_config.get("threads", 4))
+        # FIX: default bumped from 4 → 6 so the two new non-YouTube-only
+        # passes actually get a chance to run.
+        self.max_passes              = int(self.spotify_config.get("max_retry_passes", 6))
+        self.base_threads            = int(self.spotify_config.get("threads", 4))
 
     # ── metadata ──────────────────────────────────────────────────────
 
@@ -513,12 +565,25 @@ class SpotifyDownloader:
                            audio_format: str, bitrate_arg: str,
                            archive_file: str, errors_file: str, log_file: str,
                            providers: list, dont_filter: bool,
-                           threads: int, max_retries: int) -> None:
+                           threads: int, max_retries: int) -> int:
+        """
+        Run one spotdl batch. Returns the subprocess exit code.
+
+        FIX: spotdl's CLI is `spotdl [operation] query...`. The operation
+        slot only accepts download|save|web|sync|meta|url. Without the
+        explicit `download` verb, argparse binds the first URL to
+        `operation` and dies with:
+            "invalid choice: 'https://open.spotify.com/...'"
+        before doing any work at all. This was the reason every single
+        batch silently produced 0 files while the ledger claimed success.
+        """
         if os.path.exists(errors_file):
             os.remove(errors_file)
 
         cmd = [
-            self.spotdl_path, *urls,
+            self.spotdl_path,
+            "download",                 # ← THE FIX
+            *urls,
             "--output", template,
             "--format", audio_format,
             "--bitrate", bitrate_arg,
@@ -532,20 +597,26 @@ class SpotifyDownloader:
         if dont_filter:
             cmd.append("--dont-filter-results")
         if self.client_id and self.client_secret:
-            cmd += ["--client-id", self.client_id, "--client-secret", self.client_secret]
+            cmd += ["--client-id", self.client_id,
+                    "--client-secret", self.client_secret]
 
         with open(log_file, "a", encoding="utf-8") as logf:
-            logf.write(f"\n\n===== Batch — {datetime.now()} — providers={providers} "
-                       f"dont_filter={dont_filter} =====\n")
-            proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, text=True)
+            logf.write(f"\n\n===== Batch — {datetime.now()} — "
+                       f"providers={providers} dont_filter={dont_filter} =====\n")
+            logf.write("CMD: " + " ".join(cmd) + "\n")
+            proc = subprocess.Popen(cmd, stdout=logf,
+                                    stderr=subprocess.STDOUT, text=True)
             proc.wait()
+            return proc.returncode
 
-    def _download_tracks(self, songs: list, item_type: str, meta_name: str | None) -> tuple:
+    def _download_tracks(self, songs: list, item_type: str,
+                          meta_name: str | None) -> tuple:
         """
         Download a list of Song objects with batched pacing and an
         adaptive, ledger-tracked multi-pass retry.
 
-        Returns (final_count, out_dir, expected_total, failed_report_path, error_breakdown).
+        Returns (final_count, out_dir, expected_total,
+                 failed_report_path, error_breakdown).
         """
         audio_format = self.spotify_config.get("audio_format", "mp3").lower()
         quality  = self.spotify_config.get("audio_quality", "320k").replace("k", "")
@@ -570,124 +641,163 @@ class SpotifyDownloader:
 
         # ── build / merge the ledger ────────────────────────────────
         ledger = _load_ledger(out_dir)
+        song_urls = {_song_url(s) for s in songs if _song_url(s)}
         for song in songs:
             url = _song_url(song)
             if not url:
                 continue
             if url not in ledger:
-                ledger[url] = _init_ledger_entry(url, _song_title(song), _song_artist(song))
-            elif ledger[url].get("status") == "failed":
-                # a previous run left this pending retry — keep its history
-                pass
+                ledger[url] = _init_ledger_entry(
+                    url, _song_title(song), _song_artist(song))
         _save_ledger(out_dir, ledger)
 
         youtube_blocked = False
 
-        for pass_num in range(1, self.max_passes + 1):
-            pending_urls = [u for u, rec in ledger.items()
-                             if u in {_song_url(s) for s in songs} and rec["status"] != "success"]
-            if not pending_urls:
-                break
+        # ── one and only one progress bar ──────────────────────────
+        reporter = _ProgressReporter(out_dir, expected_total,
+                                     f"⬇ Downloading 0/{expected_total}")
+        reporter.start()
 
-            providers, dont_filter, divisor, max_retries = _strategy_for_pass(pass_num, youtube_blocked)
-            threads = max(1, self.base_threads // divisor)
+        try:
+            for pass_num in range(1, self.max_passes + 1):
+                pending_urls = [
+                    u for u, rec in ledger.items()
+                    if u in song_urls and rec["status"] != "success"
+                ]
+                if not pending_urls:
+                    break
 
-            label = f"⬇ Pass {pass_num}/{self.max_passes}"
-            if pass_num == 1:
-                print_info(f"{label} — downloading {len(pending_urls)} track(s) "
-                           f"via {'/'.join(providers)}…")
-            else:
-                print_info(f"{label} — retrying {len(pending_urls)} missing track(s) "
-                           f"via {'/'.join(providers)}"
-                           f"{' (loosened matching)' if dont_filter else ''}…")
+                providers, dont_filter, divisor, max_retries = \
+                    _strategy_for_pass(pass_num, youtube_blocked)
+                threads = max(1, self.base_threads // divisor)
 
-            batches = [pending_urls[i:i + self.batch_size]
-                       for i in range(0, len(pending_urls), self.batch_size)]
-
-            pass_start_success = sum(1 for r in ledger.values() if r["status"] == "success")
-
-            for b_idx, batch_urls in enumerate(batches, start=1):
-                start_spinner(f"{label} — batch {b_idx}/{len(batches)}")
-                self._run_spotdl_batch(
-                    batch_urls, out_dir, template, audio_format, bitrate_arg,
-                    archive_file, errors_file, log_file,
-                    providers, dont_filter, threads, max_retries,
-                )
-                stop_spinner()
-
-                batch_errors = _read_errors_file(errors_file)  # {url: message}
-                now = datetime.now().isoformat(timespec="seconds")
-                for url in batch_urls:
-                    rec = ledger.get(url)
-                    if rec is None:
-                        continue
-                    rec["attempts"] += 1
-                    rec["last_attempt"] = now
-                    for p in providers:
-                        if p not in rec["providers_tried"]:
-                            rec["providers_tried"].append(p)
-                    if url in batch_errors:
-                        msg = batch_errors[url]
-                        rec["status"] = "failed"
-                        rec["last_error"] = msg
-                        rec["error_type"] = _classify_error(msg)
-                        if rec["error_type"] == "blocked_or_rate_limited" and "blocked by youtube" in msg.lower():
-                            youtube_blocked = True
-                    else:
-                        rec["status"] = "success"
-                        rec["last_error"] = None
-                        rec["error_type"] = None
-
-                _save_ledger(out_dir, ledger)
-
-                done = sum(1 for r in ledger.values() if r["status"] == "success")
-                _progress_snapshot(label, done, expected_total,
-                                   extra=f"batch {b_idx}/{len(batches)}")
-
-                is_last_batch = b_idx == len(batches)
-                if not is_last_batch:
-                    cd_low, cd_high = self.batch_cooldown_min, self.batch_cooldown_max
-                    if youtube_blocked:
-                        cd_low, cd_high = self.blocked_cooldown_seconds, self.blocked_cooldown_seconds + 15
-                    _jitter_sleep(cd_low, cd_high)
-
-            pass_end_success = sum(1 for r in ledger.values() if r["status"] == "success")
-            gained = pass_end_success - pass_start_success
-            still_missing = expected_total - pass_end_success
-
-            if still_missing <= 0:
-                break
-
-            if youtube_blocked:
-                print_warning(
-                    "YouTube/YouTube Music appears to be rate-limiting or blocking this "
-                    "connection. Switching remaining retries to non-YouTube providers "
-                    "(slider-kz, soundcloud) and cooling down longer."
+                reporter.set_label(
+                    f"⬇ Pass {pass_num}/{self.max_passes} "
+                    f"({len(pending_urls)} left)"
                 )
 
-            if pass_num < self.max_passes:
-                cooldown = self.blocked_cooldown_seconds if youtube_blocked else self.pass_cooldown_seconds
-                print_warning(
-                    f"{still_missing} track(s) still missing after pass {pass_num} "
-                    f"(+{gained} recovered this pass). Cooling down {cooldown}s "
-                    f"before the next pass…"
-                )
-                _jitter_sleep(cooldown, cooldown + 5)
+                batches = [
+                    pending_urls[i:i + self.batch_size]
+                    for i in range(0, len(pending_urls), self.batch_size)
+                ]
+
+                pass_start_success = sum(
+                    1 for r in ledger.values() if r["status"] == "success")
+
+                for b_idx, batch_urls in enumerate(batches, start=1):
+                    exit_code = self._run_spotdl_batch(
+                        batch_urls, out_dir, template, audio_format,
+                        bitrate_arg, archive_file, errors_file, log_file,
+                        providers, dont_filter, threads, max_retries,
+                    )
+
+                    batch_errors = _read_errors_file(errors_file)
+                    archive_urls = _read_archive(archive_file)
+                    now = datetime.now().isoformat(timespec="seconds")
+
+                    for url in batch_urls:
+                        rec = ledger.get(url)
+                        if rec is None:
+                            continue
+                        rec["attempts"] += 1
+                        rec["last_attempt"] = now
+                        for p in providers:
+                            if p not in rec["providers_tried"]:
+                                rec["providers_tried"].append(p)
+
+                        if url in batch_errors:
+                            # confirmed per-track failure
+                            msg = batch_errors[url]
+                            rec["status"]     = "failed"
+                            rec["last_error"] = msg
+                            rec["error_type"] = _classify_error(msg)
+                            if rec["error_type"] == "blocked_or_rate_limited":
+                                youtube_blocked = True
+                        elif url in archive_urls:
+                            # confirmed success on disk
+                            rec["status"]     = "success"
+                            rec["last_error"] = None
+                            rec["error_type"] = None
+                        elif exit_code != 0:
+                            # spotdl died before it could write per-track
+                            # errors (argparse, missing deps, etc.) —
+                            # FIX: do NOT lie and mark these as success.
+                            rec["status"]     = "failed"
+                            rec["last_error"] = (
+                                f"spotdl exited with code {exit_code} "
+                                f"(no per-track error captured; see "
+                                f"{os.path.basename(log_file)})"
+                            )
+                            rec["error_type"] = "other"
+                        else:
+                            # exit 0, no error recorded, not in archive —
+                            # spotdl sometimes skips writing to the
+                            # archive for files that already existed on
+                            # disk. Trust exit code 0 here.
+                            rec["status"]     = "success"
+                            rec["last_error"] = None
+                            rec["error_type"] = None
+
+                    _save_ledger(out_dir, ledger)
+
+                    reporter.set_label(
+                        f"⬇ Pass {pass_num}/{self.max_passes} "
+                        f"batch {b_idx}/{len(batches)}"
+                    )
+                    reporter._render()
+
+                    is_last_batch = b_idx == len(batches)
+                    if not is_last_batch:
+                        cd_low, cd_high = (self.batch_cooldown_min,
+                                           self.batch_cooldown_max)
+                        if youtube_blocked:
+                            cd_low  = self.blocked_cooldown_seconds
+                            cd_high = self.blocked_cooldown_seconds + 15
+                        _jitter_sleep(cd_low, cd_high)
+
+                pass_end_success = sum(
+                    1 for r in ledger.values() if r["status"] == "success")
+                gained = pass_end_success - pass_start_success
+                still_missing = expected_total - pass_end_success
+
+                if still_missing <= 0:
+                    break
+
+                if youtube_blocked:
+                    reporter.say(
+                        "⚠️  YouTube/YouTube Music is rate-limiting this "
+                        "connection — switching remaining retries to "
+                        "non-YouTube providers."
+                    )
+
+                if pass_num < self.max_passes:
+                    cooldown = (self.blocked_cooldown_seconds
+                                if youtube_blocked
+                                else self.pass_cooldown_seconds)
+                    reporter.say(
+                        f"⚠️  {still_missing} track(s) still missing after "
+                        f"pass {pass_num} (+{gained} recovered). Cooling "
+                        f"down {cooldown}s before the next pass…"
+                    )
+                    _jitter_sleep(cooldown, cooldown + 5)
+        finally:
+            reporter.stop()
 
         final_count = _count_audio_files(out_dir)
-        relevant_records = [ledger[u] for u in {_song_url(s) for s in songs} if u in ledger]
-        failed_records = [r for r in relevant_records if r["status"] != "success"]
+        relevant_records = [ledger[u] for u in song_urls if u in ledger]
+        failed_records   = [r for r in relevant_records if r["status"] != "success"]
 
         error_breakdown = {}
         for r in failed_records:
             etype = r.get("error_type") or "other"
-            error_breakdown[_ERROR_LABELS.get(etype, etype)] = \
-                error_breakdown.get(_ERROR_LABELS.get(etype, etype), 0) + 1
+            label = _ERROR_LABELS.get(etype, etype)
+            error_breakdown[label] = error_breakdown.get(label, 0) + 1
 
         failed_report_path = None
         if failed_records:
             failed_report_path = _write_failed_report(
-                out_dir, meta_name, failed_records, expected_total, final_count, error_breakdown
+                out_dir, meta_name, failed_records,
+                expected_total, final_count, error_breakdown
             )
 
         return final_count, out_dir, expected_total, failed_report_path, error_breakdown
@@ -706,8 +816,8 @@ class SpotifyDownloader:
         count, out_folder, expected, failed_report, breakdown = self._download_tracks(
             [song], "track", meta.get("title")
         )
-        _display_download_result("track", meta.get("title"), out_folder, count, expected,
-                                  failed_report, breakdown)
+        _display_download_result("track", meta.get("title"), out_folder,
+                                  count, expected, failed_report, breakdown)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist=meta.get("artist", "spotdl"),
                      mode="Single", status=status)
@@ -723,12 +833,13 @@ class SpotifyDownloader:
         if not songs:
             print_error("Could not resolve the album's track list.",
                         "Falling back to a single bulk download via spotdl.")
-            songs = [{"url": url, "name": meta.get("name"), "artist": meta.get("artist")}]
+            songs = [{"url": url, "name": meta.get("name"),
+                      "artist": meta.get("artist")}]
         count, out_folder, expected, failed_report, breakdown = self._download_tracks(
             songs, "album", meta["name"]
         )
-        _display_download_result("album", meta["name"], out_folder, count, expected,
-                                  failed_report, breakdown)
+        _display_download_result("album", meta["name"], out_folder,
+                                  count, expected, failed_report, breakdown)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist="spotdl", mode="Album", status=status)
 
@@ -743,12 +854,13 @@ class SpotifyDownloader:
         if not songs:
             print_error("Could not resolve the playlist's track list.",
                         "Falling back to a single bulk download via spotdl.")
-            songs = [{"url": url, "name": meta.get("name"), "artist": meta.get("author")}]
+            songs = [{"url": url, "name": meta.get("name"),
+                      "artist": meta.get("author")}]
         count, out_folder, expected, failed_report, breakdown = self._download_tracks(
             songs, "playlist", meta["name"]
         )
-        _display_download_result("playlist", meta["name"], out_folder, count, expected,
-                                  failed_report, breakdown)
+        _display_download_result("playlist", meta["name"], out_folder,
+                                  count, expected, failed_report, breakdown)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist="spotdl", mode="Playlist", status=status)
 
@@ -820,6 +932,25 @@ def _read_errors_file(path: str) -> dict:
     return result
 
 
+# FIX: new helper — reads spotdl's own --archive file, which is the
+# only authoritative record of which tracks actually made it to disk.
+# Used to stop the ledger from claiming "success" when spotdl never
+# even parsed its arguments.
+def _read_archive(path: str) -> set:
+    urls = set()
+    if not os.path.exists(path):
+        return urls
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("http"):
+                    urls.add(line)
+    except Exception:
+        pass
+    return urls
+
+
 def _write_failed_report(out_dir: str, meta_name: str | None, failed_records: list,
                           expected_total: int, final_count: int,
                           error_breakdown: dict) -> str:
@@ -847,7 +978,8 @@ def _write_failed_report(out_dir: str, meta_name: str | None, failed_records: li
         for r in failed_records:
             title = r.get("title") or "Unknown title"
             artist = r.get("artist") or "Unknown artist"
-            etype = _ERROR_LABELS.get(r.get("error_type"), r.get("error_type") or "other")
+            etype = _ERROR_LABELS.get(r.get("error_type"),
+                                       r.get("error_type") or "other")
             tried = ", ".join(r.get("providers_tried") or []) or "n/a"
             f.write(f"{r['url']}\n")
             f.write(f"    {artist} - {title}\n")
@@ -868,12 +1000,12 @@ def _write_failed_report(out_dir: str, meta_name: str | None, failed_records: li
             f.write(
                 "\nMost of these failed with 'no match found', not a rate limit —\n"
                 "that means the audio-provider fallback chain (YouTube Music →\n"
-                "YouTube → slider-kz → SoundCloud) still couldn't find a usable\n"
-                "match, most often for regional / film-soundtrack tracks whose\n"
-                "Spotify title differs a lot from how it's titled on YouTube.\n"
-                "Re-running with more passes gives the 'loosened matching' pass\n"
-                "(--dont-filter-results) more chances to pick up a lower-\n"
-                "confidence match for these specific stragglers.\n"
+                "YouTube → SoundCloud → Piped → Bandcamp) still couldn't find a\n"
+                "usable match, most often for regional / film-soundtrack tracks\n"
+                "whose Spotify title differs a lot from how it's titled on\n"
+                "YouTube. Re-running with more passes gives the 'loosened\n"
+                "matching' pass (--dont-filter-results) more chances to pick up\n"
+                "a lower-confidence match for these specific stragglers.\n"
             )
         if error_breakdown and _ERROR_LABELS["blocked_or_rate_limited"] in error_breakdown:
             f.write(
