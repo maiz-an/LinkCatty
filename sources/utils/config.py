@@ -15,41 +15,41 @@ DEFAULT_DOWNLOAD_DIR = str(ROOT_DIR / "downloads")
 DEFAULT_CONFIG = {
     "download_dir": DEFAULT_DOWNLOAD_DIR,
     "youtube": {
-        "audio_quality": "320k",       # for MP3 only
-        "video_quality": "best",       # best, 2160p, 1440p, 1080p, 720p, 480p, 360p
+        "audio_quality": "320k",
+        "video_quality": "best",
         "auto_retry": True,
         "max_retries": 3,
         "quiet_mode": True,
 
-        # ── parallel downloads + retry passes ─────────────────────────
-        "parallel_downloads": 3,       # concurrent yt-dlp instances
-        "max_retry_passes": 3,         # total attempts per playlist
-        "retry_delay_seconds": 8,      # cooldown between retry passes
+        # parallel downloads + retry passes
+        "parallel_downloads": 3,
+        "max_retry_passes": 3,
+        "retry_delay_seconds": 8,
 
-        # ── metadata sidecars (one file per video) ────────────────────
-        "save_metadata": True,         # writes  <title>.info.json
-        "save_thumbnail": True,        # writes  <title>.webp / .jpg
-        "save_description": False,     # writes  <title>.description
+        # metadata sidecars (one file per video)
+        "save_metadata": True,
+        "save_thumbnail": True,
+        "save_description": False,
 
-        # ── embed metadata directly into the media file ───────────────
-        "embed_metadata": True,        # ID3 / MP4 tags (title, artist, etc.)
-        "embed_thumbnail": False,      # cover art inside the file
+        # embed metadata directly into the media file
+        "embed_metadata": True,
+        "embed_thumbnail": False,
     },
     "spotify": {
         "client_id": "",
         "client_secret": "",
-        "audio_format": "mp3",       # mp3, flac, m4a, opus, ogg, wav
+        "audio_format": "mp3",
         "audio_quality": "320k",
         "auto_retry": True,
         "max_retries": 3,
         "quiet_mode": True,
 
-        # ── multi-pass retry + pacing ─────────────────────────────────
+        # multi-pass retry + pacing
         "threads": 2,
         "max_retry_passes": 4,
         "retry_delay_seconds": 8,
 
-        # ── parallel batching (speed) ─────────────────────────────────
+        # parallel batching (speed)
         "parallel_batches": 3,
         "batch_size": 10,
         "batch_cooldown_min": 1,
@@ -63,12 +63,7 @@ DEFAULT_CONFIG = {
 }
 
 def get_version():
-    """Return the current LinkCatty version as a plain string.
-
-    Reads `sources/version.txt` (written by the installer / updater).
-    Falls back to "dev" when the file is missing or empty so the UI
-    still renders something sensible in a dev checkout.
-    """
+    """Return the current LinkCatty version as a plain string."""
     try:
         if VERSION_FILE.exists():
             value = VERSION_FILE.read_text(encoding="utf-8").strip()
@@ -83,8 +78,7 @@ def load_config():
 
     if not CONFIG_FILE.exists():
         # First run: write the defaults to disk so users have a real
-        # settings.json to edit. save_config() strips ffmpeg_path, so
-        # we pass the clean copy, not the runtime one.
+        # settings.json to edit.
         try:
             save_config(config)
         except Exception as e:
@@ -116,3 +110,29 @@ def save_config(config):
             json.dump(to_save, f, indent=4, ensure_ascii=False)
     except Exception as e:
         print(f"⚠️ Could not save config: {e}")
+
+def reset_to_defaults():
+    """Overwrite settings.json with a fresh copy of DEFAULT_CONFIG,
+    but keep any user-set Spotify API credentials.
+
+    Returns the new config dict so the caller can swap it into the
+    running session without restarting.
+    """
+    fresh = deepcopy(DEFAULT_CONFIG)
+
+    # Preserve credentials if the user already had them.
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                old = json.load(f)
+            old_spotify = old.get("spotify", {})
+            if old_spotify.get("client_id"):
+                fresh["spotify"]["client_id"] = old_spotify["client_id"]
+            if old_spotify.get("client_secret"):
+                fresh["spotify"]["client_secret"] = old_spotify["client_secret"]
+        except Exception:
+            pass
+
+    save_config(fresh)
+    fresh['ffmpeg_path'] = get_ffmpeg_path()
+    return fresh

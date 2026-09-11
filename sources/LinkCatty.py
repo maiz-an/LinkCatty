@@ -6,10 +6,11 @@ import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
+APP_ROOT = BASE_DIR.parent          # app root (works in dev + installed)
 sys.path.insert(0, str(BASE_DIR))
 
 from downloaders import spotify_downloader, youtube_downloader
-from utils.config import load_config, save_config
+from utils.config import load_config, save_config, reset_to_defaults
 from utils.ui import (
     clear_screen,
     confirm,
@@ -20,6 +21,7 @@ from utils.ui import (
     print_info,
     print_main_menu,
     print_success,
+    print_warning,
     set_console_width,
 )
 
@@ -33,24 +35,29 @@ def settings_menu(config):
         try:
             clear_screen()
             print_banner()
-            print("                        ⚙️ SETTINGS")
+            print("                        ⚙️  SETTINGS")
             print("=" * 61)
-            print(f"1. Download folder   [{config['download_dir']}]")
+            print(f"📍 Install location : {APP_ROOT}")
+            print(f"📂 Download folder  : {config['download_dir']}")
+            print("=" * 61)
+            print("1. Change download folder")
             print("2. YouTube settings")
             print("3. Spotify settings")
             print("4. Spotify API credentials")
             print("5. Clear download history")
-            print("6. Back to main menu")
+            print("6. Restore all settings to defaults")
+            print("7. Back to main menu")
             print("=" * 61)
-            choice = menu_choice("Select (1-6): ", "123456")
+            choice = menu_choice("Select (1-7): ", "1234567")
 
-            if choice in (None, "6"):
+            if choice in (None, "7"):
                 return
 
             if choice == "1":
                 new_dir = input("New download folder (absolute path): ").strip()
                 if not new_dir:
-                    print_error("Download folder was not changed", "Enter a full folder path or choose Back.")
+                    print_error("Download folder was not changed",
+                                "Enter a full folder path or choose Back.")
                 else:
                     path = Path(new_dir).expanduser().resolve()
                     path.mkdir(parents=True, exist_ok=True)
@@ -83,6 +90,28 @@ def settings_menu(config):
                     print_success("History cleared.")
                 else:
                     print_info("Cancelled.")
+
+            elif choice == "6":
+                print()
+                print_warning(
+                    "This will reset download folder, YouTube, and Spotify "
+                    "settings to their factory defaults."
+                )
+                print_warning(
+                    "Your downloaded files and the install location are "
+                    "never touched. Spotify API credentials are preserved."
+                )
+                if not confirm("Restore all settings to defaults?", default=False):
+                    print_info("Cancelled.")
+                else:
+                    fresh = reset_to_defaults()
+                    # Swap in place so the running session picks up the
+                    # new values immediately (no restart needed).
+                    config.clear()
+                    config.update(fresh)
+                    print_success("Settings restored to defaults.")
+                    print_info("Note: some changes take effect next time you "
+                               "start a download.")
 
         except Exception as error:
             print_error(
@@ -147,7 +176,8 @@ def main():
     try:
         Path(config["download_dir"]).mkdir(parents=True, exist_ok=True)
     except Exception as error:
-        print_error(f"Could not create download folder: {error}", "Choose a writable folder in Settings.")
+        print_error(f"Could not create download folder: {error}",
+                    "Choose a writable folder in Settings.")
         pause()
 
     while True:
