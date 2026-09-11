@@ -3,9 +3,7 @@ chcp 65001 >nul 2>&1
 title LinkCatty
 setlocal enabledelayedexpansion
 
-
 :: Check for uninstall flag
-
 echo %* | findstr /i "\-\-uninstall" >nul
 if not errorlevel 1 (
     if exist "%~dp0uninstall_linkcatty.cmd" (
@@ -17,7 +15,6 @@ if not errorlevel 1 (
         set "UNINSTALL_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
         powershell -command "& {Invoke-WebRequest -Uri '!UNINSTALL_URL!' -OutFile '!UNINSTALL_FILE!'}" >nul 2>&1
-        powershell -command "& { $p = '!UNINSTALL_FILE!'; if (Test-Path -LiteralPath $p) { $fs = [System.IO.File]::OpenRead($p); $b = New-Object byte[] 3; $n = $fs.Read($b, 0, 3); $fs.Close(); if ($n -eq 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $a = [System.IO.File]::ReadAllBytes($p); $s = New-Object byte[] ($a.Length - 3); [Array]::Copy($a, 3, $s, 0, $a.Length - 3); [System.IO.File]::WriteAllBytes($p, $s) } } }" >nul 2>&1
         if exist "!UNINSTALL_FILE!" (
             start "" "!UNINSTALL_FILE!"
         ) else (
@@ -36,9 +33,7 @@ echo                    LinkCatty Launcher
 echo ============================================================
 echo.
 
-
 :: [1/3] Check for updates
-
 echo [1/3] Checking for updates...
 set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
@@ -105,9 +100,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     exit /b 0
 )
 
-
 :: [2/3] Python setup - find or install Python ONCE
-
 echo [2/3] Setting up Python...
 
 set "PORTABLE_DIR=%~dp0sources\portable_python"
@@ -115,7 +108,7 @@ set "PYTHON_EXE="
 set "PYTHON_SCRIPTS="
 set "DEPS_MARKER=%~dp0sources\.deps_installed"
 
-:: ── Check if portable python already extracted and working
+:: Check if portable python already extracted and working
 if exist "%PORTABLE_DIR%\python.exe" (
     set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
     set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
@@ -129,7 +122,7 @@ if exist "%PORTABLE_DIR%\Scripts\python.exe" (
     goto :SetupDeps
 )
 
-:: ── Try to extract portable python if zip present
+:: Try to extract portable python if zip present
 if exist "%~dp0sources\PortablePython.zip" (
     echo Extracting portable Python...
     if not exist "%PORTABLE_DIR%" mkdir "%PORTABLE_DIR%"
@@ -161,7 +154,7 @@ if exist "%~dp0sources\PortablePython.zip" (
     )
 )
 
-:: ── Fall back to system Python
+:: Fall back to system Python
 for %%p in (python python3) do (
     if not defined PYTHON_EXE (
         %%p --version >nul 2>&1
@@ -198,7 +191,7 @@ if defined PYTHON_SCRIPTS (
     )
 )
 
-:: ── FFmpeg
+:: FFmpeg
 set "FFMPEG_DIR=%~dp0sources\FFmpeg\windows\ffmpeg\bin"
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     set "PATH=%FFMPEG_DIR%;%PATH%"
@@ -206,9 +199,7 @@ if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     echo Warning: FFmpeg not found in sources. Some features may not work.
 )
 
-
 :: [3/3] Install dependencies (only if not already done)
-
 echo [3/3] Checking dependencies...
 
 if exist "%DEPS_MARKER%" (
@@ -254,5 +245,4 @@ for /f "tokens=1,2 delims=|" %%a in ("!entry!") do (
 for %%f in ("%FILE_PATH%") do set "FILE_DIR=%%~dpf"
 if not exist "%~dp0!FILE_DIR!" mkdir "%~dp0!FILE_DIR!" 2>nul
 powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '!FILE_URL!' -OutFile '%~dp0!FILE_PATH!' }" >nul 2>&1
-powershell -command "& { $p = '%~dp0!FILE_PATH!'; if (Test-Path -LiteralPath $p) { $fs = [System.IO.File]::OpenRead($p); $b = New-Object byte[] 3; $n = $fs.Read($b, 0, 3); $fs.Close(); if ($n -eq 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $a = [System.IO.File]::ReadAllBytes($p); $s = New-Object byte[] ($a.Length - 3); [Array]::Copy($a, 3, $s, 0, $a.Length - 3); [System.IO.File]::WriteAllBytes($p, $s) } } }" >nul 2>&1
 exit /b

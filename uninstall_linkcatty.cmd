@@ -36,7 +36,6 @@ if exist "%INSTALL_DIR%" (
 echo [1/3] Done.
 
 echo [2/3] Removing from PATH...
-:: Build new PATH without the installation directory
 set "NEW_PATH="
 for %%a in ("%PATH:;=";"%") do (
     if /i not "%%~a"=="%INSTALL_DIR%" (
