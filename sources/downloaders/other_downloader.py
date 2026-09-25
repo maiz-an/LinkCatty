@@ -10,6 +10,7 @@ from pathlib import Path
 
 from yt_dlp import YoutubeDL
 
+from utils.config import run_with_proxy_fallback
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
@@ -18,6 +19,7 @@ from utils.ui import (
     print_banner, print_error, print_info,
     print_success, print_warning,
     start_spinner, stop_spinner,
+    SilentLogger, explain_error,
 )
 
 from downloaders.ph import is_ph_url, run as ph_run
@@ -46,12 +48,18 @@ def _generic_download(url: str, config: dict) -> None:
     """Generic yt-dlp fallback for any yt-dlp-supported site."""
     start_spinner("Fetching information")
     try:
-        with YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-            info = ydl.extract_info(url, download=False)
+        def _fetch(px):
+            opts = {"quiet": True, "no_warnings": True, "logger": SilentLogger()}
+            if px:
+                opts["proxy"] = px
+            with YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=False)
+
+        info, proxy = run_with_proxy_fallback(_fetch, config)
     except Exception as exc:
         stop_spinner()
-        print_error(f"Cannot retrieve info: {exc}",
-                    "This URL may not be supported by the downloader.")
+        msg, hint = explain_error(exc)
+        print_error(f"Cannot retrieve info: {msg}", hint)
         return
     finally:
         stop_spinner()
@@ -59,6 +67,8 @@ def _generic_download(url: str, config: dict) -> None:
     title = info.get("title") or url
     print(f"\n  {CYAN}{BOLD}Title :{RESET} {title}")
     print(f"  {CYAN}{BOLD}Site  :{RESET} {info.get('extractor_key', 'Unknown')}")
+    if proxy:
+        print_info("Direct connection was blocked, using your proxy.")
     print()
 
     if not confirm("🚀 Download this (best quality)?"):
@@ -72,15 +82,22 @@ def _generic_download(url: str, config: dict) -> None:
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
+        "logger": SilentLogger(),
     }
     if ffmpeg:
         options["ffmpeg_location"] = ffmpeg
 
+    def _download(px):
+        opts = dict(options)
+        if px:
+            opts["proxy"] = px
+        with YoutubeDL(opts) as ydl:
+            ydl.download([url])
+
     start_time = time.time()
     try:
         start_spinner("Downloading")
-        with YoutubeDL(options) as ydl:
-            ydl.download([url])
+        run_with_proxy_fallback(_download, config, proxy)
         stop_spinner()
         elapsed = time.time() - start_time
         m, s = divmod(int(elapsed), 60)
@@ -88,8 +105,9 @@ def _generic_download(url: str, config: dict) -> None:
         log_download("Generic", title, mode="best", status="Success")
     except Exception as exc:
         stop_spinner()
-        print_error(f"Download failed: {exc}")
-        log_download("Generic", title, mode="best", status="Failed", error=str(exc))
+        msg, hint = explain_error(exc)
+        print_error(f"Download failed: {msg}", hint)
+        log_download("Generic", title, mode="best", status="Failed", error=msg)
 
 
 def run(config: dict) -> None:

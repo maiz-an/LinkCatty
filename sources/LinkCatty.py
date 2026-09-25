@@ -10,7 +10,14 @@ APP_ROOT = BASE_DIR.parent          # app root (works in dev + installed)
 sys.path.insert(0, str(BASE_DIR))
 
 from downloaders import spotify_downloader, youtube_downloader, other_downloader
-from utils.config import load_config, save_config, reset_to_defaults
+from utils.config import (
+    get_proxy,
+    is_valid_proxy,
+    load_config,
+    mask_proxy,
+    reset_to_defaults,
+    save_config,
+)
 from utils.ui import (
     clear_screen,
     confirm,
@@ -53,11 +60,12 @@ def settings_menu(config):
             print("4. Spotify API credentials")
             print("5. Clear download history")
             print("6. Restore all settings to defaults")
-            print("7. Back to main menu")
+            print("7. Network proxy (Other Downloaders)")
+            print("8. Back to main menu")
             print("=" * 61)
-            choice = menu_choice("Select (1-7): ", "1234567")
+            choice = menu_choice("Select (1-8): ", "12345678")
 
-            if choice in (None, "7"):
+            if choice in (None, "8"):
                 return
 
             if choice == "1":
@@ -110,7 +118,8 @@ def settings_menu(config):
                 )
                 print_warning(
                     "Your downloaded files and the install location are "
-                    "never touched. Spotify API credentials are preserved."
+                    "never touched. Spotify API credentials and the "
+                    "network proxy are preserved."
                 )
                 if not confirm("Restore all settings to defaults?", default=False):
                     print_info("Cancelled.")
@@ -122,6 +131,9 @@ def settings_menu(config):
                     print_info("Note: some changes take effect next time you "
                                "start a download.")
 
+            elif choice == "7":
+                network_settings(config)
+
         except Exception as error:
             print_error(
                 f"Settings error: {error}",
@@ -129,6 +141,44 @@ def settings_menu(config):
             )
 
         pause()
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Network proxy settings (Other Downloaders)
+# ─────────────────────────────────────────────────────────────────────
+
+def network_settings(config):
+    print("\n🌐 Network Proxy (Other Downloaders)")
+    print_info("Used only when a direct connection is blocked. If the "
+               "direct connection works, no proxy is used.")
+    print_info("Examples: socks5://127.0.0.1:1080   http://127.0.0.1:8080")
+    print_info("Enter = keep current, - = remove, 0 = cancel.")
+    current = get_proxy(config)
+    print(f"\nCurrent proxy: {mask_proxy(current) if current else 'none'}")
+
+    value = input("Proxy URL: ").strip()
+    if value in ("", "0"):
+        print_info("Proxy unchanged.")
+        return
+
+    network = config.setdefault("network", {})
+    if value == "-":
+        network["proxy"] = ""
+        save_config(config)
+        print_success("Proxy removed.")
+        return
+
+    if not is_valid_proxy(value):
+        print_error(
+            "Invalid proxy URL.",
+            "Use a full URL starting with http://, https://, socks4:// "
+            "or socks5://, e.g. socks5://127.0.0.1:1080",
+        )
+        return
+
+    network["proxy"] = value
+    save_config(config)
+    print_success(f"Proxy saved: {mask_proxy(value)}")
 
 
 # ─────────────────────────────────────────────────────────────────────

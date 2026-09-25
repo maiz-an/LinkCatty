@@ -9,6 +9,7 @@ from pathlib import Path
 
 from yt_dlp import YoutubeDL
 
+from utils.config import get_proxy, run_with_proxy_fallback
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
@@ -17,6 +18,7 @@ from utils.ui import (
     print_banner, print_error, print_info,
     print_success, print_warning,
     start_spinner, stop_spinner,
+    SilentLogger, explain_error,
 )
 
 _SECTION = "📥 Video Downloader"
@@ -51,23 +53,26 @@ def _show_header() -> None:
     print("=" * 61)
 
 
-def _build_options(output_dir: str, quality_key: str, cookie_opt=None) -> dict:
+def _build_options(output_dir: str, quality_key: str, cookie_opt=None, proxy=None) -> dict:
     options = {
         "outtmpl": str(Path(output_dir) / "%(title)s.%(ext)s"),
         "format": _QUALITY_MAP.get(quality_key, "best"),
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
+        "logger": SilentLogger(),
     }
     ffmpeg = get_ffmpeg_path()
     if ffmpeg:
         options["ffmpeg_location"] = ffmpeg
     if cookie_opt:
         options["cookiesfrombrowser"] = cookie_opt
+    if proxy:
+        options["proxy"] = proxy
     return options
 
 
-def _try_browser_cookies():
+def _try_browser_cookies(proxy=None):
     """Attempt to load cookies from an installed browser for member content."""
     print()
     print_info("Member content needs your browser session cookies.")
@@ -79,7 +84,10 @@ def _try_browser_cookies():
 
     for browser in ("chrome", "firefox", "edge", "brave"):
         try:
-            with YoutubeDL({"quiet": True, "cookiesfrombrowser": (browser,)}) as ydl:
+            probe = {"quiet": True, "logger": SilentLogger(), "cookiesfrombrowser": (browser,)}
+            if proxy:
+                probe["proxy"] = proxy
+            with YoutubeDL(probe) as ydl:
                 ydl.extract_info("https://www.pornhub.com", download=False)
             print_info(f"Loaded cookies from {browser}.")
             return (browser,)
@@ -126,31 +134,38 @@ def _pick_quality() -> str | None:
 def download_video(url: str, config: dict, cookie_opt=None) -> None:
     start_spinner("Fetching video information")
     try:
-        opts_probe = {"quiet": True, "no_warnings": True}
-        if cookie_opt:
-            opts_probe["cookiesfrombrowser"] = cookie_opt
-        with YoutubeDL(opts_probe) as ydl:
-            info = ydl.extract_info(url, download=False)
+        def _fetch(px):
+            opts_probe = {"quiet": True, "no_warnings": True, "logger": SilentLogger()}
+            if cookie_opt:
+                opts_probe["cookiesfrombrowser"] = cookie_opt
+            if px:
+                opts_probe["proxy"] = px
+            with YoutubeDL(opts_probe) as ydl:
+                return ydl.extract_info(url, download=False)
+
+        info, proxy = run_with_proxy_fallback(_fetch, config)
     except Exception as exc:
         stop_spinner()
         err_msg = str(exc)
         if "premium" in err_msg.lower() or "members" in err_msg.lower() or "login" in err_msg.lower():
             print_warning("This content requires an account login.")
             if confirm("Try with your browser cookies (you must be logged in)?"):
-                cookie_opt = _try_browser_cookies()
+                cookie_opt = _try_browser_cookies(get_proxy(config) or None)
                 if cookie_opt:
                     download_video(url, config, cookie_opt)
                 else:
                     print_error("No cookies available.", "Log in to the site in your browser first.")
             return
-        print_error(f"Could not fetch video info: {err_msg}",
-                    "Check the URL and your internet connection.")
+        msg, hint = explain_error(exc)
+        print_error(f"Could not fetch video info: {msg}", hint)
         return
     finally:
         stop_spinner()
 
     _show_header()
     _display_info(info)
+    if proxy:
+        print_info("Direct connection was blocked, using your proxy.")
 
     quality_key = _pick_quality()
     if quality_key is None:
@@ -161,13 +176,16 @@ def download_video(url: str, config: dict, cookie_opt=None) -> None:
         print_info("Download cancelled.")
         return
 
-    options = _build_options(config["download_dir"], quality_key, cookie_opt)
+    def _download(px):
+        options = _build_options(config["download_dir"], quality_key, cookie_opt, px)
+        with YoutubeDL(options) as ydl:
+            ydl.download([url])
+
     start_time = time.time()
     print()
     try:
         start_spinner("Downloading")
-        with YoutubeDL(options) as ydl:
-            ydl.download([url])
+        run_with_proxy_fallback(_download, config, proxy)
         stop_spinner()
         elapsed = time.time() - start_time
         m, s = divmod(int(elapsed), 60)
@@ -176,9 +194,10 @@ def download_video(url: str, config: dict, cookie_opt=None) -> None:
         log_download("ph", info.get("title", url), mode=label, status="Success")
     except Exception as exc:
         stop_spinner()
-        print_error(f"Download failed: {exc}", "Check the URL and network connection.")
+        msg, hint = explain_error(exc)
+        print_error(f"Download failed: {msg}", hint)
         log_download("ph", info.get("title", url), mode=label,
-                     status="Failed", error=str(exc))
+                     status="Failed", error=msg)
 
 
 def run(config: dict, url: str | None = None) -> None:

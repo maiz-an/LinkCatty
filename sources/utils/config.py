@@ -1,4 +1,5 @@
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from .ffmpeg import get_ffmpeg_path
@@ -59,6 +60,11 @@ DEFAULT_CONFIG = {
     "common": {
         "enable_logging": True,
         "history_limit": 100
+    },
+    "network": {
+        # Optional proxy for Other Downloaders, used only when a direct
+        # connection is blocked. Example: socks5://127.0.0.1:1080
+        "proxy": ""
     }
 }
 
@@ -72,6 +78,52 @@ def get_version():
     except Exception:
         pass
     return "dev"
+
+# ---------------------------------------------------------------------
+#  Network helpers (Other Downloaders): direct first, proxy only if blocked
+# ---------------------------------------------------------------------
+_BLOCK_PATTERN = re.compile(
+    r"connection was reset|curl: \(35\)|\bssl|time(d )?out|connection refused|"
+    r"connection aborted|remote end closed|name or service not known",
+    re.IGNORECASE,
+)
+_PROXY_PATTERN = re.compile(r"^(https?|socks4a?|socks5h?)://\S+$", re.IGNORECASE)
+
+
+def is_block_error(exc):
+    """True when an error looks like the connection itself was cut/blocked."""
+    return bool(_BLOCK_PATTERN.search(str(exc)))
+
+
+def get_proxy(config):
+    return str((config.get("network") or {}).get("proxy") or "").strip()
+
+
+def is_valid_proxy(value):
+    return bool(_PROXY_PATTERN.match(value))
+
+
+def mask_proxy(value):
+    """Hide the password in scheme://user:pass@host:port for display."""
+    return re.sub(r"(//[^:/@\s]+):[^@\s]*@", r"\1:***@", value)
+
+
+def run_with_proxy_fallback(func, config, proxy=None):
+    """Call func(proxy) and return (result, proxy_used).
+
+    Starts with `proxy` (None = direct connection). If that fails with a
+    connection-block error and a proxy is configured in Settings, retries
+    once through it. Any other error, or a failure through the proxy,
+    is raised unchanged.
+    """
+    configured = get_proxy(config)
+    try:
+        return func(proxy), proxy
+    except Exception as exc:
+        if configured and proxy != configured and is_block_error(exc):
+            return func(configured), configured
+        raise
+
 
 def load_config():
     config = deepcopy(DEFAULT_CONFIG)
@@ -113,7 +165,7 @@ def save_config(config):
 
 def reset_to_defaults():
     """Overwrite settings.json with a fresh copy of DEFAULT_CONFIG,
-    but keep any user-set Spotify API credentials.
+    but keep any user-set Spotify API credentials and network proxy.
 
     Returns the new config dict so the caller can swap it into the
     running session without restarting.
@@ -130,6 +182,9 @@ def reset_to_defaults():
                 fresh["spotify"]["client_id"] = old_spotify["client_id"]
             if old_spotify.get("client_secret"):
                 fresh["spotify"]["client_secret"] = old_spotify["client_secret"]
+            old_proxy = (old.get("network") or {}).get("proxy")
+            if old_proxy:
+                fresh["network"]["proxy"] = old_proxy
         except Exception:
             pass
 

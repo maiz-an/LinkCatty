@@ -1,3 +1,4 @@
+import re
 import sys
 import os
 import time
@@ -229,3 +230,40 @@ def progress_bar(current, total, prefix="", suffix="", length=40):
     bar = f"{GREEN}{'█' * filled}{RESET}{'░' * (length - filled)}"
     sys.stdout.write(f"\r{prefix} |{bar}| {percent:.1%} {suffix}")
     sys.stdout.flush()
+
+
+class SilentLogger:
+    """yt-dlp logger that swallows all output (we print our own messages)."""
+
+    def debug(self, msg):
+        pass
+
+    info = warning = error = debug
+
+
+_URL = re.compile(r"https?://\S+")
+
+
+def explain_error(exc):
+    """Return (message, hint) for display: no extractor tags or URLs."""
+    text = str(exc).strip()
+    text = text.split("; please report")[0]
+    text = re.sub(r"^ERROR:\s*", "", text)
+    text = re.sub(r"^\[[^\]]+\]\s*\S+:\s*", "", text)
+    text = _URL.sub("", text)
+    text = re.sub(r"\s*See\s+first for more details\.?", "", text).strip()
+    from .config import is_block_error
+    if "proxyerror" in text.lower() or "tunnel failed" in text.lower():
+        return (
+            "Could not connect through your proxy.",
+            "Check the address in Settings > Network proxy, and that your "
+            "proxy or VPN is running.",
+        )
+    if is_block_error(text):
+        return (
+            "Could not connect to the site.",
+            "Your network is closing the connection (firewall, DNS filter, "
+            "or ISP). Set a proxy in Settings > Network proxy, or try "
+            "another network.",
+        )
+    return text, "Check the URL and your internet connection."

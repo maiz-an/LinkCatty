@@ -42,6 +42,7 @@ LinkCatty/
 - `pause()` — press Enter to continue
 - `start_spinner()` / `stop_spinner()` — animated progress indicator
 - Always `clear_screen()` + `print_banner()` at the start of each downloader sub-menu
+- yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc)` (returns `(message, hint)`); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`
 
 ## Adding a New Downloader
 1. Create `sources/downloaders/<site>.py` with a `run(config, url=None)` function
@@ -53,9 +54,11 @@ LinkCatty/
 {
   "download_dir": "...",
   "youtube": { "audio_quality": "320k", "video_quality": "best", ... },
-  "spotify":  { "audio_format": "mp3", "audio_quality": "320k", ... }
+  "spotify":  { "audio_format": "mp3", "audio_quality": "320k", ... },
+  "network":  { "proxy": "" }
 }
 ```
+`network.proxy` (Settings > 7) applies to Other Downloaders only. It is used **only as a fallback**: downloaders call `run_with_proxy_fallback(func, config, proxy=None)` from `utils/config.py`, which tries a direct connection first and retries once through the proxy only when the error looks like a blocked/reset connection (`is_block_error`). Reuse it in any new site handler; keep it preserved across "restore defaults".
 
 ## Key Dependencies
 - `yt-dlp` — handles YouTube and 1000+ other sites
@@ -81,3 +84,4 @@ Then bump `sources/version.txt` (updates only trigger when the version string di
 - **`.cmd` files must be pure ASCII.** `run.cmd` runs `chcp 65001`; any multi-byte character (e.g. an em dash in a comment) makes cmd misread later lines (`'tle' is not recognized`). Check with `grep -nP '[^\x00-\x7F]' *.cmd`.
 - **`version.txt` must have no BOM.** In Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds one. Write it with `printf "1.0.x" > sources/version.txt`.
 - Inside parenthesized blocks in `.cmd` files use `rem`, not `::`.
+- **A brand-new source file is not fetched by older launchers.** An update runs with the *installed* launcher's embedded file list, so a file added in version N is missing for users updating from N-1 (ImportError). Prefer extending an existing file (this is why the proxy helpers live in `utils/config.py`), or ship the new file in the lists one release before anything imports it.
