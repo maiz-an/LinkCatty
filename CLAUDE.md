@@ -16,9 +16,9 @@ LinkCatty/
 │   ├── downloaders/
 │   │   ├── youtube_downloader.py
 │   │   ├── spotify_downloader.py
-│   │   ├── other_downloader.py  # Option 3 router — detects site, dispatches
-│   │   ├── ph.py                # site handler (yt-dlp + browser cookies for member content)
-│   │   └── xm.py                # site handler (yt-dlp)
+│   │   ├── other_downloader.py  # Option 3: Spotify-style UI + engine (progress, retry passes, ledger, report)
+│   │   ├── ph.py                # site profile: URL match + member login via browser cookies
+│   │   └── xm.py                # site profile: URL match
 │   ├── utils/
 │   │   ├── ui.py               # All CLI output helpers + ANSI colors
 │   │   ├── config.py           # JSON settings load/save
@@ -42,12 +42,17 @@ LinkCatty/
 - `pause()` — press Enter to continue
 - `start_spinner()` / `stop_spinner()` — animated progress indicator
 - Always `clear_screen()` + `print_banner()` at the start of each downloader sub-menu
-- yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc, config)` (returns `(message, hint)`; the hint tells the user how to set the proxy when a block is detected); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`. In a real terminal yt-dlp wraps `ERROR:` in ANSI color codes, which broke prefix stripping once; `explain_error` strips ANSI first, and tests must force `"color": {"stderr": "always"}` (redirected output has no colors and hides the bug)
+- Progress: use `DownloadProgress` (one live bar; `.hook` / `.pp_hook` for yt-dlp, `.say()` to print above the bar, `.paused()` around prompts)
+- yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc, config)` (returns `(message, hint)`; the hint tells the user how to set the proxy when a block is detected); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`. In a real terminal yt-dlp wraps `ERROR:` in ANSI color codes, which broke prefix stripping once; `explain_error` strips ANSI first, and tests must force `"color": {"stderr": "always"}` (redirected output has no colors and hides the bug). After a blocked-connection error, call `offer_retry_after_block(exc)` so the user can turn on a VPN and press Enter to retry (it only prompts for block-type errors)
 
-## Adding a New Downloader
-1. Create `sources/downloaders/<site>.py` with a `run(config, url=None)` function
-2. Register it in `sources/downloaders/other_downloader.py` — add domain detection and route
-3. No changes needed to `LinkCatty.py` (option 3 always goes through `other_downloader.run`)
+## Adding a New Downloader (Other Downloader sites)
+`other_downloader.py` owns the whole flow (info panel, quality menu, single live progress bar, classified errors, multi-pass retries with cooldowns, ledger/report for playlists, VPN retry prompt, workflow guard). A site file is only a small **profile**:
+1. Create `sources/downloaders/<site>.py` with `KEY = "<short code>"` and `matches(url) -> bool`
+2. Optional: `login_options(config, proxy=None) -> dict | None` returning extra yt-dlp options (e.g. browser cookies); the engine calls it once when a login-class error appears
+3. Add the module to `_SITES` in `other_downloader.py`, and to the four file lists (see the checklist below)
+Links matching no profile use the generic yt-dlp path (`KEY` shown as `Generic`).
+
+Behavior worth knowing: single videos keep no ledger/report files (nothing extra on disk); playlists write `.linkcatty_state.json` + `failed_downloads.txt` in their folder and resume on re-run. Errors are classified (`login`, `blocked`, `network`, `rate_limited`, `unavailable`, `unsupported`, `format`, `disk`); `login`, `blocked`, `unavailable`, `unsupported` and `disk` are not retried by passes. Blocked errors end the round and ask the user to turn on a VPN, then retry.
 
 ## Config Structure (settings.json)
 ```json
@@ -55,7 +60,8 @@ LinkCatty/
   "download_dir": "...",
   "youtube": { "audio_quality": "320k", "video_quality": "best", ... },
   "spotify":  { "audio_format": "mp3", "audio_quality": "320k", ... },
-  "network":  { "proxy": "" }
+  "network":  { "proxy": "" },
+  "other":    { "auto_retry": true, "max_retry_passes": 3, "retry_delay_seconds": 8, "rate_limit_cooldown_seconds": 45 }
 }
 ```
 `network.proxy` (Settings > 7) applies to Other Downloaders only. It is used **only as a fallback**: downloaders call `run_with_proxy_fallback(func, config, proxy=None)` from `utils/config.py`, which tries a direct connection first and retries once through the proxy only when the error looks like a blocked/reset connection (`is_block_error`). Reuse it in any new site handler; keep it preserved across "restore defaults".

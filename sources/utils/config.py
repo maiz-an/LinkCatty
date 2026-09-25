@@ -67,6 +67,12 @@ DEFAULT_CONFIG = {
         # Optional proxy for Other Downloaders, used only when a direct
         # connection is blocked. Example: socks5://127.0.0.1:1080
         "proxy": ""
+    },
+    "other": {
+        "auto_retry": True,
+        "max_retry_passes": 3,
+        "retry_delay_seconds": 8,
+        "rate_limit_cooldown_seconds": 45
     }
 }
 
@@ -85,7 +91,7 @@ def get_version():
 #  Network helpers (Other Downloaders): direct first, proxy only if blocked
 # ---------------------------------------------------------------------
 _BLOCK_PATTERN = re.compile(
-    r"connection was reset|curl: \(35\)|\bssl|time(d )?out|connection refused|"
+    r"connection (was )?reset|forcibly closed|10054|curl: \(35\)|\bssl|time(d )?out|connection refused|"
     r"connection aborted|remote end closed|name or service not known|"
     r"curl: \(7\)|failed to connect|could not connect to server",
     re.IGNORECASE,
