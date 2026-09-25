@@ -21,10 +21,10 @@ from utils.config import is_block_error, run_with_proxy_fallback
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
-    BOLD, CYAN, RESET,
+    BOLD, RESET,
     DownloadProgress, SilentLogger,
     ask_retry_vpn, clear_screen, confirm, explain_error, format_bytes,
-    format_count, format_duration, format_eta, menu_choice, pause,
+    format_count, format_duration, format_eta, pause,
     print_banner, print_error, print_info, print_warning,
     start_spinner, stop_spinner, strip_ansi,
 )
@@ -481,7 +481,6 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
     if persist:
         _save_ledger(out_dir, ledger)
 
-    print_info(f"Output folder : {out_dir}")
     print_info(f"Quality       : {_quality_label(quality)}")
     print_info(f"Retry passes  : up to {max_passes}")
     already = _count_success(ledger, keys)
@@ -612,23 +611,11 @@ def _available_heights(info: dict) -> list:
     return sorted((h for h in heights if h <= 2160), reverse=True)
 
 
-def _pick_quality(heights: list):
-    if heights:
-        options = ["best"] + [str(h) for h in heights[:6]]
-    else:
-        options = ["best", "1080", "720", "480", "360"]
-    print(f"\n{BOLD}📐 Select quality{RESET}")
-    print("=" * 61)
-    for number, quality in enumerate(options, 1):
-        print(f"{CYAN}{BOLD}{number}.{RESET} {_quality_label(quality)}")
-    back = len(options) + 1
-    print(f"{CYAN}{BOLD}{back}.{RESET} Back")
-    print("=" * 61)
-    choice = menu_choice(f"Select (1-{back}): ",
-                         "".join(str(n) for n in range(1, back + 1)))
-    if choice in (None, str(back)):
-        return None
-    return options[int(choice) - 1]
+def _configured_quality(config: dict) -> str:
+    """Quality from Settings > Other downloads: 'best' or a height like '720'."""
+    value = str((config.get("other") or {}).get("video_quality", "best"))
+    digits = value.strip().lower().rstrip("p")
+    return digits if digits.isdigit() else "best"
 
 
 def _entries_from(info: dict) -> list:
@@ -695,13 +682,12 @@ def _process_link(url: str, config: dict) -> None:
             return
         if not confirm(f"Download all {len(entries)} videos?"):
             return
-        quality = _pick_quality([])
-        if quality is None:
-            return
+        quality = _configured_quality(config)
         name = info.get("title") or "Playlist"
         out_dir = os.path.join(config["download_dir"], _safe_name(name))
         result = _download_entries(entries, out_dir, quality, session,
                                    "playlist", name, persist=True)
+        _show_session_header("📂 Other Downloader — Playlist")
         _display_result("playlist", name, out_dir, result)
         mode = "Playlist"
     else:
@@ -709,14 +695,15 @@ def _process_link(url: str, config: dict) -> None:
         _show_session_header("📥 Other Downloader — Video")
         _display_video_info(info, heights)
         session.flush_notice()
-        quality = _pick_quality(heights)
-        if quality is None:
+        if not confirm("Proceed with download?", default=True):
             return
+        quality = _configured_quality(config)
         name = info.get("title")
         entries = [{"url": url, "title": name}]
         out_dir = config["download_dir"]
         result = _download_entries(entries, out_dir, quality, session,
                                    "video", name, persist=False)
+        _show_session_header("📥 Other Downloader — Video")
         _display_result("video", name, out_dir, result)
         mode = "Single"
 

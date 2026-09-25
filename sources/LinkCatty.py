@@ -62,11 +62,12 @@ def settings_menu(config):
             print("5. Clear download history")
             print("6. Restore all settings to defaults")
             print("7. Network proxy (Other Downloaders)")
-            print("8. Back to main menu")
+            print("8. Other downloads settings")
+            print("9. Back to main menu")
             print("=" * 61)
-            choice = menu_choice("Select (1-8): ", "12345678")
+            choice = menu_choice("Select (1-9): ", "123456789")
 
-            if choice in (None, "8"):
+            if choice in (None, "9"):
                 return
 
             if choice == "1":
@@ -135,6 +136,9 @@ def settings_menu(config):
             elif choice == "7":
                 network_settings(config)
 
+            elif choice == "8":
+                other_settings(config)
+
         except Exception as error:
             print_error(
                 f"Settings error: {error}",
@@ -193,6 +197,60 @@ def network_settings(config):
             "Nothing is running at that address right now, so it can't "
             "be used yet. Start your proxy or VPN app first."
         )
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Other downloads settings
+# ─────────────────────────────────────────────────────────────────────
+
+def other_settings(config):
+    other = config.setdefault("other", {})
+    print("\n🌐 Other Downloads Settings")
+    print_info(_HINT)
+    print_info(_HINT2)
+    print()
+
+    draft = dict(other)
+
+    # ── video quality ─────────────────────────────────────────────
+    current = draft.get("video_quality", "best")
+    print(f"Video quality (current: {current})")
+    print("1. Best (highest available)")
+    print("2. 1080p")
+    print("3. 720p")
+    print("4. 480p")
+    print("5. 360p")
+    quality_map = {"1": "best", "2": "1080p", "3": "720p", "4": "480p", "5": "360p"}
+    choice = menu_choice(
+        "Select (1-5) [Enter=keep, 0=cancel]: ",
+        "12345", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["video_quality"] = quality_map[choice]
+
+    # ── auto-retry ────────────────────────────────────────────────
+    current = draft.get("auto_retry", True)
+    print(f"\nAuto-retry failed downloads? (current: {'yes' if current else 'no'})")
+    print("1. Yes")
+    print("2. No")
+    choice = menu_choice(
+        "Select (1-2) [Enter=keep, 0=cancel]: ",
+        "12", back_choices={"0"}, allow_empty=True,
+    )
+    if choice is None or choice == "0":
+        print_info("Cancelled — no changes saved.")
+        return
+    if choice != "":
+        draft["auto_retry"] = (choice == "1")
+
+    # ── commit ────────────────────────────────────────────────────
+    other.clear()
+    other.update(draft)
+    save_config(config)
+    print_success("Other downloads settings saved.")
 
 
 # ─────────────────────────────────────────────────────────────────────

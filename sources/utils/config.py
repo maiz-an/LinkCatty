@@ -69,6 +69,7 @@ DEFAULT_CONFIG = {
         "proxy": ""
     },
     "other": {
+        "video_quality": "best",
         "auto_retry": True,
         "max_retry_passes": 3,
         "retry_delay_seconds": 8,
