@@ -17,8 +17,8 @@ LinkCatty/
 │   │   ├── youtube_downloader.py
 │   │   ├── spotify_downloader.py
 │   │   ├── other_downloader.py  # Option 3 router — detects site, dispatches
-│   │   ├── ph.py                # PornHub (yt-dlp + browser cookies for member content)
-│   │   └── xm.py                # XHamster (yt-dlp)
+│   │   ├── ph.py                # site handler (yt-dlp + browser cookies for member content)
+│   │   └── xm.py                # site handler (yt-dlp)
 │   ├── utils/
 │   │   ├── ui.py               # All CLI output helpers + ANSI colors
 │   │   ├── config.py           # JSON settings load/save
@@ -58,7 +58,7 @@ LinkCatty/
 ```
 
 ## Key Dependencies
-- `yt-dlp` — handles YouTube, PornHub, XHamster, and 1000+ other sites
+- `yt-dlp` — handles YouTube and 1000+ other sites
 - `spotdl` — Spotify track/album/playlist downloader
 - `spotipy` — Spotify API client for metadata
 - FFmpeg is bundled under `sources/FFmpeg/`

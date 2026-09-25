@@ -51,7 +51,7 @@ def _generic_download(url: str, config: dict) -> None:
     except Exception as exc:
         stop_spinner()
         print_error(f"Cannot retrieve info: {exc}",
-                    "This site may not be supported. Try a direct PornHub or XHamster link.")
+                    "This URL may not be supported by the downloader.")
         return
     finally:
         stop_spinner()
@@ -96,8 +96,8 @@ def run(config: dict) -> None:
     while True:
         _show_header()
         print()
-        print_info("Paste any supported link and the right downloader will be used.")
-        print_info("Supported: PornHub, XHamster, and 1000+ other sites via yt-dlp.")
+        print_info("Paste any video link — the right downloader is used automatically.")
+        print_info("Supports 1000+ sites via yt-dlp.")
         print()
         raw = input("🔗 Enter URL (blank to go back): ").strip()
         if not raw:
@@ -111,10 +111,10 @@ def run(config: dict) -> None:
         site = _detect_site(raw)
 
         if site == "ph":
-            print_info("PornHub link detected.")
+            print_info("Supported link detected.")
             ph_run(config, url=raw)
         elif site == "xm":
-            print_info("XHamster link detected.")
+            print_info("Supported link detected.")
             xm_run(config, url=raw)
         else:
             print_info(f"Attempting generic yt-dlp download...")

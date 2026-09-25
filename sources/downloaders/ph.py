@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PornHub downloader — uses yt-dlp.
-Member/premium content requires browser cookies from a logged-in session.
+ph — video downloader via yt-dlp.
+Member content requires browser cookies from a logged-in session.
 """
 import re
 import time
@@ -19,7 +19,7 @@ from utils.ui import (
     start_spinner, stop_spinner,
 )
 
-_SECTION = "🔞 PornHub Downloader"
+_SECTION = "📥 Video Downloader"
 
 _QUALITY_MAP = {
     "1": "best",
@@ -37,9 +37,11 @@ _QUALITY_LABELS = {
     "5": "360p",
 }
 
+_PH_DOMAIN = re.compile(r"pornhub\.com", re.IGNORECASE)
+
 
 def is_ph_url(url: str) -> bool:
-    return bool(re.search(r"pornhub\.com", url, re.IGNORECASE))
+    return bool(_PH_DOMAIN.search(url))
 
 
 def _show_header() -> None:
@@ -68,7 +70,7 @@ def _build_options(output_dir: str, quality_key: str, cookie_opt=None) -> dict:
 def _try_browser_cookies():
     """Attempt to load cookies from an installed browser for member content."""
     print()
-    print_info("Member/premium content needs your browser session cookies.")
+    print_info("Member content needs your browser session cookies.")
     print_info("Close your browser completely before continuing.")
     try:
         input("Press Enter after closing your browser...")
@@ -78,7 +80,6 @@ def _try_browser_cookies():
     for browser in ("chrome", "firefox", "edge", "brave"):
         try:
             with YoutubeDL({"quiet": True, "cookiesfrombrowser": (browser,)}) as ydl:
-                # Quick probe with a public URL to validate cookie extraction
                 ydl.extract_info("https://www.pornhub.com", download=False)
             print_info(f"Loaded cookies from {browser}.")
             return (browser,)
@@ -87,17 +88,6 @@ def _try_browser_cookies():
 
     print_warning("Could not extract cookies from any browser.")
     return None
-
-
-def _fetch_info(url: str, cookie_opt=None):
-    opts = {"quiet": True, "no_warnings": True}
-    if cookie_opt:
-        opts["cookiesfrombrowser"] = cookie_opt
-    try:
-        with YoutubeDL(opts) as ydl:
-            return ydl.extract_info(url, download=False)
-    except Exception as exc:
-        return None, str(exc)
 
 
 def _display_info(info: dict) -> None:
@@ -144,15 +134,14 @@ def download_video(url: str, config: dict, cookie_opt=None) -> None:
     except Exception as exc:
         stop_spinner()
         err_msg = str(exc)
-        # Premium/member content check
         if "premium" in err_msg.lower() or "members" in err_msg.lower() or "login" in err_msg.lower():
-            print_warning("This content appears to require a PornHub account.")
+            print_warning("This content requires an account login.")
             if confirm("Try with your browser cookies (you must be logged in)?"):
                 cookie_opt = _try_browser_cookies()
                 if cookie_opt:
                     download_video(url, config, cookie_opt)
                 else:
-                    print_error("No cookies available.", "Log in to PornHub in your browser first.")
+                    print_error("No cookies available.", "Log in to the site in your browser first.")
             return
         print_error(f"Could not fetch video info: {err_msg}",
                     "Check the URL and your internet connection.")
@@ -184,11 +173,11 @@ def download_video(url: str, config: dict, cookie_opt=None) -> None:
         m, s = divmod(int(elapsed), 60)
         elapsed_str = f"{m}m {s:02d}s" if m else f"{s}s"
         print_success(f"Downloaded in {elapsed_str}!")
-        log_download("PornHub", info.get("title", url), mode=label, status="Success")
+        log_download("ph", info.get("title", url), mode=label, status="Success")
     except Exception as exc:
         stop_spinner()
         print_error(f"Download failed: {exc}", "Check the URL and network connection.")
-        log_download("PornHub", info.get("title", url), mode=label,
+        log_download("ph", info.get("title", url), mode=label,
                      status="Failed", error=str(exc))
 
 
@@ -198,20 +187,20 @@ def run(config: dict, url: str | None = None) -> None:
         _show_header()
         if url is None:
             print()
-            raw = input("🎯 PornHub URL (blank to go back): ").strip()
+            raw = input("🎯 URL (blank to go back): ").strip()
             if not raw:
                 return
             if not is_ph_url(raw):
-                print_error("Not a PornHub URL.",
-                             "URL must contain pornhub.com")
+                print_error("Unsupported URL for this downloader.",
+                             "Check the link and try again.")
                 pause()
                 continue
             current_url = raw
         else:
             current_url = url
-            url = None  # only use caller-supplied URL once
+            url = None
 
         download_video(current_url, config, cookie_opt)
 
-        if not confirm("\nDownload another PornHub video?"):
+        if not confirm("\nDownload another video?"):
             return

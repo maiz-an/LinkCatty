@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-XHamster downloader — uses yt-dlp.
-Supports xhamster.com, xhamster.desi, xhamster.one, etc.
+xm — video downloader via yt-dlp.
 """
 import re
 import time
@@ -19,7 +18,7 @@ from utils.ui import (
     start_spinner, stop_spinner,
 )
 
-_SECTION = "🐹 XHamster Downloader"
+_SECTION = "📥 Video Downloader"
 
 _QUALITY_MAP = {
     "1": "best",
@@ -138,11 +137,11 @@ def download_video(url: str, config: dict) -> None:
         m, s = divmod(int(elapsed), 60)
         elapsed_str = f"{m}m {s:02d}s" if m else f"{s}s"
         print_success(f"Downloaded in {elapsed_str}!")
-        log_download("XHamster", info.get("title", url), mode=label, status="Success")
+        log_download("xm", info.get("title", url), mode=label, status="Success")
     except Exception as exc:
         stop_spinner()
         print_error(f"Download failed: {exc}", "Check the URL and network connection.")
-        log_download("XHamster", info.get("title", url), mode=label,
+        log_download("xm", info.get("title", url), mode=label,
                      status="Failed", error=str(exc))
 
 
@@ -151,20 +150,20 @@ def run(config: dict, url: str | None = None) -> None:
         _show_header()
         if url is None:
             print()
-            raw = input("🎯 XHamster URL (blank to go back): ").strip()
+            raw = input("🎯 URL (blank to go back): ").strip()
             if not raw:
                 return
             if not is_xm_url(raw):
-                print_error("Not an XHamster URL.",
-                             "URL must contain xhamster.com or a known XHamster domain.")
+                print_error("Unsupported URL for this downloader.",
+                             "Check the link and try again.")
                 pause()
                 continue
             current_url = raw
         else:
             current_url = url
-            url = None  # only use caller-supplied URL once
+            url = None
 
         download_video(current_url, config)
 
-        if not confirm("\nDownload another XHamster video?"):
+        if not confirm("\nDownload another video?"):
             return
