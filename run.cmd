@@ -51,7 +51,19 @@ echo.
 
 :: [1/3] Check for updates
 echo [1/3] Checking for updates...
-set "REMOTE_VERSION_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
+rem raw.githubusercontent.com caches "main" for ~5 minutes and ignores query strings.
+rem Ask git (never cached) for the latest commit SHA and download from a SHA-pinned URL instead.
+rem If the lookup fails we fall back to "main".
+set "REF=main"
+set "REF_FILE=%TEMP%\linkcatty_ref.txt"
+del "%REF_FILE%" 2>nul
+powershell -command "& { try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 8 -Uri 'https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack'; $t = if ($r.Content -is [byte[]]) { [Text.Encoding]::ASCII.GetString($r.Content) } else { [string]$r.Content }; if ($t -match '([0-9a-f]{40}) refs/heads/main') { $matches[1] | Set-Content -Encoding ascii '%REF_FILE%' } } catch {} }" >nul 2>&1
+if exist "%REF_FILE%" (
+    for /f "usebackq delims=" %%R in ("%REF_FILE%") do set "REF=%%R"
+    del "%REF_FILE%" 2>nul
+)
+set "RAW_BASE=https://raw.githubusercontent.com/maiz-an/LinkCatty/%REF%"
+set "REMOTE_VERSION_URL=%RAW_BASE%/sources/version.txt"
 set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
 
 set "LOCAL_VER=0.0.0"
@@ -110,7 +122,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     rem Download to temp and validate first so a failed download cannot corrupt the running launcher.
     set "LAUNCHER_NEW=%TEMP%\linkcatty_launcher.new"
     del "!LAUNCHER_NEW!" 2>nul
-    powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd' -OutFile '!LAUNCHER_NEW!' }" >nul 2>&1
+    powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '%RAW_BASE%/run.cmd' -OutFile '!LAUNCHER_NEW!' }" >nul 2>&1
     findstr /c:"LinkCatty Launcher" "!LAUNCHER_NEW!" >nul 2>&1
     if not errorlevel 1 copy /y "!LAUNCHER_NEW!" "%~f0" >nul
     del "!LAUNCHER_NEW!" 2>nul
@@ -271,6 +283,7 @@ for /f "tokens=1,2 delims=|" %%a in ("!entry!") do (
     set "FILE_PATH=%%a"
     set "FILE_URL=%%b"
 )
+set "FILE_URL=!FILE_URL:/LinkCatty/main/=/LinkCatty/%REF%/!"
 for %%f in ("%FILE_PATH%") do set "FILE_DIR=%%~dpf"
 if not exist "%~dp0!FILE_DIR!" mkdir "%~dp0!FILE_DIR!" 2>nul
 powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '!FILE_URL!' -OutFile '%~dp0!FILE_PATH!' }" >nul 2>&1

@@ -71,6 +71,8 @@ LinkCatty/
 
 Flags: `--update` (force update check), `--location` (print install dir), `--uninstall`.
 
+**Never stale:** `raw.githubusercontent.com` caches `main` for ~5 minutes and ignores `?query` cache-busting (verified: fresh query strings still return `X-Cache: HIT`). So on every launch the launcher asks `https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack` (sent `no-cache`) for the latest commit SHA and downloads `version.txt`, all files and the launcher from `raw.githubusercontent.com/maiz-an/LinkCatty/<sha>/...` (a new SHA is never cached). If the lookup fails it falls back to `main`. File-list URLs stay written with `/LinkCatty/main/`; the launcher rewrites that substring to the SHA, so keep it in every new entry. The installers still use `main`, so a fresh install right after a push can be up to 5 minutes stale.
+
 ### Checklist when adding/removing a source file
 The file list is duplicated in **four** places. Update all of them or fresh installs / updates will break with ImportError:
 - `run.cmd` — `FILE_LIST[n]`, `TOTAL_FILES`, and the `for /l` upper bound

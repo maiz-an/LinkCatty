@@ -60,7 +60,17 @@ echo ""
 # -------------------------------------------------------------------
 echo "[1/3] Checking for updates..."
 
-REMOTE_VERSION_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
+# raw.githubusercontent.com caches "main" for ~5 minutes and ignores query strings.
+# Ask git (never cached) for the latest commit SHA and download from a SHA-pinned URL.
+# If the lookup fails we fall back to "main".
+REF="main"
+LATEST_SHA="$(curl -sf --max-time 8 "https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack" 2>/dev/null \
+    | grep -a -o '[0-9a-f]\{40\} refs/heads/main' | head -n1 | cut -c1-40)"
+if [[ "$LATEST_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    REF="$LATEST_SHA"
+fi
+RAW_BASE="https://raw.githubusercontent.com/maiz-an/LinkCatty/$REF"
+REMOTE_VERSION_URL="$RAW_BASE/sources/version.txt"
 LOCAL_VERSION_FILE="$SCRIPT_DIR/sources/version.txt"
 DEPS_MARKER="$SCRIPT_DIR/sources/.deps_installed"
 
@@ -131,7 +141,8 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         PERCENT=$(( (i+1) * 100 / TOTAL ))
         printf "\rProgress: [%d/%d] %d%%  " "$((i+1))" "$TOTAL" "$PERCENT"
         mkdir -p "$(dirname "$SCRIPT_DIR/$FILE_PATH")"
-        curl -s -L -o "$SCRIPT_DIR/$FILE_PATH" "$FILE_URL"
+        PINNED_URL="${FILE_URL/\/LinkCatty\/main\//\/LinkCatty\/$REF\/}"
+        curl -s -L -o "$SCRIPT_DIR/$FILE_PATH" "$PINNED_URL"
     done
     echo ""
 
@@ -149,7 +160,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     # Download to temp, validate, then mv (atomic) so the running bash keeps its old inode.
     SELF="$SCRIPT_DIR/$(basename "$0")"
     LAUNCHER_NEW="$(mktemp)"
-    if curl -sf -L -o "$LAUNCHER_NEW" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh" \
+    if curl -sf -L -o "$LAUNCHER_NEW" "$RAW_BASE/run.sh" \
         && grep -q "LinkCatty Launcher" "$LAUNCHER_NEW"; then
         mv -f "$LAUNCHER_NEW" "$SELF"
     else
