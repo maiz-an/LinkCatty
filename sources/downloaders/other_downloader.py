@@ -58,7 +58,7 @@ def _generic_download(url: str, config: dict) -> None:
         info, proxy = run_with_proxy_fallback(_fetch, config)
     except Exception as exc:
         stop_spinner()
-        msg, hint = explain_error(exc)
+        msg, hint = explain_error(exc, config)
         print_error(f"Cannot retrieve info: {msg}", hint)
         return
     finally:
@@ -105,7 +105,7 @@ def _generic_download(url: str, config: dict) -> None:
         log_download("Generic", title, mode="best", status="Success")
     except Exception as exc:
         stop_spinner()
-        msg, hint = explain_error(exc)
+        msg, hint = explain_error(exc, config)
         print_error(f"Download failed: {msg}", hint)
         log_download("Generic", title, mode="best", status="Failed", error=msg)
 

@@ -152,9 +152,12 @@ def network_settings(config):
     print_info("Used only when a direct connection is blocked. If the "
                "direct connection works, no proxy is used.")
     print_info("Examples: socks5://127.0.0.1:1080   http://127.0.0.1:8080")
-    print_info("Enter = keep current, - = remove, 0 = cancel.")
+    print_info("Enter = keep current, - = turn OFF (remove), 0 = cancel.")
     current = get_proxy(config)
-    print(f"\nCurrent proxy: {mask_proxy(current) if current else 'none'}")
+    if current:
+        print(f"\nProxy status: ON  ({mask_proxy(current)})")
+    else:
+        print("\nProxy status: OFF (default). Enter a proxy URL below to turn it ON.")
 
     value = input("Proxy URL: ").strip()
     if value in ("", "0"):
@@ -165,7 +168,7 @@ def network_settings(config):
     if value == "-":
         network["proxy"] = ""
         save_config(config)
-        print_success("Proxy removed.")
+        print_success("Proxy removed. Status: OFF.")
         return
 
     if not is_valid_proxy(value):
@@ -178,7 +181,7 @@ def network_settings(config):
 
     network["proxy"] = value
     save_config(config)
-    print_success(f"Proxy saved: {mask_proxy(value)}")
+    print_success(f"Proxy saved: {mask_proxy(value)}. Status: ON.")
 
 
 # ─────────────────────────────────────────────────────────────────────

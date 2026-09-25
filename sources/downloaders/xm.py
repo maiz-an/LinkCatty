@@ -118,7 +118,7 @@ def download_video(url: str, config: dict) -> None:
         info, proxy = run_with_proxy_fallback(_fetch, config)
     except Exception as exc:
         stop_spinner()
-        msg, hint = explain_error(exc)
+        msg, hint = explain_error(exc, config)
         print_error(f"Could not fetch video info: {msg}", hint)
         return
     finally:
@@ -156,7 +156,7 @@ def download_video(url: str, config: dict) -> None:
         log_download("xm", info.get("title", url), mode=label, status="Success")
     except Exception as exc:
         stop_spinner()
-        msg, hint = explain_error(exc)
+        msg, hint = explain_error(exc, config)
         print_error(f"Download failed: {msg}", hint)
         log_download("xm", info.get("title", url), mode=label,
                      status="Failed", error=msg)

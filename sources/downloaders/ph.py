@@ -156,7 +156,7 @@ def download_video(url: str, config: dict, cookie_opt=None) -> None:
                 else:
                     print_error("No cookies available.", "Log in to the site in your browser first.")
             return
-        msg, hint = explain_error(exc)
+        msg, hint = explain_error(exc, config)
         print_error(f"Could not fetch video info: {msg}", hint)
         return
     finally:
@@ -194,7 +194,7 @@ def download_video(url: str, config: dict, cookie_opt=None) -> None:
         log_download("ph", info.get("title", url), mode=label, status="Success")
     except Exception as exc:
         stop_spinner()
-        msg, hint = explain_error(exc)
+        msg, hint = explain_error(exc, config)
         print_error(f"Download failed: {msg}", hint)
         log_download("ph", info.get("title", url), mode=label,
                      status="Failed", error=msg)

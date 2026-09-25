@@ -244,26 +244,40 @@ class SilentLogger:
 _URL = re.compile(r"https?://\S+")
 
 
-def explain_error(exc):
-    """Return (message, hint) for display: no extractor tags or URLs."""
+def explain_error(exc, config=None):
+    """Return (message, hint) for display: no extractor tags or URLs.
+
+    Pass `config` so the hint can tell whether a proxy is already set.
+    """
     text = str(exc).strip()
     text = text.split("; please report")[0]
     text = re.sub(r"^ERROR:\s*", "", text)
     text = re.sub(r"^\[[^\]]+\]\s*\S+:\s*", "", text)
     text = _URL.sub("", text)
     text = re.sub(r"\s*See\s+first for more details\.?", "", text).strip()
-    from .config import is_block_error
-    if "proxyerror" in text.lower() or "tunnel failed" in text.lower():
+    from .config import get_proxy, is_block_error
+    has_proxy = bool(config and get_proxy(config))
+    low = text.lower()
+    if "proxyerror" in low or "tunnel failed" in low:
         return (
             "Could not connect through your proxy.",
-            "Check the address in Settings > Network proxy, and that your "
-            "proxy or VPN is running.",
+            "Check the proxy address:\n"
+            "   Main menu > 4. Settings > 7. Network proxy\n"
+            "   and make sure your proxy or VPN app is running.",
         )
     if is_block_error(text):
+        if has_proxy:
+            return (
+                "Still blocked, even through your proxy.",
+                "Try a different proxy or VPN server:\n"
+                "   Main menu > 4. Settings > 7. Network proxy",
+            )
         return (
-            "Could not connect to the site.",
-            "Your network is closing the connection (firewall, DNS filter, "
-            "or ISP). Set a proxy in Settings > Network proxy, or try "
-            "another network.",
+            "Could not connect - blocked by your network.",
+            "To use a proxy for blocked links:\n"
+            "   1. Main menu > 4. Settings > 7. Network proxy\n"
+            "   2. Enter your proxy address, e.g.\n"
+            "      socks5://127.0.0.1:1080\n"
+            "   It is only used when a direct connection is blocked.",
         )
     return text, "Check the URL and your internet connection."
