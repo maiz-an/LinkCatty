@@ -42,7 +42,7 @@ LinkCatty/
 - `pause()` — press Enter to continue
 - `start_spinner()` / `stop_spinner()` — animated progress indicator
 - Always `clear_screen()` + `print_banner()` at the start of each downloader sub-menu
-- yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc, config)` (returns `(message, hint)`; the hint tells the user how to set the proxy when a block is detected); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`
+- yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc, config)` (returns `(message, hint)`; the hint tells the user how to set the proxy when a block is detected); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`. In a real terminal yt-dlp wraps `ERROR:` in ANSI color codes, which broke prefix stripping once; `explain_error` strips ANSI first, and tests must force `"color": {"stderr": "always"}` (redirected output has no colors and hides the bug)
 
 ## Adding a New Downloader
 1. Create `sources/downloaders/<site>.py` with a `run(config, url=None)` function

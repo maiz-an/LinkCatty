@@ -1,6 +1,8 @@
 import json
 import re
+import socket
 from copy import deepcopy
+from urllib.parse import urlsplit
 from pathlib import Path
 from .ffmpeg import get_ffmpeg_path
 
@@ -84,7 +86,8 @@ def get_version():
 # ---------------------------------------------------------------------
 _BLOCK_PATTERN = re.compile(
     r"connection was reset|curl: \(35\)|\bssl|time(d )?out|connection refused|"
-    r"connection aborted|remote end closed|name or service not known",
+    r"connection aborted|remote end closed|name or service not known|"
+    r"curl: \(7\)|failed to connect|could not connect to server",
     re.IGNORECASE,
 )
 _PROXY_PATTERN = re.compile(r"^(https?|socks4a?|socks5h?)://\S+$", re.IGNORECASE)
@@ -101,6 +104,23 @@ def get_proxy(config):
 
 def is_valid_proxy(value):
     return bool(_PROXY_PATTERN.match(value))
+
+
+def proxy_endpoint(value):
+    """Return (host, port) of a proxy URL, using the scheme's default port."""
+    parts = urlsplit(value)
+    default = {"http": 80, "https": 443}.get(parts.scheme.lower(), 1080)
+    return parts.hostname or "", parts.port or default
+
+
+def proxy_is_running(value, timeout=2.0):
+    """True if something accepts TCP connections at the proxy address."""
+    host, port = proxy_endpoint(value)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 def mask_proxy(value):

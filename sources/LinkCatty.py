@@ -15,6 +15,7 @@ from utils.config import (
     is_valid_proxy,
     load_config,
     mask_proxy,
+    proxy_is_running,
     reset_to_defaults,
     save_config,
 )
@@ -151,11 +152,16 @@ def network_settings(config):
     print("\n🌐 Network Proxy (Other Downloaders)")
     print_info("Used only when a direct connection is blocked. If the "
                "direct connection works, no proxy is used.")
-    print_info("Examples: socks5://127.0.0.1:1080   http://127.0.0.1:8080")
+    print_info("You need a proxy or VPN app that provides an address. "
+               "127.0.0.1 only works while that app is running.")
+    print_info("Format examples (use YOUR proxy's address):")
+    print_info("  socks5://127.0.0.1:1080   http://127.0.0.1:8080")
     print_info("Enter = keep current, - = turn OFF (remove), 0 = cancel.")
     current = get_proxy(config)
     if current:
-        print(f"\nProxy status: ON  ({mask_proxy(current)})")
+        running = proxy_is_running(current)
+        note = "" if running else "  <- NOT RUNNING right now"
+        print(f"\nProxy status: ON  ({mask_proxy(current)}){note}")
     else:
         print("\nProxy status: OFF (default). Enter a proxy URL below to turn it ON.")
 
@@ -182,6 +188,11 @@ def network_settings(config):
     network["proxy"] = value
     save_config(config)
     print_success(f"Proxy saved: {mask_proxy(value)}. Status: ON.")
+    if not proxy_is_running(value):
+        print_warning(
+            "Nothing is running at that address right now, so it can't "
+            "be used yet. Start your proxy or VPN app first."
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────

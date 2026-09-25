@@ -242,6 +242,7 @@ class SilentLogger:
 
 
 _URL = re.compile(r"https?://\S+")
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def explain_error(exc, config=None):
@@ -249,15 +250,26 @@ def explain_error(exc, config=None):
 
     Pass `config` so the hint can tell whether a proxy is already set.
     """
-    text = str(exc).strip()
+    text = _ANSI.sub("", str(exc)).strip()
     text = text.split("; please report")[0]
     text = re.sub(r"^ERROR:\s*", "", text)
     text = re.sub(r"^\[[^\]]+\]\s*\S+:\s*", "", text)
     text = _URL.sub("", text)
     text = re.sub(r"\s*See\s+first for more details\.?", "", text).strip()
-    from .config import get_proxy, is_block_error
-    has_proxy = bool(config and get_proxy(config))
+    from .config import get_proxy, is_block_error, proxy_endpoint
+    proxy = get_proxy(config) if config else ""
+    has_proxy = bool(proxy)
     low = text.lower()
+    if has_proxy:
+        host, port = proxy_endpoint(proxy)
+        if f"{host} port {port}".lower() in low:
+            hint = (
+                "Start your proxy or VPN app, or fix the address:\n"
+                "   Main menu > 4. Settings > 7. Network proxy"
+            )
+            if (host, port) == ("127.0.0.1", 1080):
+                hint += "\n   (127.0.0.1:1080 was only an example address.)"
+            return (f"Nothing is running at your proxy address ({host}:{port}).", hint)
     if "proxyerror" in low or "tunnel failed" in low:
         return (
             "Could not connect through your proxy.",
