@@ -25,6 +25,13 @@ if not errorlevel 1 (
     exit /b 0
 )
 
+:: Check for --update flag — force update by resetting local version
+echo %* | findstr /i "\-\-update" >nul
+if not errorlevel 1 (
+    echo 0.0.0> "%~dp0sources\version.txt"
+    echo Forcing update check...
+)
+
 mode con cols=62 lines=30 >nul 2>&1
 
 echo.

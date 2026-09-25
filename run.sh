@@ -31,6 +31,14 @@ fi
 # -------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# -------------------------------------------------------------------
+# Check for --update flag — force update by resetting local version
+# -------------------------------------------------------------------
+if [[ "$*" == *"--update"* ]]; then
+    printf "0.0.0" > "$SCRIPT_DIR/sources/version.txt"
+    echo "Forcing update check..."
+fi
+
 echo ""
 echo "============================================================"
 echo "                    LinkCatty Launcher"
