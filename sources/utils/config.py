@@ -66,7 +66,7 @@ def get_version():
     """Return the current LinkCatty version as a plain string."""
     try:
         if VERSION_FILE.exists():
-            value = VERSION_FILE.read_text(encoding="utf-8").strip()
+            value = VERSION_FILE.read_text(encoding="utf-8-sig").strip()
             if value:
                 return value
     except Exception:

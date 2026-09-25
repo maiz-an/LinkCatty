@@ -95,7 +95,6 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "sources/requirements.txt"
         "sources/version.txt"
         "run.cmd"
-        "run.sh"
         "uninstall_linkcatty.cmd"
         "uninstall_linkcatty.sh"
         "sources/LinkCatty.py"
@@ -113,7 +112,6 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
@@ -147,8 +145,17 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     # Invalidate deps marker so deps reinstall after update
     rm -f "$DEPS_MARKER"
 
-    # Make sure run.sh is executable after update
-    chmod +x "$SCRIPT_DIR/run.sh" 2>/dev/null
+    # Update the launcher itself. Installed name is "linkcatty", repo name is run.sh.
+    # Download to temp, validate, then mv (atomic) so the running bash keeps its old inode.
+    SELF="$SCRIPT_DIR/$(basename "$0")"
+    LAUNCHER_NEW="$(mktemp)"
+    if curl -sf -L -o "$LAUNCHER_NEW" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh" \
+        && grep -q "LinkCatty Launcher" "$LAUNCHER_NEW"; then
+        mv -f "$LAUNCHER_NEW" "$SELF"
+    else
+        rm -f "$LAUNCHER_NEW"
+    fi
+    chmod +x "$SELF" 2>/dev/null
 
     echo ""
     echo "[3/3] Update completed. Restarting..."

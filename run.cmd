@@ -25,7 +25,7 @@ if not errorlevel 1 (
     exit /b 0
 )
 
-:: Check for --update flag — force update by resetting local version
+:: Check for --update flag - force update by resetting local version
 echo %* | findstr /i "\-\-update" >nul
 if not errorlevel 1 (
     echo 0.0.0> "%~dp0sources\version.txt"
@@ -85,27 +85,36 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[5]=sources\utils\ui.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
     set "FILE_LIST[6]=sources\requirements.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
     set "FILE_LIST[7]=sources\version.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-    set "FILE_LIST[8]=run.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
-    set "FILE_LIST[9]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
-    set "FILE_LIST[10]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
-    set "FILE_LIST[11]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
-    set "FILE_LIST[12]=sources\LinkCatty.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
-    set "FILE_LIST[13]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
-    set "FILE_LIST[14]=sources\downloaders\ph.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
-    set "FILE_LIST[15]=sources\downloaders\xm.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
-    set "TOTAL_FILES=16"
+    set "FILE_LIST[8]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
+    set "FILE_LIST[9]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
+    set "FILE_LIST[10]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
+    set "FILE_LIST[11]=sources\LinkCatty.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
+    set "FILE_LIST[12]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
+    set "FILE_LIST[13]=sources\downloaders\ph.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
+    set "FILE_LIST[14]=sources\downloaders\xm.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
+    set "TOTAL_FILES=15"
 
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
 
     set "DOWNLOADED=0"
-    for /l %%i in (0,1,15) do (
+    for /l %%i in (0,1,14) do (
         set /a DOWNLOADED+=1
         set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL_FILES!
         <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL_FILES!] !PERCENT!%%  "
         call :DownloadFile %%i
         echo.
     )
+
+    rem Update the launcher itself. Installed name is linkcatty.bat, repo name is run.cmd.
+    rem Download to temp and validate first so a failed download cannot corrupt the running launcher.
+    set "LAUNCHER_NEW=%TEMP%\linkcatty_launcher.new"
+    del "!LAUNCHER_NEW!" 2>nul
+    powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd' -OutFile '!LAUNCHER_NEW!' }" >nul 2>&1
+    findstr /c:"LinkCatty Launcher" "!LAUNCHER_NEW!" >nul 2>&1
+    if not errorlevel 1 copy /y "!LAUNCHER_NEW!" "%~f0" >nul
+    del "!LAUNCHER_NEW!" 2>nul
+    if /i not "%~nx0"=="run.cmd" del "%~dp0run.cmd" 2>nul
 
     if exist "%TEMP%\settings_backup.json" copy "%TEMP%\settings_backup.json" "%~dp0sources\settings.json" >nul 2>&1
     if exist "%TEMP%\download_history_backup.json" copy "%TEMP%\download_history_backup.json" "%~dp0sources\download_history.json" >nul 2>&1

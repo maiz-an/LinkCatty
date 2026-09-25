@@ -64,4 +64,20 @@ LinkCatty/
 - FFmpeg is bundled under `sources/FFmpeg/`
 
 ## Auto-Update Mechanism
-`run.cmd` compares `sources/version.txt` against the remote `version.txt` on GitHub main branch. If versions differ, it re-downloads all listed source files before launching. New downloaders must be added to `FILE_LIST` in `run.cmd` and `run.sh` to be included in updates.
+`run.cmd` compares `sources/version.txt` against the remote `version.txt` on GitHub main branch. If versions differ, it re-downloads all listed source files before launching, then replaces the running launcher itself.
+
+Flags: `--update` (force update check), `--location` (print install dir), `--uninstall`.
+
+### Checklist when adding/removing a source file
+The file list is duplicated in **four** places. Update all of them or fresh installs / updates will break with ImportError:
+- `run.cmd` — `FILE_LIST[n]`, `TOTAL_FILES`, and the `for /l` upper bound
+- `run.sh` — `FILE_PATHS` and `FILE_URLS` (keep the two arrays index-aligned)
+- `install_linkcatty.cmd` — `FILE_LIST[n]`, `TOTAL`, the `for /l` bound, and the FFmpeg `[N/N]` progress line
+- `install_linkcatty.sh` — the `FILES` map
+Then bump `sources/version.txt` (updates only trigger when the version string differs).
+
+### Gotchas (each of these has caused a real breakage)
+- **Installed launcher name differs**: the installer renames `run.cmd` -> `linkcatty.bat` (and `run.sh` -> `linkcatty`). The updater must overwrite the *running* launcher (`%~f0` / `$SELF`), never a literal `run.cmd`/`run.sh`, or the installed launcher never updates. The launcher is downloaded to a temp file and validated before it replaces the running one.
+- **`.cmd` files must be pure ASCII.** `run.cmd` runs `chcp 65001`; any multi-byte character (e.g. an em dash in a comment) makes cmd misread later lines (`'tle' is not recognized`). Check with `grep -nP '[^\x00-\x7F]' *.cmd`.
+- **`version.txt` must have no BOM.** In Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds one. Write it with `printf "1.0.x" > sources/version.txt`.
+- Inside parenthesized blocks in `.cmd` files use `rem`, not `::`.
