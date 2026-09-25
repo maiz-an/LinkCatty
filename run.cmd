@@ -32,6 +32,15 @@ if not errorlevel 1 (
     echo Forcing update check...
 )
 
+:: Check for --location flag
+echo %* | findstr /i "\-\-location" >nul
+if not errorlevel 1 (
+    echo.
+    echo LinkCatty is installed at:
+    echo %~dp0
+    exit /b 0
+)
+
 mode con cols=62 lines=30 >nul 2>&1
 
 echo.

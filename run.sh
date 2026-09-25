@@ -39,6 +39,16 @@ if [[ "$*" == *"--update"* ]]; then
     echo "Forcing update check..."
 fi
 
+# -------------------------------------------------------------------
+# Check for --location flag
+# -------------------------------------------------------------------
+if [[ "$*" == *"--location"* ]]; then
+    echo ""
+    echo "LinkCatty is installed at:"
+    echo "$SCRIPT_DIR"
+    exit 0
+fi
+
 echo ""
 echo "============================================================"
 echo "                    LinkCatty Launcher"
