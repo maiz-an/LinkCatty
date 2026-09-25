@@ -80,6 +80,10 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "run.sh"
         "uninstall_linkcatty.cmd"
         "uninstall_linkcatty.sh"
+        "sources/LinkCatty.py"
+        "sources/downloaders/other_downloader.py"
+        "sources/downloaders/ph.py"
+        "sources/downloaders/xm.py"
     )
     FILE_URLS=(
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
@@ -94,6 +98,10 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
         "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
+        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
     )
     TOTAL=${#FILE_PATHS[@]}
 

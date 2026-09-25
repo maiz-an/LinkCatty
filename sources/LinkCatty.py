@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).parent
 APP_ROOT = BASE_DIR.parent          # app root (works in dev + installed)
 sys.path.insert(0, str(BASE_DIR))
 
-from downloaders import spotify_downloader, youtube_downloader
+from downloaders import spotify_downloader, youtube_downloader, other_downloader
 from utils.config import load_config, save_config, reset_to_defaults
 from utils.ui import (
     clear_screen,
@@ -333,8 +333,7 @@ def main():
             elif choice == "2":
                 spotify_downloader.run(config)
             elif choice == "3":
-                print("\n🛠️  Other downloaders (e.g., SoundCloud, Vimeo) coming soon.")
-                pause("Press Enter to continue...")
+                other_downloader.run(config)
             elif choice == "4":
                 settings_menu(config)
             elif choice in (None, "5"):

@@ -73,13 +73,17 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     set "FILE_LIST[9]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
     set "FILE_LIST[10]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
     set "FILE_LIST[11]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
-    set "TOTAL_FILES=12"
+    set "FILE_LIST[12]=sources\LinkCatty.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
+    set "FILE_LIST[13]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
+    set "FILE_LIST[14]=sources\downloaders\ph.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
+    set "FILE_LIST[15]=sources\downloaders\xm.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
+    set "TOTAL_FILES=16"
 
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
 
     set "DOWNLOADED=0"
-    for /l %%i in (0,1,11) do (
+    for /l %%i in (0,1,15) do (
         set /a DOWNLOADED+=1
         set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL_FILES!
         <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL_FILES!] !PERCENT!%%  "

@@ -77,7 +77,7 @@ def print_main_menu():
     print(f"")
     print(f"{CYAN}{BOLD}1.{RESET} YouTube Downloader")
     print(f"{CYAN}{BOLD}2.{RESET} Spotify Downloader")
-    print(f"{CYAN}{BOLD}3.{RESET} Other (coming soon)")
+    print(f"{CYAN}{BOLD}3.{RESET} Other Downloaders")
     print(f"{CYAN}{BOLD}4.{RESET} Settings")
     print(f"{CYAN}{BOLD}5.{RESET} Exit")
     print(f"")
