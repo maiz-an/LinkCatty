@@ -69,6 +69,33 @@ unzip_to() {    # zip, folder
     fi
 }
 
+# One file from GitHub. Tries the raw server, then a mirror (jsDelivr, only when the commit is
+# known), three rounds with growing pauses. A web page from a proxy or captive portal is
+# rejected instead of being installed (it would show up later as a syntax or format error).
+# Sets FETCH_ERR when it fails.
+fetch_file() {   # repo-relative path, output file
+    local rel="$1" out="$2" try=1 mirror=""
+    FETCH_ERR=""
+    if [ "$REF" != "main" ]; then mirror="https://cdn.jsdelivr.net/gh/maiz-an/LinkCatty@$REF/$rel"; fi
+    while [ $try -le 3 ]; do
+        FETCH_ERR="could not reach GitHub"
+        if curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$RAW_BASE/$rel" 2>/dev/null \
+            || { [ -n "$mirror" ] && curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$mirror" 2>/dev/null; }; then
+            if head -c 300 "$out" | tr 'A-Z' 'a-z' | grep -q '^<!doctype\|^<html'; then
+                FETCH_ERR="received a web page instead of the file"
+            elif [ "$rel" = "sources/version.txt" ] && ! tr -d '\r\n ' < "$out" | grep -Eq '^[0-9][0-9.]*$'; then
+                FETCH_ERR="the version file is not valid"
+            else
+                FETCH_ERR=""
+                return 0
+            fi
+        fi
+        try=$((try + 1))
+        [ $try -le 3 ] && sleep $((try * 2 - 3))
+    done
+    return 1
+}
+
 ui_header "LinkCatty" "Setup"
 
 if [ -f "$INSTALL_DIR/linkcatty" ]; then
@@ -124,7 +151,7 @@ while [ $i -lt $TOTAL ]; do
     ui_bar "Downloading" "$i" "$STEPS"
     F="${FILES[$i]}"
     mkdir -p "$(dirname "$TEMP_DIR/$F")"
-    if ! curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$TEMP_DIR/$F" "$RAW_BASE/$F"; then
+    if ! fetch_file "$F" "$TEMP_DIR/$F"; then
         FAILED_FILE="$F"
         break
     fi
@@ -137,8 +164,9 @@ done
 if [ -n "$FAILED_FILE" ]; then
     [ "$IS_TTY" = 1 ] && printf "\n"
     echo ""
-    ui_fail "Could not download $FAILED_FILE"
-    ui_note "Check your internet connection and run the installer again."
+    ui_fail "Could not download $FAILED_FILE" "$FETCH_ERR"
+    echo ""
+    ui_note "Check your internet connection, then run the installer again."
     ui_note "Nothing was changed on your computer."
     rm -rf "$TEMP_DIR"
     echo ""

@@ -132,7 +132,7 @@ if "%NEED_UPDATE%"=="1" (
     for /l %%i in (0,1,13) do (
         set /a BAR_DONE=%%i
         call :ui_bar
-        call :DownloadFile %%i
+        if "!DL_FAILED!"=="0" call :DownloadFile %%i
     )
     set "BAR_DONE=!BAR_TOTAL!"
     call :ui_bar
@@ -141,10 +141,10 @@ if "%NEED_UPDATE%"=="1" (
 
     if "!DL_FAILED!"=="1" (
         rmdir /s /q "!STAGE!" 2>nul
-        set "MSG=Could not download the update"
-        set "DET=nothing was changed"
+        set "MSG=Could not download !FAILED_FILE!"
+        set "DET=!DL_ERR!"
         call :ui_warn
-        call :ui_note "Check your connection. LinkCatty will try again next time."
+        call :ui_note "Nothing was changed. LinkCatty will try again next time you start it."
         echo.
         ping -n 4 127.0.0.1 >nul
         goto :AfterUpdate
@@ -350,26 +350,65 @@ for /f "tokens=1,2 delims=|" %%a in ("!entry!") do (
     set "FILE_URL=%%b"
 )
 set "FILE_URL=!FILE_URL:/LinkCatty/main/=/LinkCatty/%REF%/!"
-for %%f in ("!STAGE!\!FILE_PATH!") do set "OUT_DIR=%%~dpf"
+set "OUT_FILE=!STAGE!\!FILE_PATH!"
+for %%f in ("!OUT_FILE!") do set "OUT_DIR=%%~dpf"
 if not exist "!OUT_DIR!" mkdir "!OUT_DIR!" 2>nul
-set "TRY=0"
-:DownloadTry
-set /a TRY+=1
-powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri '!FILE_URL!' -OutFile '!STAGE!\!FILE_PATH!'; exit 0 } catch { exit 1 } }" >nul 2>&1
+call :FetchFile
 if errorlevel 1 (
-    if !TRY! LSS 3 (
-        ping -n 2 127.0.0.1 >nul
-        goto :DownloadTry
-    )
     set "DL_FAILED=1"
-    exit /b 1
+    set "FAILED_FILE=!FILE_PATH!"
 )
-rem .cmd files must be CRLF + ASCII whatever the server sent
-if /i "%FILE_PATH:~-4%"==".cmd" powershell -NoProfile -Command "& { $p='!STAGE!\!FILE_PATH!'; if (Test-Path $p) { $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p, ($t -replace '\r?\n', ([string][char]13 + [char]10)), [Text.Encoding]::ASCII) } }" >nul 2>&1
 exit /b
 
+:FetchFile
+rem in : FILE_PATH (with backslashes), FILE_URL (raw.githubusercontent.com), OUT_FILE
+rem out: errorlevel 0 = ok; DL_ERR = the reason when it failed
+set "DL_ERR="
+set "FILE_FWD=!FILE_PATH:\=/!"
+set "MIRROR_URL="
+if not "%REF%"=="main" set "MIRROR_URL=https://cdn.jsdelivr.net/gh/maiz-an/LinkCatty@%REF%/!FILE_FWD!"
+set "ERR_FILE=%TEMP%\linkcatty_dl_error.txt"
+set "TRY=0"
+:FetchTry
+set /a TRY+=1
+del "!ERR_FILE!" 2>nul
+powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; $urls = @('!FILE_URL!', '!MIRROR_URL!') | Where-Object { $_ }; $err = ''; foreach ($u in $urls) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 45 -Uri $u -OutFile '!OUT_FILE!'; exit 0 } catch { $err = $_.Exception.Message } }; Set-Content -Path '!ERR_FILE!' -Value $err; exit 1 }" >nul 2>&1
+if not errorlevel 1 goto :FetchCheck
+if exist "!ERR_FILE!" set /p DL_ERR=<"!ERR_FILE!"
+goto :FetchRetry
+:FetchCheck
+rem A proxy or captive portal can answer 200 with a web page. That must never be installed
+rem as a file (it would show up later as a syntax or format error).
+findstr /b /i /r /c:"<.doctype" /c:"<html" "!OUT_FILE!" >nul 2>&1
+if not errorlevel 1 (
+    set "DL_ERR=received a web page instead of the file"
+    goto :FetchRetry
+)
+if /i not "!FILE_PATH!"=="sources\version.txt" goto :FetchCmdCheck
+rem The version file must be digits and dots only, and not empty. The next two lines must not
+rem contain an exclamation mark: with delayed expansion cmd would treat the caret in the
+rem pattern as an escape character even inside quotes.
+findstr /r /c:"[^0-9.]" "%OUT_FILE%" >nul 2>&1
+if not errorlevel 1 set "DL_ERR=the version file is not valid" & goto :FetchRetry
+for %%s in ("%OUT_FILE%") do if %%~zs LSS 3 set "DL_ERR=the version file is empty" & goto :FetchRetry
+:FetchCmdCheck
+rem .cmd files must be CRLF + ASCII whatever the server sent
+if /i "!FILE_PATH:~-4!"==".cmd" powershell -NoProfile -Command "& { $p='!OUT_FILE!'; if (Test-Path $p) { $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p, ($t -replace '\r?\n', ([string][char]13 + [char]10)), [Text.Encoding]::ASCII) } }" >nul 2>&1
+exit /b 0
+:FetchRetry
+if !TRY! LSS 3 (
+    rem wait a little longer each time (a busy server or a scan of the new file usually clears)
+    set /a WAIT=TRY*2
+    set /a WAIT+=1
+    ping -n !WAIT! 127.0.0.1 >nul
+    goto :FetchTry
+)
+if not defined DL_ERR set "DL_ERR=no answer from the server"
+exit /b 1
+
 :ui_init
-rem Colors only where the console understands them (Windows 10 or newer)
+rem Colors and real glyphs only where the console can show them (Windows 10 or newer).
+rem The glyphs are written as hex and decoded by certutil, so this file stays pure ASCII.
 set "ESC="
 set "R="
 set "B="
@@ -392,49 +431,108 @@ if defined ESC (
     set "RD=%ESC%[31m"
     set "C=%ESC%[36m"
 )
+set "G_OK="
+set "G_DOT="
+if not defined ESC goto :ui_glyph_fallback
+set "GL=%TEMP%\linkcatty_glyphs_%RANDOM%"
+> "%GL%.hex" (
+    echo e29c940d0a
+    echo e29c960d0a
+    echo e29aa00d0a
+    echo e280ba0d0a
+    echo e294810d0a
+    echo e294800d0a
+    echo e2948c0d0a
+    echo e294820d0a
+    echo e294940d0a
+    echo e280a20d0a
+)
+certutil -f -decodehex "%GL%.hex" "%GL%.txt" >nul 2>&1
+if exist "%GL%.txt" (
+    < "%GL%.txt" (
+        set /p G_OK=
+        set /p G_FAIL=
+        set /p G_WARN=
+        set /p G_ARROW=
+        set /p G_BAR1=
+        set /p G_BAR2=
+        set /p G_TL=
+        set /p G_V=
+        set /p G_BL=
+        set /p G_DOT=
+    )
+)
+del "%GL%.hex" "%GL%.txt" 2>nul
+:ui_glyph_fallback
+if not defined G_DOT (
+    set "G_OK=+"
+    set "G_FAIL=x"
+    set "G_WARN=*"
+    set "G_ARROW=>"
+    set "G_BAR1=#"
+    set "G_BAR2=."
+    set "G_TL=+"
+    set "G_V=|"
+    set "G_BL=+"
+    set "G_DOT=-"
+)
+set "RULE="
+for /l %%k in (1,1,58) do set "RULE=!RULE!!G_BAR2!"
 exit /b
 
 :ui_header
 echo.
 echo   %D%- a Maiz's one -%R%
 echo   %B%LinkCatty%R%  %D%%SHOW_VER%%R%
-echo   %D%----------------------------------------------------------%R%
+echo   %D%!RULE!%R%
 exit /b
 
 :ui_ok
-echo   %G%+%R% !MSG!  %D%!DET!%R%
+echo   %G%!G_OK!%R% !MSG!  %D%!DET!%R%
 exit /b
 
 :ui_warn
-echo   %Y%^^!%R% !MSG!  %D%!DET!%R%
+echo   %Y%!G_WARN!%R% !MSG!  %D%!DET!%R%
 exit /b
 
 :ui_fail
-echo   %RD%x%R% !MSG!  %D%!DET!%R%
+echo   %RD%!G_FAIL!%R% !MSG!  %D%!DET!%R%
 exit /b
 
 :ui_arrow
-echo   %C%^>%R% !MSG!  %D%!DET!%R%
+echo   %C%!G_ARROW!%R% !MSG!  %D%!DET!%R%
 exit /b
 
 :ui_note
 echo   %D%%~1%R%
 exit /b
 
+:ui_card_top
+echo   %G%!G_TL! !G_OK! !MSG!%R%
+exit /b
+
+:ui_row
+echo   %G%!G_V!%R%  %D%!ROW_K!%R%  !ROW_V!
+exit /b
+
+:ui_card_end
+echo   %G%!G_BL!%R%
+exit /b
+
 :ui_bar
-rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL. The line is redrawn with
-rem ANSI cursor codes (erase line + go to column 1); the classic "carriage return in a
-rem variable" trick prints nothing on current Windows builds. The bar is drawn with
-rem colored spaces (solid look, ASCII only). Consoles without ANSI only get a final line.
+rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL, same look as the app.
+rem It is redrawn with ANSI cursor codes (erase line + go to column 1); the old "carriage
+rem return in a variable" trick prints nothing on current Windows builds. Consoles without
+rem ANSI only get a final line.
 set /a BP=BAR_DONE*100/BAR_TOTAL
 set /a BF=BAR_DONE*28/BAR_TOTAL
 if not defined ESC goto :ui_bar_plain
 set "BB1="
 set "BB2="
 for /l %%k in (1,1,28) do (
-    if %%k leq !BF! (set "BB1=!BB1! ") else (set "BB2=!BB2! ")
+    if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
 )
-<nul set /p "=%ESC%[2K%ESC%[1G  %C%!BAR_LABEL!%R%  %ESC%[46m!BB1!%ESC%[100m!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%"
+<nul set /p "=%ESC%[2K%ESC%[1G  %C%!BAR_LABEL!%R%  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%"
 exit /b
 :ui_bar_plain
 if "!BAR_DONE!"=="!BAR_TOTAL!" <nul set /p "=  !BAR_LABEL!  done (!BAR_DONE!/!BAR_TOTAL!)"

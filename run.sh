@@ -63,6 +63,33 @@ ui_bar() {      # label, done, total  (in place, only on a real terminal)
         "$C_BOLD" "$pct" "$C_RST" "$C_DIM" "$n" "$total" "$C_RST"
 }
 
+# One file from GitHub. Tries the raw server, then a mirror (jsDelivr, only when the commit is
+# known), three rounds with growing pauses. A web page from a proxy or captive portal is
+# rejected instead of being installed (it would show up later as a syntax or format error).
+# Sets FETCH_ERR when it fails.
+fetch_file() {   # repo-relative path, output file
+    local rel="$1" out="$2" try=1 mirror=""
+    FETCH_ERR=""
+    if [ "$REF" != "main" ]; then mirror="https://cdn.jsdelivr.net/gh/maiz-an/LinkCatty@$REF/$rel"; fi
+    while [ $try -le 3 ]; do
+        FETCH_ERR="could not reach GitHub"
+        if curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$RAW_BASE/$rel" 2>/dev/null \
+            || { [ -n "$mirror" ] && curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$mirror" 2>/dev/null; }; then
+            if head -c 300 "$out" | tr 'A-Z' 'a-z' | grep -q '^<!doctype\|^<html'; then
+                FETCH_ERR="received a web page instead of the file"
+            elif [ "$rel" = "sources/version.txt" ] && ! tr -d '\r\n ' < "$out" | grep -Eq '^[0-9][0-9.]*$'; then
+                FETCH_ERR="the version file is not valid"
+            else
+                FETCH_ERR=""
+                return 0
+            fi
+        fi
+        try=$((try + 1))
+        [ $try -le 3 ] && sleep $((try * 2 - 3))
+    done
+    return 1
+}
+
 # -------------------------------------------------------------------
 # Flags
 # -------------------------------------------------------------------
@@ -141,23 +168,6 @@ FILE_PATHS=(
     "sources/downloaders/other_downloader.py"
     "sources/downloaders/universal.py"
 )
-FILE_URLS=(
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
-    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
-)
-
 # If a managed file is missing (e.g. a module added in a newer release), repair by
 # re-downloading. The restart flag stops any update loop.
 NEED_UPDATE=0
@@ -198,10 +208,10 @@ else
     while [ $i -lt $TOTAL ]; do
         ui_bar "Updating" "$i" "$TOTAL"
         FILE_PATH="${FILE_PATHS[$i]}"
-        PINNED_URL="${FILE_URLS[$i]/\/LinkCatty\/main\//\/LinkCatty\/$REF\/}"
         mkdir -p "$(dirname "$STAGE/$FILE_PATH")"
-        if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 90 -o "$STAGE/$FILE_PATH" "$PINNED_URL"; then
+        if ! fetch_file "$FILE_PATH" "$STAGE/$FILE_PATH"; then
             FAILED=1
+            FAILED_FILE="$FILE_PATH"
             break
         fi
         case "$FILE_PATH" in
@@ -216,8 +226,8 @@ else
     if [ "$FAILED" = 1 ]; then
         rm -rf "$STAGE"
         trap - INT TERM
-        ui_warn "Could not download the update" "nothing was changed"
-        ui_note "Check your connection. LinkCatty will try again next time."
+        ui_warn "Could not download $FAILED_FILE" "$FETCH_ERR"
+        ui_note "Nothing was changed. LinkCatty will try again next time you start it."
         echo ""
         sleep 2
     else
