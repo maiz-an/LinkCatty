@@ -16,7 +16,7 @@ LinkCatty/
 │   ├── downloaders/
 │   │   ├── youtube_downloader.py
 │   │   ├── spotify_downloader.py
-│   │   ├── other_downloader.py  # Option 3: Spotify-style UI + engine (progress, retry passes, ledger, report)
+│   │   ├── other_downloader.py  # Option 3: Spotify-style UI + engine (progress, silent retries, ledger, report)
 │   │   └── universal.py         # profile for every non-YouTube/Spotify link: redirect hints + member login
 │   ├── utils/
 │   │   ├── ui.py               # UI kit (header, menu, cards, progress bar) + CLI helpers
@@ -46,8 +46,11 @@ Every downloader (YouTube, Spotify, Other) draws its screens with the shared kit
 | `item_line(ok, i, n, title, detail)` / `note_line(text, icon)` | per-item and retry/cooldown lines, printed with `progress.say()` |
 | `DownloadProgress(label, total, unit, count_fn)` | ONE live, width-aware bar. Feed it with yt-dlp hooks (`.hook`, `.pp_hook`) or `count_fn` (e.g. files on disk); `.say()` prints above the bar, `.paused()` wraps prompts; `.final_path` is the finished file |
 | `fit` / `fit_tail` / `display_width` | column-aware shortening (`fit_tail` keeps the END, used automatically for path values) |
+| `classify_error` / `strategy_for_pass` / `apply_strategy` / `is_final_failure` / `show_failure_now` | the shared **silent retry policy** (see below): used by YouTube, Other and (labels only) Spotify |
 
 The flow every downloader follows: menu or URL prompt -> spinner -> header + info card -> `confirm("Proceed with download?", default=True)` (Enter = yes) -> plan line + live bar -> clear -> header + result card -> `Process another link?`.
+
+Retries are invisible (a rule for every downloader): no "Pass 1/3", no "retrying in Ns", no "N left after pass" lines, no plan-line mention; the bar label stays `Downloading`. Behind the scenes each item gets up to `max_retry_passes` attempts (1 when Settings `auto_retry` is off), each with more patience (`PASS_STRATEGIES`: more retries and longer timeouts, then relaxed quality over IPv4). Failures are classified with `classify_error`; `unavailable`/`upcoming`/`unsupported`/`disk`/`login` are final at once (never retried); a connection reset gets one more attempt; rate limits wait longer (YouTube also halves its parallel workers). A per-item `✖` line is printed only when the item is really final (`show_failure_now`): recovered items never show one, login/VPN cases wait for their prompt. The "Turn on your VPN" prompt appears only when a whole round downloaded nothing and a failure looked like a block (one flaky video never triggers it). YouTube playlists are parallel (bar fed by the ledger, `Ctrl+C` cancels workers through a yt-dlp hook), single videos and manual-format downloads use the same silent attempts. Ledger `.linkcatty_state.json` (playlists) records cause/attempts and a re-run resumes; a finished file the user deleted is fetched again. Tests that stub `_download_one_video` must match its real signature, or a broken call hides behind the stub (this once broke every YouTube playlist).
 
 Other rules:
 - **Navigation is the same everywhere: `0` goes back / cancels, an empty Enter skips.** Menus list `0. Back` last (Enter also goes back); the main menu lists `0. Exit` and ignores a bare Enter so the app never closes by accident; URL and format-id prompts accept `0` or blank; `confirm` treats `0` as No; settings prompts are Enter = keep, `0` = cancel; Ctrl+C acts like back. Never number Back/Exit as the last digit
@@ -57,7 +60,7 @@ Other rules:
 - yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc, config)` (returns `(message, hint)`; the hint tells the user how to set the proxy when a block is detected); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`. In a real terminal yt-dlp wraps `ERROR:` in ANSI color codes, which broke prefix stripping once; `explain_error` strips ANSI first, and tests must force `"color": {"stderr": "always"}` (redirected output has no colors and hides the bug). After a blocked-connection error, call `offer_retry_after_block(exc)` so the user can turn on a VPN and press Enter to retry (it only prompts for block-type errors)
 
 ## Adding a New Downloader (Other Downloader sites)
-`other_downloader.py` owns the whole flow (info card, single live progress bar, classified errors, multi-pass retries with cooldowns, ledger/report for playlists, VPN retry prompt, workflow guard). A site file is only a small **profile**:
+`other_downloader.py` owns the whole flow (info card, single live progress bar, classified errors, silent multi-pass retries with cooldowns, ledger/report for playlists, VPN retry prompt, workflow guard). A site file is only a small **profile**:
 There are no per-site files: every link that is not YouTube or Spotify goes through `universal.py` and the generic yt-dlp engine, so most new sites need no code.
 - `universal.dedicated(url)` returns `(name, menu number)` for links that have their own menu entry (YouTube, Spotify); the Other Downloader then tells the user to use that entry instead. To add a new *dedicated* downloader: create `downloaders/<name>.py` with a `run(config)`, add its menu entry in `LinkCatty.py`, add it to `_DEDICATED` in `universal.py`, and add the file to the four file lists (see the checklist below).
 - `universal.login_options(config, proxy)` loads browser cookies for sites that need an account; the engine calls it once when a login-class error appears.

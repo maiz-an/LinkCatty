@@ -20,7 +20,6 @@ from utils.ui import (
     card,
     confirm,
     format_eta,
-    note_line,
     pause,
     plan_line,
     print_error,
@@ -386,7 +385,8 @@ class SpotifyDownloader:
         self.batch_cooldown_max       = float(self.spotify_config.get("batch_cooldown_max", 3))
         self.pass_cooldown_seconds    = int(self.spotify_config.get("retry_delay_seconds", 8))
         self.blocked_cooldown_seconds = int(self.spotify_config.get("blocked_cooldown_seconds", 45))
-        self.max_passes               = int(self.spotify_config.get("max_retry_passes", 4))
+        self.max_passes               = (max(1, int(self.spotify_config.get("max_retry_passes", 4)))
+                                         if self.spotify_config.get("auto_retry", True) else 1)
         self.base_threads             = int(self.spotify_config.get("threads", 2))
 
     # ── metadata ──────────────────────────────────────────────────────
@@ -583,8 +583,7 @@ class SpotifyDownloader:
         format_label = audio_format.upper() + (
             "" if audio_format in ("flac", "wav") else f" {quality}k")
         plan_line(format_label,
-                  f"{self.parallel_batches * self.base_threads} parallel",
-                  f"up to {self.max_passes} passes")
+                  f"{self.parallel_batches * self.base_threads} parallel")
 
         # ── build / merge the ledger ────────────────────────────────
         ledger = _load_ledger(out_dir)
@@ -618,15 +617,10 @@ class SpotifyDownloader:
                     _strategy_for_pass(pass_num, youtube_blocked)
                 threads = max(1, self.base_threads // divisor)
 
-                reporter.set_label(f"Pass {pass_num}/{self.max_passes}")
-
                 batches = [
                     pending_urls[i:i + self.batch_size]
                     for i in range(0, len(pending_urls), self.batch_size)
                 ]
-
-                pass_start_success = sum(
-                    1 for r in ledger.values() if r["status"] == "success")
 
                 # Per-pass scratch dir for per-batch archive/errors/log.
                 pass_temp = os.path.join(out_dir, f".linkcatty_pass{pass_num}")
@@ -645,9 +639,7 @@ class SpotifyDownloader:
                             for b_idx, batch_urls in enumerate(batches)
                         }
 
-                        completed = 0
                         for future in as_completed(futures):
-                            completed += 1
                             b_idx, batch_urls = futures[future]
 
                             try:
@@ -720,34 +712,21 @@ class SpotifyDownloader:
 
                             _save_ledger(out_dir, ledger)
 
-                            reporter.set_label(
-                                f"Pass {pass_num}/{self.max_passes} · "
-                                f"batch {completed}/{len(batches)}"
-                            )
                             reporter._render()
                 finally:
                     shutil.rmtree(pass_temp, ignore_errors=True)
 
                 pass_end_success = sum(
                     1 for r in ledger.values() if r["status"] == "success")
-                gained = pass_end_success - pass_start_success
                 still_missing = expected_total - pass_end_success
 
                 if still_missing <= 0:
                     break
 
-                if youtube_blocked:
-                    reporter.say(note_line(
-                        "YouTube is rate-limiting this connection, switching "
-                        "retries to other providers", "⏳"))
-
                 if pass_num < self.max_passes:
                     cooldown = (self.blocked_cooldown_seconds
                                 if youtube_blocked
                                 else self.pass_cooldown_seconds)
-                    reporter.say(note_line(
-                        f"{still_missing} left after pass {pass_num} "
-                        f"(+{gained} recovered) · retrying in {cooldown}s"))
                     _jitter_sleep(cooldown, cooldown + 3)
         finally:
             reporter.stop()

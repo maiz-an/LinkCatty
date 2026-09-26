@@ -3,9 +3,9 @@
 Other Downloader - paste any video or playlist link.
 
 Same look and failure handling as the Spotify downloader: header, info
-panel, one live progress bar, classified errors, multi-pass retries with
+panel, one live progress bar, classified errors, silent multi-pass retries with
 cooldowns, a resumable ledger (playlists) and a failed-items report.
-Site profiles (ph.py, xm.py) only supply URL matching / member login.
+universal.py only supplies the redirect hints and the member login.
 """
 import json
 import os
@@ -21,11 +21,12 @@ from utils.config import is_block_error, run_with_proxy_fallback
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
-    DownloadProgress, SilentLogger,
-    ask_retry_vpn, ask_url, card, confirm, explain_error, format_bytes,
-    format_count, format_duration, format_eta, item_line, pause,
-    note_line, plan_line, print_error, print_info, print_warning, result_card,
-    section_header, start_spinner, stop_spinner, strip_ansi,
+    DownloadProgress, ERROR_LABELS, SHORT_REASONS, SilentLogger,
+    apply_strategy, ask_retry_vpn, ask_url, card, classify_error, confirm,
+    explain_error, final_path, format_bytes, format_count, format_duration,
+    format_eta, is_final_failure, item_line, pause, plan_line, print_error,
+    print_info, print_warning, result_card, scrub_error, section_header,
+    show_failure_now, start_spinner, stop_spinner, strategy_for_pass,
 )
 
 _SECTION = "🌐 Other Downloader"
@@ -86,103 +87,8 @@ def _display_result(kind: str, name, out_folder: str, result: dict) -> None:
         print_error(message, hint)
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  Error classification
-# ─────────────────────────────────────────────────────────────────────
-
-_ERROR_LABELS = {
-    "login":        "Members-only content (login required)",
-    "blocked":      "Blocked by your network (connection reset)",
-    "network":      "Network / timeout error",
-    "rate_limited": "Rate-limited or refused by the site",
-    "unavailable":  "Video removed, private, or region-locked",
-    "unsupported":  "Link not supported",
-    "format":       "Requested quality not available",
-    "disk":         "Disk full or folder not writable",
-    "other":        "Other / unclassified error",
-}
-
-# Retrying these with the same setup cannot help; they wait for the user
-# (login / VPN) or are simply final.
-_NON_RETRYABLE = {"login", "blocked", "unavailable", "unsupported", "disk"}
-
-
-def _scrub(exc) -> str:
-    """Error text without color codes, extractor tag, id prefix or URLs."""
-    text = strip_ansi(str(exc)).strip()
-    text = re.sub(r"^ERROR:\s*", "", text)
-    text = re.sub(r"^\[[^\]]+\]\s*\S+:\s*", "", text)
-    return re.sub(r"https?://\S+", "", text)
-
-
-def _classify_error(message: str) -> str:
-    msg = (message or "").lower()
-    if any(t in msg for t in ("no space left", "disk full", "permission denied",
-                              "access is denied", "errno 28")):
-        return "disk"
-    if any(t in msg for t in ("premium", "sign in", "log in", "login",
-                              "members only", "members-only", "subscribe")):
-        return "login"
-    if "unsupported url" in msg:
-        return "unsupported"
-    if any(t in msg for t in ("too many requests", "rate limit", "captcha",
-                              "forbidden")) or re.search(r"\b(429|403)\b", msg):
-        return "rate_limited"
-    if any(t in msg for t in ("requested format is not available",
-                              "no video formats found")):
-        return "format"
-    if any(t in msg for t in ("video unavailable", "has been removed", "removed",
-                              "not found", "does not exist", "no longer available",
-                              "deleted", "private video",
-                              "not available in your country")) \
-            or re.search(r"\b404\b", msg):
-        return "unavailable"
-    if any(t in msg for t in ("connection was reset", "connection reset",
-                              "forcibly closed", "curl: (35)", "curl: (7)",
-                              "connection refused", "failed to connect",
-                              "connection aborted", "remote end closed")) \
-            or re.search(r"\bssl|\b10054\b", msg):
-        return "blocked"
-    if any(t in msg for t in ("timed out", "timeout", "temporary failure",
-                              "name or service not known", "getaddrinfo",
-                              "network is unreachable", "incompleteread",
-                              "connection broken", "bytes read",
-                              "more expected")):
-        return "network"
-    return "other"
-
-
-# Short reason shown on the per-video line while a run is in progress.
-_SHORT_REASONS = {
-    "login":        "login required",
-    "blocked":      "blocked by your network",
-    "network":      "network / timeout error",
-    "rate_limited": "rate-limited by the site",
-    "unavailable":  "removed, private, or region-locked",
-    "unsupported":  "link not supported",
-    "format":       "quality not available",
-    "disk":         "disk or folder error",
-    "other":        "download error",
-}
-
-
-# ─────────────────────────────────────────────────────────────────────
-#  Adaptive retry-pass strategy
-#
-#  Pass 1: normal settings. Later passes get more patience, then a relaxed
-#  quality fallback over IPv4, for whatever is STILL missing.
-# ─────────────────────────────────────────────────────────────────────
-
-_PASS_STRATEGIES = [
-    # (label, relaxed_quality, retries, socket_timeout, force_ipv4)
-    ("standard", False, 3, 20, False),
-    ("patient",  False, 8, 45, False),
-    ("relaxed",  True, 10, 60, True),
-]
-
-
-def _strategy_for_pass(pass_num: int) -> tuple:
-    return _PASS_STRATEGIES[min(pass_num - 1, len(_PASS_STRATEGIES) - 1)]
+# Error classification, the silent retry policy and the pass strategies are
+# shared with the other downloaders (utils/ui.py).
 
 
 def _format_selector(quality: str, relaxed: bool) -> str:
@@ -266,7 +172,7 @@ def _write_failed_report(out_dir: str, name, failed: list, expected: int,
             f.write("-" * 60 + "\n")
         f.write("Per-video detail:\n\n")
         for rec in failed:
-            cause = _ERROR_LABELS.get(rec.get("error_type"), "Other / unclassified error")
+            cause = ERROR_LABELS.get(rec.get("error_type"), "Other / unclassified error")
             f.write(f"{rec['url']}\n")
             f.write(f"    {rec.get('title') or 'Unknown title'}\n")
             f.write(f"    Cause      : {cause}\n")
@@ -280,7 +186,7 @@ def _write_failed_report(out_dir: str, name, failed: list, expected: int,
             "report, so finished videos are skipped and only the videos listed\n"
             "above are retried.\n"
         )
-        if _ERROR_LABELS["blocked"] in breakdown:
+        if ERROR_LABELS["blocked"] in breakdown:
             f.write(
                 "\nSome failures were your network cutting the connection. Turn on\n"
                 "your VPN (or set a proxy in Settings > Network proxy) and run the\n"
@@ -356,17 +262,8 @@ class _Session:
 #  Core download engine (ledger-driven, multi-pass, adaptive)
 # ─────────────────────────────────────────────────────────────────────
 
-def _final_path(info):
-    if not isinstance(info, dict):
-        return None
-    for item in info.get("requested_downloads") or []:
-        if item.get("filepath"):
-            return item["filepath"]
-    return info.get("filepath") or info.get("_filename")
-
-
 def _download_one(url, out_dir, quality, strategy, session, progress):
-    _label, relaxed, retries, timeout, ipv4 = strategy
+    relaxed = strategy[1]
 
     def go(px):
         opts = session.ydl_options(px)
@@ -375,14 +272,10 @@ def _download_one(url, out_dir, quality, strategy, session, progress):
             "format": _format_selector(quality, relaxed),
             "merge_output_format": "mp4",
             "noplaylist": True,
-            "retries": retries,
-            "fragment_retries": retries,
-            "socket_timeout": timeout,
             "progress_hooks": [progress.hook],
             "postprocessor_hooks": [progress.pp_hook],
         })
-        if ipv4:
-            opts["source_address"] = "0.0.0.0"
+        apply_strategy(opts, strategy)
         with YoutubeDL(opts) as ydl:
             return ydl.extract_info(url, download=True)
 
@@ -390,7 +283,7 @@ def _download_one(url, out_dir, quality, strategy, session, progress):
 
 
 def _attempt_entry(key, out_dir, quality, strategy, session, progress,
-                   ledger, persist, multi, index, count):
+                   ledger, persist, multi, position, count, attempt, last_pass):
     rec = ledger[key]
     title = rec.get("title") or key
     rec["attempts"] += 1
@@ -403,18 +296,18 @@ def _attempt_entry(key, out_dir, quality, strategy, session, progress,
     except KeyboardInterrupt:
         raise
     except Exception as exc:
-        scrubbed = _scrub(exc)
-        kind = _classify_error(scrubbed)
+        scrubbed = scrub_error(exc)
+        kind = classify_error(scrubbed)
         message, hint = explain_error(exc, session.config)
         rec.update(status="failed", last_error=message, hint=hint,
                    error_type=kind, reach_error=is_block_error(scrubbed),
-                   final=kind in _NON_RETRYABLE)
+                   final=is_final_failure(kind, attempt))
         progress.item_reset()
-        if multi:
-            progress.say(item_line(False, index, count, title,
-                                   _SHORT_REASONS.get(kind, _SHORT_REASONS["other"])))
+        if multi and show_failure_now(kind, last_pass):
+            progress.say(item_line(False, position, count, title,
+                                   SHORT_REASONS.get(kind, SHORT_REASONS["other"])))
     else:
-        path = _final_path(info)
+        path = final_path(info)
         rec.update(status="success", last_error=None, hint=None,
                    error_type=None, reach_error=False, final=False, file=path)
         if isinstance(info, dict) and info.get("title") and not rec.get("title"):
@@ -424,7 +317,7 @@ def _attempt_entry(key, out_dir, quality, strategy, session, progress,
             size = ""
             if path and os.path.exists(path):
                 size = format_bytes(os.path.getsize(path))
-            progress.say(item_line(True, index, count, title, size))
+            progress.say(item_line(True, position, count, title, size))
     if persist:
         _save_ledger(out_dir, ledger)
 
@@ -461,27 +354,29 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
         _save_ledger(out_dir, ledger)
 
     already = _count_success(ledger, keys)
-    plan_line(_quality_label(quality), f"up to {max_passes} retry passes",
+    position = {k: i for i, k in enumerate(keys, 1)}
+    plan_line(_quality_label(quality),
               f"resuming, {already}/{total} done" if already else None)
 
     started = time.time()
 
     def run_round():
-        progress = DownloadProgress(f"Pass 1/{max_passes}", total)
+        progress = DownloadProgress("Downloading", total)
         progress.done_items = _count_success(ledger, keys)
         progress.start()
+        limit, pass_num = max_passes, 0
         try:
-            for pass_num in range(1, max_passes + 1):
+            while pass_num < limit:
+                pass_num += 1
                 pending = [k for k in keys if _needs_work(ledger[k])]
                 if not pending:
                     break
-                strategy = _strategy_for_pass(pass_num)
-                progress.set_label(f"Pass {pass_num}/{max_passes}")
-                start_success = _count_success(ledger, keys)
-                for index, key in enumerate(pending, 1):
+                strategy = strategy_for_pass(pass_num)
+                for key in pending:
                     _attempt_entry(key, out_dir, quality, strategy, session,
                                    progress, ledger, persist, multi,
-                                   index, len(pending))
+                                   position[key], total, pass_num,
+                                   pass_num == limit)
 
                 # member content: offer the browser-cookie login once
                 login_failed = [k for k in keys
@@ -495,40 +390,32 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
                             if session.login():
                                 for k in login_failed:
                                     ledger[k].update(status="pending", final=False)
+                                limit = max(limit, pass_num + 1)   # one pass with the cookies
                             else:
                                 print_error("No cookies available.",
                                             "Log in to the site in your browser first.")
                         else:
                             session.login_tried = True
 
-                end_success = _count_success(ledger, keys)
-                gained = end_success - start_success
-                still_missing = total - end_success
-                if still_missing <= 0:
-                    break
                 if not [k for k in keys if _needs_work(ledger[k])]:
                     break
-                if pass_num < max_passes:
+                if pass_num < limit:
                     rate_limited = any(
                         ledger[k].get("error_type") == "rate_limited"
                         for k in keys if _needs_work(ledger[k]))
                     wait = rate_cooldown if rate_limited else cooldown
-                    if rate_limited:
-                        progress.say(note_line("The site is rate-limiting this "
-                                               "connection, waiting longer", "⏳"))
-                    progress.say(note_line(
-                        f"{still_missing} left after pass {pass_num} "
-                        f"(+{gained} recovered) · retrying in {wait}s"))
                     if wait:
                         time.sleep(random.uniform(wait, wait + 3))
         finally:
             progress.stop()
 
     while True:
+        before = _count_success(ledger, keys)
         run_round()
         failed_keys = [k for k in keys if ledger[k]["status"] != "success"]
         reach = [k for k in failed_keys if ledger[k].get("reach_error")]
-        if reach and ask_retry_vpn():
+        # a real block stops everything; a single flaky video does not
+        if reach and _count_success(ledger, keys) == before and ask_retry_vpn():
             for k in reach:
                 ledger[k].update(status="pending", final=False)
             continue
@@ -538,8 +425,8 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
     failed = [ledger[k] for k in keys if ledger[k]["status"] != "success"]
     breakdown = {}
     for rec in failed:
-        label = _ERROR_LABELS.get(rec.get("error_type") or "other",
-                                  _ERROR_LABELS["other"])
+        label = ERROR_LABELS.get(rec.get("error_type") or "other",
+                                  ERROR_LABELS["other"])
         breakdown[label] = breakdown.get(label, 0) + 1
 
     failed_report = None
@@ -613,8 +500,8 @@ def _fetch_with_recovery(url: str, session: _Session):
             raise
         except Exception as exc:
             stop_spinner()
-            scrubbed = _scrub(exc)
-            if _classify_error(scrubbed) == "login" and session.can_login():
+            scrubbed = scrub_error(exc)
+            if classify_error(scrubbed) == "login" and session.can_login():
                 print_warning("This content requires an account login.")
                 if confirm("Try with your browser cookies (you must be logged in)?"):
                     if session.login():

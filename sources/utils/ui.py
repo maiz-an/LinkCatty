@@ -331,6 +331,153 @@ def ask_retry_vpn():
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  Silent retry policy (shared by every yt-dlp based downloader)
+#
+#  Retries happen in the background: the user never sees pass numbers or
+#  "retrying in Ns" notices, only finished items, the one live bar and, at
+#  the end, a result card that lists what could not be downloaded.
+# ─────────────────────────────────────────────────────────────────────
+
+ERROR_LABELS = {
+    "login":        "Members-only content (login required)",
+    "blocked":      "Blocked by your network (connection reset)",
+    "network":      "Network / timeout error",
+    "rate_limited": "Rate-limited or refused by the site",
+    "unavailable":  "Video removed, private, or region-locked",
+    "upcoming":     "Not released yet (premiere or live)",
+    "unsupported":  "Link not supported",
+    "format":       "Requested quality not available",
+    "disk":         "Disk full or folder not writable",
+    "other":        "Other / unclassified error",
+}
+
+SHORT_REASONS = {
+    "login":        "login required",
+    "blocked":      "blocked by your network",
+    "network":      "network / timeout error",
+    "rate_limited": "rate-limited by the site",
+    "unavailable":  "removed, private, or region-locked",
+    "upcoming":     "not released yet",
+    "unsupported":  "link not supported",
+    "format":       "quality not available",
+    "disk":         "disk or folder error",
+    "other":        "download error",
+}
+
+# Retrying with the same setup cannot help: these are final, or they wait
+# for the user (login prompt / VPN prompt after the round).
+NON_RETRYABLE = {"login", "unavailable", "upcoming", "unsupported", "disk"}
+
+# Kinds whose outcome is decided after the round (login / VPN prompt), so no
+# per-item failure line is printed for them.
+_DEFERRED_KINDS = {"login", "blocked"}
+_FINAL_NOW_KINDS = {"unavailable", "upcoming", "unsupported", "disk"}
+
+# (label, relaxed_quality, retries, socket_timeout, force_ipv4)
+PASS_STRATEGIES = [
+    ("standard", False, 3, 20, False),
+    ("patient",  False, 8, 45, False),
+    ("relaxed",  True, 10, 60, True),
+]
+
+
+def strategy_for_pass(pass_num):
+    return PASS_STRATEGIES[min(max(pass_num, 1) - 1, len(PASS_STRATEGIES) - 1)]
+
+
+def apply_strategy(options, strategy):
+    """Patience settings of a retry pass, applied to yt-dlp options."""
+    _label, _relaxed, retries, timeout, ipv4 = strategy
+    options.update({"retries": retries, "fragment_retries": retries,
+                    "socket_timeout": timeout})
+    if ipv4:
+        options["source_address"] = "0.0.0.0"
+    return options
+
+
+def is_final_failure(kind, attempt):
+    """True when another pass cannot help. A connection reset gets one more
+    pass first (it is often a flaky link), then the VPN prompt takes over."""
+    if kind == "blocked":
+        return attempt >= 2
+    return kind in NON_RETRYABLE
+
+
+def show_failure_now(kind, last_pass):
+    """Whether a failed item deserves its own line right now. Retryable
+    failures stay silent until the last pass; login/VPN cases until the
+    prompt has been answered."""
+    if kind in _FINAL_NOW_KINDS:
+        return True
+    return last_pass and kind not in _DEFERRED_KINDS
+
+
+def scrub_error(exc):
+    """Error text without color codes, extractor tag, id prefix or URLs."""
+    text = strip_ansi(str(exc)).strip()
+    text = re.sub(r"^ERROR:\s*", "", text)
+    text = re.sub(r"^\[[^\]]+\]\s*\S+:\s*", "", text)
+    return _URL.sub("", text)
+
+
+def classify_error(message):
+    msg = (message or "").lower()
+    if any(t in msg for t in ("no space left", "disk full", "permission denied",
+                              "access is denied", "errno 28")):
+        return "disk"
+    if any(t in msg for t in ("premieres in", "will begin in", "live event will",
+                              "upcoming")):
+        return "upcoming"
+    if any(t in msg for t in ("private video", "video unavailable",
+                              "has been removed", "removed by the uploader",
+                              "account associated with this video has been terminated",
+                              "copyright", "not available in your country",
+                              "blocked it in your country", "who has blocked it",
+                              "this video is not available", "video is unavailable",
+                              "not made this video available",
+                              "no longer available", "does not exist")):
+        return "unavailable"
+    if any(t in msg for t in ("premium", "sign in", "log in", "login",
+                              "members only", "members-only", "subscribe",
+                              "join this channel")):
+        return "login"
+    if "unsupported url" in msg:
+        return "unsupported"
+    if any(t in msg for t in ("too many requests", "rate limit", "captcha",
+                              "forbidden")) or re.search(r"\b(429|403)\b", msg):
+        return "rate_limited"
+    if any(t in msg for t in ("requested format is not available",
+                              "no video formats found")):
+        return "format"
+    if any(t in msg for t in ("removed", "not found", "deleted",
+                              "private")) or re.search(r"\b404\b", msg):
+        return "unavailable"
+    if any(t in msg for t in ("connection was reset", "connection reset",
+                              "forcibly closed", "curl: (35)", "curl: (7)",
+                              "connection refused", "failed to connect",
+                              "connection aborted", "remote end closed")) \
+            or re.search(r"\bssl|\b10054\b", msg):
+        return "blocked"
+    if any(t in msg for t in ("timed out", "timeout", "temporary failure",
+                              "name or service not known", "getaddrinfo",
+                              "network is unreachable", "incompleteread",
+                              "connection broken", "bytes read",
+                              "more expected", "unable to download")):
+        return "network"
+    return "other"
+
+
+def final_path(info):
+    """The finished file of a yt-dlp extract_info(download=True) result."""
+    if not isinstance(info, dict):
+        return None
+    for item in info.get("requested_downloads") or []:
+        if item.get("filepath"):
+            return item["filepath"]
+    return info.get("filepath") or info.get("_filename")
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  Formatting helpers
 # ─────────────────────────────────────────────────────────────────────
 
