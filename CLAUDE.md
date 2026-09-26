@@ -20,7 +20,7 @@ LinkCatty/
 │   │   ├── ph.py                # site profile: URL match + member login via browser cookies
 │   │   └── xm.py                # site profile: URL match
 │   ├── utils/
-│   │   ├── ui.py               # All CLI output helpers + ANSI colors
+│   │   ├── ui.py               # UI kit (header, menu, cards, progress bar) + CLI helpers
 │   │   ├── config.py           # JSON settings load/save
 │   │   ├── logger.py           # download_history.json
 │   │   └── ffmpeg.py           # FFmpeg path resolver
@@ -33,20 +33,31 @@ LinkCatty/
 └── CLAUDE.md
 ```
 
-## UI Conventions (sources/utils/ui.py)
-- All menus: `print_banner()` → section header → numbered options → `menu_choice()`
-- Colors: `CYAN+BOLD` for option numbers, `GREEN` for success, `RED` for error, `YELLOW` for warnings
-- Console width: fixed 62 columns (`set_console_width(62)`)
-- `menu_choice(prompt, valid_chars)` — single-key input, returns string or None on Ctrl+C
-- `confirm(prompt)` — y/n single-key
-- `pause()` — press Enter to continue
-- `start_spinner()` / `stop_spinner()` — animated progress indicator
-- Always `clear_screen()` + `print_banner()` at the start of each downloader sub-menu
-- Progress: use `DownloadProgress` (one live bar; `.hook` / `.pp_hook` for yt-dlp, `.say()` to print above the bar, `.paused()` around prompts)
+## UI Conventions (sources/utils/ui.py is the UI kit)
+Every downloader (YouTube, Spotify, Other) draws its screens with the shared kit, so all of them look and behave the same. To restyle, change `ui.py` and every downloader follows. Never hand-print layouts (rules, boxes, `\r` progress) inside a downloader. The kit lives in `ui.py` on purpose: a new source file would be missing for users updating from an older launcher.
+
+| Component | Use |
+|---|---|
+| `section_header(title)` | clear screen + banner + centered title. Call it again after a run so the screen shows just header + result |
+| `show_menu(title, options)` | numbered sub-menu; returns the chosen key (last option = Back) |
+| `ask_url(what)` | the URL prompt: `🎯 Enter <what> URL (blank to go back):` |
+| `card(title, rows, icon, details)` | info card (`┌ │ └`, dim aligned labels, optional bullets) |
+| `result_card(status, headline, rows, details, footer)` | end-of-run summary; status `ok` / `warn` / `fail`; `details` = cause bullets, `footer` = e.g. the Report path |
+| `plan_line(*parts)` | one dim line above the bar: what is about to run |
+| `item_line(ok, i, n, title, detail)` / `note_line(text, icon)` | per-item and retry/cooldown lines, printed with `progress.say()` |
+| `DownloadProgress(label, total, unit, count_fn)` | ONE live, width-aware bar. Feed it with yt-dlp hooks (`.hook`, `.pp_hook`) or `count_fn` (e.g. files on disk); `.say()` prints above the bar, `.paused()` wraps prompts; `.final_path` is the finished file |
+| `fit` / `fit_tail` / `display_width` | column-aware shortening (`fit_tail` keeps the END, used automatically for path values) |
+
+The flow every downloader follows: menu or URL prompt -> spinner -> header + info card -> `confirm("Proceed with download?", default=True)` (Enter = yes) -> plan line + live bar -> clear -> header + result card -> `Process another link?`.
+
+Other rules:
+- Menus keep `CYAN+BOLD` numbers; console width is fixed at 62 columns (`set_console_width(62)`) and the bar adapts to it, never wrap
+- `menu_choice(prompt, valid_chars)` single-key input (None on Ctrl+C); `confirm(prompt, default)` y/n; `pause()`; `start_spinner()` / `stop_spinner()` for the fetch step
+- There is no per-downloader "quiet mode": yt-dlp output is always replaced by the bar
 - yt-dlp in downloaders: pass `"logger": SilentLogger()` and show failures via `explain_error(exc, config)` (returns `(message, hint)`; the hint tells the user how to set the proxy when a block is detected); never print raw yt-dlp errors, they leak extractor names like `[SiteName]`. In a real terminal yt-dlp wraps `ERROR:` in ANSI color codes, which broke prefix stripping once; `explain_error` strips ANSI first, and tests must force `"color": {"stderr": "always"}` (redirected output has no colors and hides the bug). After a blocked-connection error, call `offer_retry_after_block(exc)` so the user can turn on a VPN and press Enter to retry (it only prompts for block-type errors)
 
 ## Adding a New Downloader (Other Downloader sites)
-`other_downloader.py` owns the whole flow (info panel, single live progress bar, classified errors, multi-pass retries with cooldowns, ledger/report for playlists, VPN retry prompt, workflow guard). A site file is only a small **profile**:
+`other_downloader.py` owns the whole flow (info card, single live progress bar, classified errors, multi-pass retries with cooldowns, ledger/report for playlists, VPN retry prompt, workflow guard). A site file is only a small **profile**:
 1. Create `sources/downloaders/<site>.py` with `KEY = "<short code>"` and `matches(url) -> bool`
 2. Optional: `login_options(config, proxy=None) -> dict | None` returning extra yt-dlp options (e.g. browser cookies); the engine calls it once when a login-class error appears
 3. Add the module to `_SITES` in `other_downloader.py`, and to the four file lists (see the checklist below)

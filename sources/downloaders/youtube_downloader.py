@@ -1,11 +1,11 @@
 import re
-import sys
 import time
 import json
 import threading
 import os
+from collections import Counter
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from yt_dlp import YoutubeDL
@@ -13,77 +13,51 @@ from yt_dlp import YoutubeDL
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
-    BOLD,
-    CYAN,
-    GREEN,
-    YELLOW,
-    RESET,
-    clear_screen,
+    DownloadProgress,
+    SilentLogger,
+    ask_url,
+    card,
     confirm,
-    menu_choice,
+    fit,
+    format_bytes,
+    format_count,
+    format_duration,
+    format_eta,
+    item_line,
+    note_line,
     pause,
-    print_banner,
+    plan_line,
     print_error,
     print_info,
-    print_success,
     print_warning,
+    result_card,
+    section_header,
+    show_menu,
     start_spinner,
     stop_spinner,
+    strip_ansi,
 )
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Formatting helpers
+#  Small helpers
 # ─────────────────────────────────────────────────────────────────────
 
-def format_duration(seconds):
-    if not seconds:
-        return "Unknown"
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes:02d}:{seconds:02d}"
+def _clean_error(error):
+    """yt-dlp error text without color codes or the ERROR: prefix."""
+    text = strip_ansi(str(error)).strip()
+    text = re.sub(r"^ERROR:\s*", "", text)
+    return text.split("; please report")[0].strip()
 
 
-def format_view_count(count):
-    if not count:
-        return "Unknown"
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}K"
-    return str(count)
-
-
-def _format_bytes(num_bytes):
-    if not num_bytes:
-        return "Unknown"
-    for unit in ("B", "KB", "MB", "GB"):
-        if num_bytes < 1024:
-            return f"{num_bytes:.2f} {unit}"
-        num_bytes /= 1024
-    return f"{num_bytes:.2f} TB"
-
-
-def _format_eta(seconds):
-    if seconds is None or seconds < 0:
-        return "—"
-    try:
-        return str(timedelta(seconds=int(seconds)))
-    except Exception:
-        return "—"
-
-
-def _format_elapsed(seconds):
-    seconds = int(seconds)
-    if seconds < 60:
-        return f"{seconds}s"
-    m, s = divmod(seconds, 60)
-    if m < 60:
-        return f"{m}m {s:02d}s"
-    h, m = divmod(m, 60)
-    return f"{h}h {m:02d}m {s:02d}s"
+def _short_reason(error, width=34):
+    """A short, single-line reason for a failed video."""
+    text = re.sub(r"^\[[^\]]+\]\s*[\w-]+:\s*", "", _clean_error(error))
+    text = re.sub(r"\s*\(caused by .*$", "", text).replace("<", "").replace(">", "")
+    if len(text) > width and ": " in text:
+        text = text.rsplit(": ", 1)[-1]          # the specific cause is last
+    text = text.split(". ")[0]                    # first sentence only
+    return fit(text or "download error", width)
 
 
 def is_youtube_url(url):
@@ -101,15 +75,6 @@ def get_video_format(video_quality):
         "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]",
     }
     return quality_map.get(video_quality, "bestvideo+bestaudio/best")
-
-
-def _show_session_header(section_title: str) -> None:
-    """Redraw the banner + section title so an info panel isn't stacked
-    under the numbered menu the user already picked from."""
-    clear_screen()
-    print_banner()
-    print(f"{BOLD}                   {section_title}{RESET}")
-    print("=" * 61)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -153,15 +118,15 @@ def get_browser_cookie_option(force_retry: bool = False):
 #  yt-dlp option builder
 # ─────────────────────────────────────────────────────────────────────
 
-def build_download_options(output_dir, mode, config, quiet_progress=False):
+def build_download_options(output_dir, mode, config, progress=None):
     youtube_config = config["youtube"]
-    quiet = youtube_config.get("quiet_mode", True)
 
     options = {
         "outtmpl": str(Path(output_dir) / "%(title)s - %(uploader)s.%(ext)s"),
-        "quiet": quiet,
-        "no_warnings": quiet,
-        "noprogress": quiet_progress or False,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "logger": SilentLogger(),
         "retries": int(youtube_config.get("max_retries", 3)),
         "ignoreerrors": False,
 
@@ -175,8 +140,9 @@ def build_download_options(output_dir, mode, config, quiet_progress=False):
         "embedthumbnail":    bool(youtube_config.get("embed_thumbnail", False)),
     }
 
-    if not quiet_progress and not quiet:
-        options["progress_hooks"] = [progress_hook]
+    if progress is not None:
+        options["progress_hooks"] = [progress.hook]
+        options["postprocessor_hooks"] = [progress.pp_hook]
 
     if mode == "1":
         options.update({
@@ -200,62 +166,26 @@ def build_download_options(output_dir, mode, config, quiet_progress=False):
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Progress hook (sequential mode only)
+#  Single-video download (used by the single-video flow)
 # ─────────────────────────────────────────────────────────────────────
 
-_download_completed_shown = False
+def _say(progress, message):
+    if progress is not None:
+        progress.say(message)
+    else:
+        print(message)
 
 
-def progress_hook(data):
-    global _download_completed_shown
-    if data["status"] == "downloading" and "_percent_str" in data:
-        percent = data["_percent_str"].strip()
-        speed = data.get("_speed_str", "N/A").strip()
-        eta = data.get("_eta_str", "N/A").strip()
-        total_size = data.get("_total_bytes_str", "N/A").strip()
-        downloaded = data.get("_downloaded_bytes_str", "N/A").strip()
-        sys.stdout.write(
-            f"\r⏳ Downloading... {percent} | {downloaded}/{total_size} "
-            f"| Speed: {speed} | ETA: {eta}"
-        )
-        sys.stdout.flush()
-    elif data["status"] == "finished" and not _download_completed_shown:
-        _download_completed_shown = True
-        info = data.get("info_dict") or {}
-        if info.get("__quiet_box__"):
-            print()
-            return
-        filepath = data.get("filepath", "Unknown")
-        time.sleep(0.5)
-        if filepath and filepath != "Unknown" and Path(filepath).exists():
-            path = Path(filepath).absolute()
-            try:
-                size_mb = path.stat().st_size / (1024 * 1024)
-            except OSError:
-                size_mb = 0
-            print("\n" + "═" * 55)
-            print("            ✅ DOWNLOAD COMPLETED")
-            print("═" * 55)
-            print(f"📄 File name: {path.name}")
-            print(f"📂 Location: {path.parent}")
-            print(f"💾 File size: {size_mb:.2f} MB")
-            print(f"⏰ Completed at: {time.strftime('%H:%M:%S')}")
-            print("═" * 55 + "\n")
-        else:
-            print("\n✅ Download completed successfully\n")
+def _cookie_option(progress):
+    """get_browser_cookie_option() asks the user something, so pause the bar."""
+    if progress is None:
+        return get_browser_cookie_option()
+    with progress.paused():
+        return get_browser_cookie_option()
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  Single-video download (used by single-video flow + manual format)
-# ─────────────────────────────────────────────────────────────────────
-
-def download_single_video(video_url, output_dir, mode, config, quiet_box=False):
-    global _download_completed_shown
-    _download_completed_shown = False
-    options = build_download_options(output_dir, mode, config,
-                                     quiet_progress=quiet_box)
-    if quiet_box:
-        options["__quiet_box__"] = True
+def download_single_video(video_url, output_dir, mode, config, progress=None):
+    options = build_download_options(output_dir, mode, config, progress)
 
     if _COOKIE_OPTION is not None:
         options["cookiesfrombrowser"] = _COOKIE_OPTION
@@ -265,24 +195,27 @@ def download_single_video(video_url, output_dir, mode, config, quiet_box=False):
             ydl.download([video_url])
         return True, None
     except Exception as error:
-        error_message = str(error)
+        error_message = _clean_error(error)
         if "Sign in to confirm" not in error_message and "bot" not in error_message:
             return False, error_message
         if _COOKIE_ATTEMPTED and _COOKIE_OPTION is None:
             return False, ("Blocked (sign-in required) — no working browser "
                            "cookies found earlier this session.")
-        print_warning("Direct download blocked. Trying browser cookies.")
+        _say(progress, note_line(
+            "YouTube asked for a sign-in, trying your browser cookies", "🍪"))
 
-    cookie_option = get_browser_cookie_option()
+    cookie_option = _cookie_option(progress)
     if not cookie_option:
         return False, "No working browser cookies. Try logging into YouTube in your browser."
     options["cookiesfrombrowser"] = cookie_option
+    if progress is not None:
+        progress.item_reset()
     try:
         with YoutubeDL(options) as ydl:
             ydl.download([video_url])
         return True, None
     except Exception as error:
-        return False, str(error)
+        return False, _clean_error(error)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -295,9 +228,9 @@ def get_url_info(url):
             info = ydl.extract_info(url, download=False)
         return parse_info(info)
     except Exception as error:
-        error_message = str(error)
+        error_message = _clean_error(error)
         if "Sign in to confirm" not in error_message and "bot" not in error_message:
-            print_error(f"Could not fetch info: {error}",
+            print_error(f"Could not fetch info: {_short_reason(error, 120)}",
                         "Check your internet connection and URL.")
             return None
         print_warning("Info fetch blocked. Trying browser cookies.")
@@ -312,7 +245,7 @@ def get_url_info(url):
             info = ydl.extract_info(url, download=False)
         return parse_info(info)
     except Exception as error:
-        print_error(f"Could not fetch info with cookies: {error}")
+        print_error(f"Could not fetch info with cookies: {_short_reason(error, 100)}")
         return None
 
 
@@ -341,34 +274,28 @@ def parse_info(info):
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Display panels
+#  Display panels (drawn with the shared UI kit)
 # ─────────────────────────────────────────────────────────────────────
 
 def display_video_info(info):
-    print("\n" + "─" * 61)
-    print("📹 VIDEO INFORMATION")
-    print("─" * 61)
-    print(f"📺 Title: {info['title']}")
-    print(f"👤 Channel: {info['uploader']}")
-    print(f"⏱️ Duration: {format_duration(info['duration'])}")
-    print(f"👀 Views: {format_view_count(info['view_count'])}")
-    upload_date = info.get("upload_date")
-    if upload_date and len(upload_date) >= 8:
-        print(f"📅 Upload date: {upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}")
-    print("─" * 61)
+    date = info.get("upload_date") or ""
+    uploaded = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) >= 8 else None
+    card("VIDEO", [
+        ("Title", info["title"]),
+        ("Channel", info["uploader"]),
+        ("Duration", format_duration(info["duration"])),
+        ("Views", format_count(info["view_count"])),
+        ("Uploaded", uploaded),
+    ], icon="📹")
 
 
 def display_playlist_info(info):
-    print("\n" + "─" * 61)
-    print("📂 PLAYLIST INFORMATION")
-    print("─" * 61)
-    print(f"📺 Playlist: {info['title']}")
-    print(f"👤 Channel: {info['uploader']}")
-    print(f"🎬 Total Videos: {info['video_count']}")
-    print("\n📹 First few videos:")
-    for index, title in enumerate(info["videos"], 1):
-        print(f"  {index}. {title[:50]}")
-    print("─" * 61)
+    card("PLAYLIST", [
+        ("Name", info["title"]),
+        ("Channel", info["uploader"]),
+        ("Videos", info["video_count"]),
+    ], icon="📂",
+        details=[f"{index}. {title}" for index, title in enumerate(info["videos"], 1)])
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -463,73 +390,6 @@ def _latest_media_file(folder, since_ts):
     return newest
 
 
-class _ProgressReporter:
-    """Single-line progress bar with ETA — Spotify-style."""
-
-    BAR_WIDTH = 40
-
-    def __init__(self, folder, total, label):
-        self.folder = folder
-        self.total  = max(int(total), 1)
-        self.label  = label
-        self._start = time.time()
-        self._stop  = threading.Event()
-        self._thread = None
-        self._lock  = threading.Lock()
-        self._last_len = 0
-
-    def start(self):
-        self._render()
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-
-    def stop(self):
-        self._stop.set()
-        if self._thread:
-            self._thread.join()
-        self._render()
-        with self._lock:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-
-    def set_label(self, label):
-        with self._lock:
-            self.label = label
-
-    def say(self, message):
-        with self._lock:
-            sys.stdout.write("\r" + " " * self._last_len + "\r")
-            sys.stdout.flush()
-            print(message)
-            self._last_len = 0
-
-    def _loop(self):
-        while not self._stop.wait(0.5):
-            self._render()
-
-    def _render(self):
-        count   = _count_audio_video_files(self.folder)
-        elapsed = max(time.time() - self._start, 0.001)
-        remaining = max(self.total - count, 0)
-        pct     = (count / self.total) * 100 if self.total else 0.0
-        filled  = int(self.BAR_WIDTH * count / self.total) if self.total else 0
-        filled  = max(0, min(self.BAR_WIDTH, filled))
-        bar     = "█" * filled + "░" * (self.BAR_WIDTH - filled)
-
-        eta_str = ""
-        if count > 0 and remaining > 0:
-            rate = count / elapsed
-            if rate > 0:
-                eta_str = f" · ETA {int(remaining / rate)}s"
-
-        line = f"{self.label} |{bar}| {pct:5.1f}% {count}/{self.total}{eta_str}"
-        with self._lock:
-            pad = max(0, self._last_len - len(line))
-            sys.stdout.write("\r" + line + (" " * pad))
-            sys.stdout.flush()
-            self._last_len = len(line)
-
-
 def _write_failed_report(folder, playlist_title, total, success_count, failed_entries):
     report_path = Path(folder) / "failed_downloads.txt"
     with open(report_path, "w", encoding="utf-8") as f:
@@ -575,10 +435,10 @@ def download_playlist(playlist_info, mode, config):
     if total == 0:
         print_error("Playlist has no downloadable videos.")
         return
-    print_success(f"Found {total} videos in playlist")
-    if not confirm(f"\n🚀 Download all {total} videos?"):
+    if not confirm(f"Download all {total} videos?", default=True):
         return
 
+    section_title = "📂 YouTube Downloader — Playlist"
     playlist_title = re.sub(r'[<>:"/\\|?*]', "_", full_info.get("title", "Playlist"))
     playlist_folder = Path(config["download_dir"]) / playlist_title
     try:
@@ -593,28 +453,12 @@ def download_playlist(playlist_info, mode, config):
     max_passes = int(youtube_config.get("max_retry_passes", 3))
     cooldown   = int(youtube_config.get("retry_delay_seconds", 8))
     parallel   = max(1, int(youtube_config.get("parallel_downloads", 3)))
-    mode_label = "video (best quality)" if mode == "1" else "audio (MP3)"
-
-    # ── startup summary (mirrors Spotify's panel) ───────────────────
-    print()
-    print("─" * 61)
-    print("📋 PLAYLIST DOWNLOAD PLAN")
-    print("─" * 61)
-    print(f"  🎬 Mode             : {mode_label}")
     if mode == "1":
-        print(f"  🎞️  Video quality    : "
-              f"{youtube_config.get('video_quality', 'best')}")
+        quality_label = f"Video {youtube_config.get('video_quality', 'best')}"
     else:
-        print(f"  🎵 Audio bitrate    : "
-              f"{youtube_config.get('audio_quality', '320k')}")
-    print(f"  📁 Output folder    : {playlist_folder}")
-    print(f"  ⚡ Parallel workers : {parallel} concurrent downloads")
-    print(f"  🔁 Retry passes     : {max_passes}")
-    if youtube_config.get("save_metadata", True):
-        print(f"  📝 Sidecar metadata : .info.json per video")
-    if youtube_config.get("save_thumbnail", True):
-        print(f"  🖼️  Thumbnails       : saved alongside each video")
-    print("─" * 61)
+        quality_label = f"MP3 {youtube_config.get('audio_quality', '320k')}"
+
+    plan_line(quality_label, f"{parallel} parallel", f"up to {max_passes} passes")
 
     # ── build / merge ledger ────────────────────────────────────────
     ledger = _load_ledger(playlist_folder)
@@ -627,8 +471,9 @@ def download_playlist(playlist_info, mode, config):
     _save_ledger(playlist_folder, ledger)
 
     # ── progress reporter ───────────────────────────────────────────
-    reporter = _ProgressReporter(playlist_folder, total,
-                                 f"⬇ Downloading 0/{total}")
+    reporter = DownloadProgress(
+        "Downloading", total, unit="videos",
+        count_fn=lambda: _count_audio_video_files(playlist_folder))
     reporter.start()
 
     started_at = time.time()
@@ -645,9 +490,7 @@ def download_playlist(playlist_info, mode, config):
             if not pending:
                 break
 
-            reporter.set_label(
-                f"⬇ Pass {attempt}/{max_passes} ({len(pending)} left)"
-            )
+            reporter.set_label(f"Pass {attempt}/{max_passes}")
 
             cookie_option = _COOKIE_OPTION
 
@@ -688,30 +531,24 @@ def download_playlist(playlist_info, mode, config):
                         size_str = ""
                         if written:
                             try:
-                                size_str = f" ({_format_bytes(written.stat().st_size)})"
+                                size_str = format_bytes(written.stat().st_size)
                             except OSError:
                                 pass
 
-                        print_success(
-                            f"[{completed}/{len(pending)}] ✓ "
-                            f"{title[:45]}{size_str}"
-                        )
+                        reporter.say(item_line(True, completed, len(pending),
+                                               title, size_str))
                         log_download("YouTube", title, mode=mode, status="Success")
                     else:
                         rec["status"] = "failed"
-                        rec["last_error"] = err or "Unknown error"
-                        print_error(
-                            f"[{completed}/{len(pending)}] ✗ "
-                            f"{title[:45]} — {(err or '')[:80]}"
-                        )
+                        rec["last_error"] = _clean_error(err or "Unknown error")
+                        reporter.say(item_line(False, completed, len(pending),
+                                               title, _short_reason(err)))
                         log_download("YouTube", title, mode=mode,
-                                     status="Failed", error=err or "")
+                                     status="Failed", error=rec["last_error"])
 
                     _save_ledger(playlist_folder, ledger)
                     reporter.set_label(
-                        f"⬇ Pass {attempt}/{max_passes} "
-                        f"({completed}/{len(pending)})"
-                    )
+                        f"Pass {attempt}/{max_passes} · {completed}/{len(pending)}")
                     reporter._render()
 
             success_count = sum(
@@ -733,51 +570,51 @@ def download_playlist(playlist_info, mode, config):
                 or "bot" in (f[2] or "").lower()
             ]
             if bot_failures and not _COOKIE_ATTEMPTED:
-                reporter.say(
-                    f"⚠️  {len(bot_failures)} video(s) hit a YouTube bot-check. "
-                    f"Trying browser cookies…"
-                )
-                get_browser_cookie_option()
+                reporter.say(note_line(
+                    f"{len(bot_failures)} video(s) hit a YouTube bot-check, "
+                    "trying your browser cookies", "🍪"))
+                with reporter.paused():
+                    get_browser_cookie_option()
 
             if attempt < max_passes:
-                reporter.say(
-                    f"⚠️  {len(last_failed)} video(s) missing after pass "
-                    f"{attempt}. Cooling down {cooldown}s before retrying…"
-                )
+                reporter.say(note_line(
+                    f"{len(last_failed)} left after pass {attempt} "
+                    f"· retrying in {cooldown}s"))
                 time.sleep(cooldown)
     finally:
         reporter.stop()
 
     elapsed = time.time() - started_at
 
-    # ── summary panel (mirrors Spotify's result panel) ──────────────
-    print()
-    print("─" * 61)
+    # ── result card ─────────────────────────────────────────────────
+    section_header(section_title)
+    rows = [("Playlist", playlist_title), ("Saved to", str(playlist_folder)),
+            ("Files", f"{success_count} of {total}")]
     if not last_failed:
-        print("✅ PLAYLIST DOWNLOAD COMPLETE — everything downloaded")
-    else:
-        print("⚠️  PLAYLIST FINISHED WITH MISSING VIDEOS")
-    print("─" * 61)
-    print(f"📺 Playlist    : {playlist_title}")
-    print(f"📁 Saved to    : {playlist_folder}")
-    print(f"🎵 Files       : {success_count}/{total} video(s)")
-    if last_failed:
-        print(f"❌ Missing     : {len(last_failed)}")
-    print(f"⏱️  Elapsed     : {_format_elapsed(elapsed)}")
-    if elapsed > 0 and success_count > 0:
-        avg = elapsed / success_count
-        print(f"⚡ Avg / video : {avg:.1f}s")
-    if last_failed:
-        report_path = _write_failed_report(
-            playlist_folder, playlist_title, total, success_count, last_failed
-        )
-        print(f"📝 Failed list : {report_path}")
-    print("─" * 61)
+        rows.append(("Time", format_eta(elapsed)))
+        result_card("ok", "DOWNLOAD COMPLETE", rows)
+        return
+    rows += [("Missing", len(last_failed)), ("Time", format_eta(elapsed))]
+    reasons = Counter(_short_reason(f[2] or "Unknown error") for f in last_failed)
+    details = [f"{text}  ×{count}" for text, count in reasons.most_common(4)]
+    report_path = _write_failed_report(
+        playlist_folder, playlist_title, total, success_count, last_failed
+    )
+    result_card("warn" if success_count else "fail",
+                "FINISHED WITH MISSING VIDEOS" if success_count else "DOWNLOAD FAILED",
+                rows, details, [("Report", str(report_path))])
 
 
 # ─────────────────────────────────────────────────────────────────────
 #  Top-level content router
 # ─────────────────────────────────────────────────────────────────────
+
+def _file_size(path):
+    try:
+        return format_bytes(os.path.getsize(path)) if path else None
+    except OSError:
+        return None
+
 
 def download_content(url, mode, config):
     start_spinner("🎬 Fetching video/playlist information")
@@ -787,30 +624,50 @@ def download_content(url, mode, config):
         return
 
     if info["type"] == "playlist":
-        _show_session_header("📂 YouTube Downloader — Playlist")
+        section_header("📂 YouTube Downloader — Playlist")
         display_playlist_info(info)
         download_playlist(info, mode, config)
         return
 
-    # ── single video: mode-aware confirmation ───────────────────────
-    _show_session_header("📹 YouTube Downloader — Video")
+    # ── single video ────────────────────────────────────────────────
+    title = "📹 YouTube Downloader — Video"
+    section_header(title)
     display_video_info(info)
-    label = "video" if mode == "1" else "audio (MP3)"
-    if not confirm(f"\n🚀 Download this {label}?"):
-        print_info("Download cancelled")
+    if not confirm("Proceed with download?", default=True):
         return
 
+    youtube_config = config["youtube"]
+    if mode == "1":
+        plan_line(f"Video {youtube_config.get('video_quality', 'best')}")
+    else:
+        plan_line(f"MP3 {youtube_config.get('audio_quality', '320k')}")
+
+    progress = DownloadProgress("Downloading", 1)
+    progress.start()
     start = time.time()
-    success, error = download_single_video(
-        url, config["download_dir"], mode, config
-    )
+    try:
+        success, error = download_single_video(
+            url, config["download_dir"], mode, config, progress
+        )
+    finally:
+        progress.stop()
     elapsed = time.time() - start
 
+    section_header(title)
     if success:
-        print_success(f"Download completed in {_format_elapsed(elapsed)}!")
+        result_card("ok", "DOWNLOAD COMPLETE", [
+            ("Title", info["title"]),
+            ("Saved to", config["download_dir"]),
+            ("Size", _file_size(progress.final_path)),
+            ("Time", format_eta(elapsed)),
+        ])
         log_download("YouTube", info["title"], mode=mode, status="Success")
     else:
-        print_error(f"Download failed: {error}")
+        result_card("fail", "DOWNLOAD FAILED", [
+            ("Title", info["title"]),
+            ("Time", format_eta(elapsed)),
+        ])
+        print_error(_short_reason(error, 200))
         log_download("YouTube", info["title"], mode=mode,
                      status="Failed", error=error or "")
 
@@ -820,8 +677,9 @@ def download_content(url, mode, config):
 # ─────────────────────────────────────────────────────────────────────
 
 def run_manual_format(config):
+    title = "🎬 YouTube Downloader — Manual format"
     while True:
-        url = input("\n🎯 YouTube URL (blank to go back): ").strip()
+        url = ask_url("YouTube video")
         if not url:
             return
         if not is_youtube_url(url):
@@ -837,25 +695,35 @@ def run_manual_format(config):
                 print_error("No format ID provided",
                             "Enter one of the listed format IDs.")
                 continue
-            options = build_download_options(config["download_dir"], "1", config)
+            progress = DownloadProgress("Downloading", 1)
+            options = build_download_options(config["download_dir"], "1", config, progress)
             options["format"] = format_id
-            start_spinner("Downloading custom format")
-            with YoutubeDL(options) as ydl:
-                ydl.download([url])
-            stop_spinner()
-            print_success("Download completed!")
+            progress.start()
+            start = time.time()
+            try:
+                with YoutubeDL(options) as ydl:
+                    ydl.download([url])
+            finally:
+                progress.stop()
+            section_header(title)
+            result_card("ok", "DOWNLOAD COMPLETE", [
+                ("Format", format_id),
+                ("Saved to", config["download_dir"]),
+                ("Size", _file_size(progress.final_path)),
+                ("Time", format_eta(time.time() - start)),
+            ])
             log_download("YouTube", url, mode="Manual Format", status="Success")
         except Exception as error:
             stop_spinner()
-            print_error(f"Manual download failed: {error}",
+            print_error(f"Manual download failed: {_short_reason(error, 120)}",
                         "Check the URL, format ID, and network connection.")
-        if not confirm("\nDownload another manual format?"):
+        if not confirm("\nProcess another link?"):
             return
 
 
 def run_standard_downloads(mode, config):
     while True:
-        url = input("\n🎯 YouTube URL (video or playlist, blank to go back): ").strip()
+        url = ask_url("YouTube video or playlist")
         if not url:
             return
         if is_youtube_url(url):
@@ -863,24 +731,18 @@ def run_standard_downloads(mode, config):
         else:
             print_error("Not a valid YouTube URL",
                         "URL should start with http(s) and contain youtube.com or youtu.be.")
-        if not confirm("\nDownload another?"):
+        if not confirm("\nProcess another link?"):
             return
 
 
 def run(config):
     while True:
-        clear_screen()
-        print_banner()
-        print(f"{BOLD}                   🎬 YouTube Downloader")
-        print("=" * 61)
-        print()
-        print(f"{CYAN}{BOLD}1.{RESET} Download video (best quality)")
-        print(f"{CYAN}{BOLD}2.{RESET} Download audio (MP3)")
-        print(f"{CYAN}{BOLD}3.{RESET} Manual format selection")
-        print(f"{CYAN}{BOLD}4.{RESET} Back to main menu")
-        print()
-        print("=" * 61)
-        mode = menu_choice("Select (1-4): ", "1234")
+        mode = show_menu("🎬 YouTube Downloader", [
+            "Download video (best quality)",
+            "Download audio (MP3)",
+            "Manual format selection",
+            "Back to main menu",
+        ])
         if mode in (None, "4"):
             return
         try:

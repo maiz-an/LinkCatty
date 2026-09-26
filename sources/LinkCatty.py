@@ -316,21 +316,6 @@ def youtube_settings(config):
     if choice != "":
         draft["auto_retry"] = (choice == "1")
 
-    # ── quiet mode ────────────────────────────────────────────────
-    current = draft.get("quiet_mode", True)
-    print(f"\nQuiet mode (less output)? (current: {'yes' if current else 'no'})")
-    print("1. Yes")
-    print("2. No")
-    choice = menu_choice(
-        "Select (1-2) [Enter=keep, 0=cancel]: ",
-        "12", back_choices={"0"}, allow_empty=True,
-    )
-    if choice is None or choice == "0":
-        print_info("Cancelled — no changes saved.")
-        return
-    if choice != "":
-        draft["quiet_mode"] = (choice == "1")
-
     # ── commit ────────────────────────────────────────────────────
     youtube.clear()
     youtube.update(draft)
@@ -407,21 +392,6 @@ def spotify_settings(config):
         return
     if choice != "":
         draft["auto_retry"] = (choice == "1")
-
-    # ── quiet mode ────────────────────────────────────────────────
-    current = draft.get("quiet_mode", True)
-    print(f"\nQuiet mode? (current: {'yes' if current else 'no'})")
-    print("1. Yes")
-    print("2. No")
-    choice = menu_choice(
-        "Select (1-2) [Enter=keep, 0=cancel]: ",
-        "12", back_choices={"0"}, allow_empty=True,
-    )
-    if choice is None or choice == "0":
-        print_info("Cancelled — no changes saved.")
-        return
-    if choice != "":
-        draft["quiet_mode"] = (choice == "1")
 
     # ── commit ────────────────────────────────────────────────────
     spotify.clear()

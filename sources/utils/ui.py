@@ -1,4 +1,5 @@
 import contextlib
+import unicodedata
 import re
 import sys
 import os
@@ -373,19 +374,170 @@ def format_count(num):
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Single live progress bar fed by yt-dlp hooks (Spotify-style)
+#  LinkCatty UI kit - shared by every downloader
 #
-#  One bar for the whole run. Messages printed with .say() land ABOVE
-#  the bar instead of stomping on it; .paused() lets prompts run cleanly.
+#    section_header    banner + centered section title
+#    show_menu         numbered sub-menu
+#    ask_url           the URL prompt
+#    card              minimal info card            ┌ │ └
+#    result_card       end-of-run summary card
+#    plan_line         one dim line: what is about to happen
+#    item_line         one ✔ / ✖ line for DownloadProgress.say()
+#    DownloadProgress  ONE live, width-aware progress bar
+#
+#  Restyle here and every downloader changes with it.
 # ─────────────────────────────────────────────────────────────────────
 
-class DownloadProgress:
-    BAR_WIDTH = 40
+WIDTH = 61
 
-    def __init__(self, label, total_items=1):
+
+def display_width(text):
+    """Columns a string takes in the console (emoji/CJK count as 2)."""
+    width = 0
+    for ch in strip_ansi(str(text)):
+        if unicodedata.combining(ch) or ch in ("‍", "︎", "️"):
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
+
+
+def fit(text, width):
+    """Shorten to `width` columns, adding … when something was cut."""
+    text = " ".join(str(text).split())
+    if display_width(text) <= width:
+        return text
+    out = ""
+    for ch in text:
+        if display_width(out + ch) > width - 1:
+            break
+        out += ch
+    return out.rstrip() + "…"
+
+
+_PATH_START = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]|~)")
+
+
+def fit_tail(text, width):
+    """Shorten from the left, keeping the END (what matters in a file path)."""
+    text = str(text)
+    if display_width(text) <= width:
+        return text
+    out = ""
+    for ch in reversed(text):
+        if display_width(ch + out) > width - 1:
+            break
+        out = ch + out
+    return "…" + out
+
+
+def center_text(text, width=WIDTH):
+    return " " * max(0, (width - display_width(text)) // 2) + text
+
+
+def section_header(title):
+    """Clear the screen and draw: banner, centered title, rule."""
+    clear_screen()
+    print_banner()
+    print(f"{BOLD}{center_text(title)}{RESET}")
+    print("=" * WIDTH)
+
+
+def show_menu(title, options, prompt="Select"):
+    """Full-screen numbered menu. Returns the chosen key (or None on Ctrl+C)."""
+    section_header(title)
+    print()
+    for number, text in enumerate(options, 1):
+        print(f"{CYAN}{BOLD}{number}.{RESET} {text}")
+    print()
+    print("=" * WIDTH)
+    keys = "".join(str(n) for n in range(1, len(options) + 1))
+    return menu_choice(f"{prompt} (1-{len(options)}): ", keys)
+
+
+def ask_url(what):
+    return input(f"\n🎯 Enter {what} URL (blank to go back): ").strip()
+
+
+def _print_card(head, accent, rows, details=None, footer=None):
+    def clean(items):
+        return [(str(label), str(value)) for label, value in items
+                if value not in (None, "")]
+    rows, footer = clean(rows), clean(footer or [])
+    label_w = max([len(label) for label, _ in rows + footer] + [6])
+
+    def show(items):
+        for label, value in items:
+            room = WIDTH - (2 + 2 + label_w + 2)
+            shown = fit_tail(value, room) if _PATH_START.match(value) else fit(value, room)
+            print(f"  {DIM}│{RESET} {DIM}{label.ljust(label_w)}{RESET}  {shown}")
+
+    print()
+    print(f"  {DIM}┌{RESET} {accent}{BOLD}{head}{RESET}")
+    show(rows)
+    for line in details or []:
+        print(f"  {DIM}│{RESET}   {DIM}•{RESET} {fit(line, WIDTH - 8)}")
+    show(footer)
+    print(f"  {DIM}└{RESET}")
+    print()
+
+
+def card(title, rows, icon="", details=None):
+    """Info card: a title, aligned label/value rows, optional bullet lines."""
+    _print_card(f"{icon} {title}".strip(), CYAN, rows, details)
+
+
+_STATUS_STYLE = {"ok": ("✔", GREEN), "warn": ("⚠", YELLOW), "fail": ("✖", RED)}
+
+
+def result_card(status, headline, rows, details=None, footer=None):
+    """End-of-run card. status: 'ok' | 'warn' | 'fail'.
+
+    rows first, then `details` as bullets (e.g. failure causes), then `footer`
+    rows (e.g. the report path).
+    """
+    icon, color = _STATUS_STYLE[status]
+    _print_card(f"{icon} {headline}", color, rows, details, footer)
+
+
+def plan_line(*parts):
+    """One dim line summarising what is about to run."""
+    text = " · ".join(str(p) for p in parts if p)
+    if text:
+        print(f"  {DIM}{fit(text, WIDTH - 2)}{RESET}")
+
+
+def item_line(ok, index, count, title, detail=""):
+    """A per-item line, meant for DownloadProgress.say()."""
+    mark = f"{GREEN}✔{RESET}" if ok else f"{RED}✖{RESET}"
+    prefix = f"{index}/{count}"
+    room = WIDTH - 4 - len(prefix) - 2 - (display_width(detail) + 2 if detail else 0)
+    tail = f"  {DIM}{detail}{RESET}" if detail else ""
+    return f"  {mark} {DIM}{prefix}{RESET}  {fit(title, max(room, 12))}{tail}"
+
+
+def note_line(text, icon="↻"):
+    """A dim one-liner (retry / cooldown notices), meant for .say()."""
+    return f"  {DIM}{icon} {fit(text, WIDTH - 6)}{RESET}"
+
+
+class DownloadProgress:
+    """One live progress line for a whole run.
+
+    Two ways to feed it:
+      * yt-dlp hooks   -> pass .hook / .pp_hook as progress_hooks / postprocessor_hooks
+      * counting files -> pass count_fn (e.g. Spotify: files on disk)
+    The line adapts to the console width so it never wraps.
+    Use .say() to print above the bar and .paused() around prompts.
+    """
+
+    def __init__(self, label, total_items=1, unit="videos", count_fn=None):
         self.label = label
         self.total_items = max(int(total_items), 1)
+        self.unit = unit
         self.done_items = 0
+        self.final_path = None
+        self._count_fn = count_fn
+        self._icon = "⬇"
         self._run_done = 0
         self._start = time.time()
         self._stop = threading.Event()
@@ -395,6 +547,10 @@ class DownloadProgress:
         self._paused = False
         self._saved_label = None
         self._reset_item()
+
+    @property
+    def elapsed(self):
+        return time.time() - self._start
 
     def _reset_item(self):
         self._base_done = 0
@@ -474,6 +630,7 @@ class DownloadProgress:
             if status == "finished":
                 total = total or done
                 done = total
+                self.final_path = data.get("filename") or self.final_path
             self._stream_done = done
             self._stream_total = total
             self._speed = data.get("speed")
@@ -488,60 +645,97 @@ class DownloadProgress:
             self._frac = max(self._frac, min(frac, 1.0))
 
     def pp_hook(self, data):
-        """yt-dlp postprocessor hook (merging etc.)."""
+        """yt-dlp postprocessor hook (merging, audio conversion...)."""
         name = str(data.get("postprocessor") or "").lower()
         with self._lock:
             if data.get("status") == "started":
                 if self._saved_label is None:
-                    self._saved_label = self.label
-                self.label = "🔧 Merging" if "merg" in name else "🔧 Processing"
-            elif data.get("status") == "finished" and self._saved_label is not None:
-                self.label = self._saved_label
-                self._saved_label = None
+                    self._saved_label = (self.label, self._icon)
+                self.label = "Merging" if "merg" in name else "Processing"
+                self._icon = "🔧"
+            elif data.get("status") == "finished":
+                path = (data.get("info_dict") or {}).get("filepath")
+                if path:
+                    self.final_path = path
+                if self._saved_label is not None:
+                    self.label, self._icon = self._saved_label
+                    self._saved_label = None
 
     def _loop(self):
         while not self._stop.wait(0.5):
             self._render()
 
+    @staticmethod
+    def _columns():
+        cols = shutil.get_terminal_size((100, 24)).columns
+        return max(30, min(cols, 100) - 2)
+
     def _render(self):
         with self._lock:
             if self._paused:
                 return
-            multi = self.total_items > 1
-            overall = (self.done_items + self._frac) / self.total_items
-            overall = max(0.0, min(overall, 1.0))
-            filled = int(self.BAR_WIDTH * overall)
-            bar = "█" * filled + "░" * (self.BAR_WIDTH - filled)
-
-            parts = []
-            if multi:
-                parts.append(f"{self.done_items}/{self.total_items} videos")
+            parts = {}
+            if self._count_fn:
+                try:
+                    done = int(self._count_fn())
+                except Exception:
+                    done = self.done_items
+                self.done_items = min(done, self.total_items)
+                frac = self.done_items / self.total_items
+                parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
+                remaining = self.total_items - self.done_items
+                if self.done_items > 0 and remaining > 0:
+                    rate = self.done_items / max(self.elapsed, 0.001)
+                    if rate > 0:
+                        parts["eta"] = format_eta(remaining / rate)
             else:
-                done = self._base_done + self._stream_done
-                total = self._base_total + (self._stream_total or 0)
-                if total:
-                    parts.append(f"{format_bytes(done)}/{format_bytes(total)}")
-                elif done:
-                    parts.append(format_bytes(done))
-            if self._speed:
-                parts.append(f"{format_bytes(self._speed)}/s")
-            eta = self._estimate_eta(multi)
-            if eta is not None:
-                parts.append(f"ETA {format_eta(eta)}")
+                frac = min((self.done_items + self._frac) / self.total_items, 1.0)
+                if self.total_items > 1:
+                    parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
+                else:
+                    done = self._base_done + self._stream_done
+                    total = self._base_total + (self._stream_total or 0)
+                    if total:
+                        parts["size"] = f"{format_bytes(done)}/{format_bytes(total)}"
+                    elif done:
+                        parts["size"] = format_bytes(done)
+                if self._speed:
+                    parts["speed"] = f"{format_bytes(self._speed)}/s"
+                eta = self._estimate_eta()
+                if eta is not None:
+                    parts["eta"] = format_eta(eta)
 
-            line = f"{self.label} |{bar}| {overall * 100:5.1f}% " + " · ".join(parts)
-            line = line.rstrip()
-            pad = max(0, self._last_len - len(line))
+            line = self._compose(max(0.0, min(frac, 1.0)), parts)
+            visible = display_width(line)
+            pad = max(0, self._last_len - visible)
             sys.stdout.write("\r" + line + (" " * pad))
             sys.stdout.flush()
-            self._last_len = len(line)
+            self._last_len = visible
 
-    def _estimate_eta(self, multi):
-        if not multi:
+    def _compose(self, frac, parts):
+        head = f"  {self._icon} {self.label}  "
+        pct = f"  {frac * 100:3.0f}%"
+        cols = self._columns()
+        order = ("size", "speed", "eta")
+        keep = [name for name in order if name in parts]
+        for drop in ("speed", "size"):
+            tail = "  " + " · ".join(parts[n] for n in keep) if keep else ""
+            if cols - display_width(head) - len(pct) - display_width(tail) >= 14:
+                break
+            if drop in keep:
+                keep.remove(drop)
+        tail = "  " + " · ".join(parts[n] for n in keep) if keep else ""
+        bar_w = cols - display_width(head) - len(pct) - display_width(tail)
+        bar_w = max(6, min(bar_w, 36))
+        filled = int(bar_w * frac)
+        bar = f"{CYAN}{'━' * filled}{RESET}{DIM}{'─' * (bar_w - filled)}{RESET}"
+        return f"{head}{bar}{BOLD}{pct}{RESET}{DIM}{tail}{RESET}"
+
+    def _estimate_eta(self):
+        if self.total_items == 1:
             return self._eta
         progressed = self._run_done + self._frac
         if progressed <= 0:
             return None
-        elapsed = max(time.time() - self._start, 0.001)
         remaining = self.total_items - self.done_items - self._frac
-        return elapsed / progressed * max(remaining, 0)
+        return self.elapsed / progressed * max(remaining, 0)

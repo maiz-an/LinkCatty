@@ -1,12 +1,10 @@
 import os
-import sys
 import shutil
 import subprocess
 import re
 import json
 import time
 import random
-import threading
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -16,21 +14,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
-    print_warning,
-    BOLD,
-    CYAN,
-    GREEN,
-    YELLOW,
-    RESET,
-    clear_screen,
+    DownloadProgress,
+    ask_url,
+    card,
     confirm,
-    menu_choice,
+    format_eta,
+    note_line,
     pause,
-    print_banner,
+    plan_line,
     print_error,
     print_info,
     print_success,
-    progress_bar,
+    print_warning,
+    result_card,
+    section_header,
+    show_menu,
     start_spinner,
     stop_spinner,
 )
@@ -127,76 +125,58 @@ def _get_free_client():
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Display helpers
+#  Display helpers (all drawn with the shared UI kit in utils/ui.py)
 # ─────────────────────────────────────────────────────────────────────
 
-def _show_session_header(section_title: str) -> None:
-    clear_screen()
-    print_banner()
-    print(f"{BOLD}               {section_title}{RESET}")
-    print("=" * 61)
-
-
 def _display_track_info(info: dict) -> None:
-    print("\n" + "─" * 61)
-    print("🎵 TRACK INFORMATION")
-    print("─" * 61)
-    print(f"🎶 Title  : {info.get('title') or 'Unknown'}")
-    print(f"🎤 Artist : {info.get('artist') or 'Unknown'}")
-    if info.get("album"):
-        print(f"💿 Album  : {info['album']}")
-    print("─" * 61)
+    card("TRACK", [
+        ("Title", info.get("title") or "Unknown"),
+        ("Artist", info.get("artist") or "Unknown"),
+        ("Album", info.get("album")),
+    ], icon="🎵")
 
 
 def _display_album_info(info: dict) -> None:
-    print("\n" + "─" * 61)
-    print("💿 ALBUM INFORMATION")
-    print("─" * 61)
-    print(f"💿 Album       : {info.get('name') or 'Unknown'}")
-    if info.get("artist"):
-        print(f"🎤 Artist      : {info['artist']}")
-    tc = info.get("track_count")
-    print(f"🎬 Total Tracks: {tc if tc is not None else 'Unknown'}")
-    print("─" * 61)
+    count = info.get("track_count")
+    card("ALBUM", [
+        ("Album", info.get("name") or "Unknown"),
+        ("Artist", info.get("artist")),
+        ("Tracks", count if count is not None else "Unknown"),
+    ], icon="💿")
 
 
 def _display_playlist_info(info: dict) -> None:
-    print("\n" + "─" * 61)
-    print("📂 PLAYLIST INFORMATION")
-    print("─" * 61)
-    print(f"📋 Playlist    : {info.get('name') or 'Unknown'}")
-    if info.get("author"):
-        print(f"👤 Author      : {info['author']}")
-    tc = info.get("track_count")
-    print(f"🎬 Total Tracks: {tc if tc is not None else 'Unknown'}")
-    print("─" * 61)
+    count = info.get("track_count")
+    card("PLAYLIST", [
+        ("Name", info.get("name") or "Unknown"),
+        ("Author", info.get("author")),
+        ("Tracks", count if count is not None else "Unknown"),
+    ], icon="📂")
 
 
 def _display_download_result(item_type: str, name: str | None, out_folder: str,
                               downloaded: int, expected: int,
                               failed_report: str | None,
-                              error_breakdown: dict | None = None) -> None:
-    print("\n" + "─" * 61)
+                              error_breakdown: dict | None = None,
+                              elapsed: float | None = None) -> None:
+    what = {"track": "Track", "album": "Album", "playlist": "Playlist"}[item_type]
+    time_text = format_eta(elapsed) if elapsed is not None else None
     if failed_report is None:
-        print("✅ DOWNLOAD COMPLETE — everything downloaded")
-    else:
-        print("⚠️  DOWNLOAD FINISHED WITH MISSING TRACKS")
-    print("─" * 61)
-    if name:
-        label = {"track": "🎶 Track", "album": "💿 Album", "playlist": "📋 Playlist"}[item_type]
-        print(f"{label}    : {name}")
-    print(f"📁 Saved to  : {out_folder}")
-    print(f"🎵 Files     : {downloaded}/{expected} audio file(s)")
-    if failed_report is not None:
-        missing = max(expected - downloaded, 0)
-        print(f"❌ Missing   : {missing}")
-        if error_breakdown:
-            print("   Breakdown  :")
-            for label, count in error_breakdown.items():
-                if count:
-                    print(f"     • {label}: {count}")
-        print(f"📝 Failed list saved to : {failed_report}")
-    print("─" * 61)
+        rows = [(what, name), ("Saved to", out_folder)]
+        if item_type != "track":
+            rows.append(("Files", f"{downloaded} of {expected}"))
+        rows.append(("Time", time_text))
+        result_card("ok", "DOWNLOAD COMPLETE", rows)
+        return
+    rows = [(what, name), ("Saved to", out_folder),
+            ("Files", f"{downloaded} of {expected}"),
+            ("Missing", max(expected - downloaded, 0)),
+            ("Time", time_text)]
+    details = [f"{label}  ×{count}"
+               for label, count in (error_breakdown or {}).items() if count]
+    result_card("warn" if downloaded else "fail",
+                "FINISHED WITH MISSING TRACKS" if downloaded else "DOWNLOAD FAILED",
+                rows, details, [("Report", failed_report)])
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -342,81 +322,6 @@ def _song_artist(song) -> str | None:
         first = artists[0]
         return first if isinstance(first, str) else first.get("name")
     return None
-
-
-# ─────────────────────────────────────────────────────────────────────
-#  Single progress bar (one and only one for the whole run)
-#
-#  Runs in a daemon thread, repaints the same \r-line every 0.5 s and
-#  computes a live ETA from files-on-disk vs. elapsed time. All print
-#  calls made from the main thread go through .say() so they land
-#  ABOVE the bar instead of stomping on it.
-# ─────────────────────────────────────────────────────────────────────
-
-class _ProgressReporter:
-    BAR_WIDTH = 40
-
-    def __init__(self, out_dir: str, total: int, label: str):
-        self.out_dir        = out_dir
-        self.total          = max(int(total), 1)
-        self.label          = label
-        self._start_time    = time.time()
-        self._stop          = threading.Event()
-        self._thread        = None
-        self._lock          = threading.Lock()
-        self._last_line_len = 0
-
-    def start(self):
-        self._render()
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-
-    def stop(self):
-        self._stop.set()
-        if self._thread:
-            self._thread.join()
-        self._render()
-        with self._lock:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-
-    def set_label(self, label: str):
-        with self._lock:
-            self.label = label
-
-    def say(self, message: str):
-        with self._lock:
-            sys.stdout.write("\r" + " " * self._last_line_len + "\r")
-            sys.stdout.flush()
-            print(message)
-            self._last_line_len = 0
-
-    def _loop(self):
-        while not self._stop.wait(0.5):
-            self._render()
-
-    def _render(self):
-        count     = _count_audio_files(self.out_dir)
-        elapsed   = max(time.time() - self._start_time, 0.001)
-        remaining = max(self.total - count, 0)
-        pct       = (count / self.total) * 100 if self.total else 0.0
-        filled    = int(self.BAR_WIDTH * count / self.total) if self.total else 0
-        filled    = max(0, min(self.BAR_WIDTH, filled))
-        bar       = "█" * filled + "░" * (self.BAR_WIDTH - filled)
-
-        eta_str = ""
-        if count > 0 and remaining > 0:
-            rate = count / elapsed
-            if rate > 0:
-                eta_str = f" · ETA {int(remaining / rate)}s"
-
-        line = f"{self.label} |{bar}| {pct:5.1f}% {count}/{self.total} tracks{eta_str}"
-
-        with self._lock:
-            pad = max(0, self._last_line_len - len(line))
-            sys.stdout.write("\r" + line + (" " * pad))
-            sys.stdout.flush()
-            self._last_line_len = len(line)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -662,10 +567,11 @@ class SpotifyDownloader:
 
         expected_total = len(songs) or 1
 
-        print_info(f"Output folder : {out_dir}")
-        print_info(f"Parallelism   : {self.parallel_batches} batches x "
-                   f"{self.base_threads} threads  =  "
-                   f"{self.parallel_batches * self.base_threads} concurrent downloads")
+        format_label = audio_format.upper() + (
+            "" if audio_format in ("flac", "wav") else f" {quality}k")
+        plan_line(format_label,
+                  f"{self.parallel_batches * self.base_threads} parallel",
+                  f"up to {self.max_passes} passes")
 
         # ── build / merge the ledger ────────────────────────────────
         ledger = _load_ledger(out_dir)
@@ -681,8 +587,9 @@ class SpotifyDownloader:
 
         youtube_blocked = False
 
-        reporter = _ProgressReporter(out_dir, expected_total,
-                                     f"⬇ Downloading 0/{expected_total}")
+        reporter = DownloadProgress(
+            "Downloading", expected_total, unit="tracks",
+            count_fn=lambda: _count_audio_files(out_dir))
         reporter.start()
 
         try:
@@ -698,10 +605,7 @@ class SpotifyDownloader:
                     _strategy_for_pass(pass_num, youtube_blocked)
                 threads = max(1, self.base_threads // divisor)
 
-                reporter.set_label(
-                    f"⬇ Pass {pass_num}/{self.max_passes} "
-                    f"({len(pending_urls)} left)"
-                )
+                reporter.set_label(f"Pass {pass_num}/{self.max_passes}")
 
                 batches = [
                     pending_urls[i:i + self.batch_size]
@@ -804,7 +708,7 @@ class SpotifyDownloader:
                             _save_ledger(out_dir, ledger)
 
                             reporter.set_label(
-                                f"⬇ Pass {pass_num}/{self.max_passes} "
+                                f"Pass {pass_num}/{self.max_passes} · "
                                 f"batch {completed}/{len(batches)}"
                             )
                             reporter._render()
@@ -820,21 +724,17 @@ class SpotifyDownloader:
                     break
 
                 if youtube_blocked:
-                    reporter.say(
-                        "⚠️  YouTube/YouTube Music is rate-limiting this "
-                        "connection — switching remaining retries to "
-                        "non-YouTube providers."
-                    )
+                    reporter.say(note_line(
+                        "YouTube is rate-limiting this connection, switching "
+                        "retries to other providers", "⏳"))
 
                 if pass_num < self.max_passes:
                     cooldown = (self.blocked_cooldown_seconds
                                 if youtube_blocked
                                 else self.pass_cooldown_seconds)
-                    reporter.say(
-                        f"⚠️  {still_missing} track(s) still missing after "
-                        f"pass {pass_num} (+{gained} recovered). Cooling "
-                        f"down {cooldown}s before the next pass…"
-                    )
+                    reporter.say(note_line(
+                        f"{still_missing} left after pass {pass_num} "
+                        f"(+{gained} recovered) · retrying in {cooldown}s"))
                     _jitter_sleep(cooldown, cooldown + 3)
         finally:
             reporter.stop()
@@ -861,62 +761,74 @@ class SpotifyDownloader:
     # ── public entry-points ───────────────────────────────────────────
 
     def download_single_track(self, url: str) -> None:
+        title = "🎵 Spotify Downloader — Track"
         start_spinner("🎶 Fetching track info")
         meta = self._get_track_meta(url)
         stop_spinner()
-        _show_session_header("🎵 Spotify Downloader — Track")
+        section_header(title)
         _display_track_info(meta)
-        if not confirm("Proceed with download?"):
+        if not confirm("Proceed with download?", default=True):
             return
         song = {"url": url, "name": meta.get("title"), "artist": meta.get("artist")}
+        started = time.time()
         count, out_folder, expected, failed_report, breakdown = self._download_tracks(
             [song], "track", meta.get("title")
         )
+        section_header(title)
         _display_download_result("track", meta.get("title"), out_folder,
-                                  count, expected, failed_report, breakdown)
+                                  count, expected, failed_report, breakdown,
+                                  elapsed=time.time() - started)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist=meta.get("artist", "spotdl"),
                      mode="Single", status=status)
 
     def download_album(self, url: str) -> None:
+        title = "💿 Spotify Downloader — Album"
         start_spinner("💿 Fetching album info")
         meta, songs = self._get_album_meta(url)
         stop_spinner()
-        _show_session_header("💿 Spotify Downloader — Album")
+        section_header(title)
         _display_album_info(meta)
-        if not confirm("Download all tracks?"):
+        if not confirm("Download all tracks?", default=True):
             return
         if not songs:
             print_error("Could not resolve the album's track list.",
                         "Falling back to a single bulk download via spotdl.")
             songs = [{"url": url, "name": meta.get("name"),
                       "artist": meta.get("artist")}]
+        started = time.time()
         count, out_folder, expected, failed_report, breakdown = self._download_tracks(
             songs, "album", meta["name"]
         )
+        section_header(title)
         _display_download_result("album", meta["name"], out_folder,
-                                  count, expected, failed_report, breakdown)
+                                  count, expected, failed_report, breakdown,
+                                  elapsed=time.time() - started)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist="spotdl", mode="Album", status=status)
 
     def download_playlist(self, url: str) -> None:
+        title = "📂 Spotify Downloader — Playlist"
         start_spinner("📂 Fetching playlist info")
         meta, songs = self._get_playlist_meta(url)
         stop_spinner()
-        _show_session_header("📂 Spotify Downloader — Playlist")
+        section_header(title)
         _display_playlist_info(meta)
-        if not confirm("Download all tracks?"):
+        if not confirm("Download all tracks?", default=True):
             return
         if not songs:
             print_error("Could not resolve the playlist's track list.",
                         "Falling back to a single bulk download via spotdl.")
             songs = [{"url": url, "name": meta.get("name"),
                       "artist": meta.get("author")}]
+        started = time.time()
         count, out_folder, expected, failed_report, breakdown = self._download_tracks(
             songs, "playlist", meta["name"]
         )
+        section_header(title)
         _display_download_result("playlist", meta["name"], out_folder,
-                                  count, expected, failed_report, breakdown)
+                                  count, expected, failed_report, breakdown,
+                                  elapsed=time.time() - started)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist="spotdl", mode="Playlist", status=status)
 
@@ -1081,7 +993,7 @@ def run_spotify_workflow(config, choice: str) -> None:
 
     item_type = {"1": "track", "2": "album", "3": "playlist"}[choice]
     while True:
-        url = input(f"\n🎯 Enter Spotify {item_type} URL (blank to go back): ").strip()
+        url = ask_url(f"Spotify {item_type}")
         if not url:
             return
         if not is_spotify_url(url, item_type):
@@ -1104,18 +1016,12 @@ def run_spotify_workflow(config, choice: str) -> None:
 
 def run(config) -> None:
     while True:
-        clear_screen()
-        print_banner()
-        print(f"{BOLD}                   🎵 Spotify Downloader")
-        print("=" * 61)
-        print()
-        print(f"{CYAN}{BOLD}1.{RESET} Download single track")
-        print(f"{CYAN}{BOLD}2.{RESET} Download album")
-        print(f"{CYAN}{BOLD}3.{RESET} Download playlist")
-        print(f"{CYAN}{BOLD}4.{RESET} Back to main menu")
-        print()
-        print("=" * 61)
-        choice = menu_choice("Select (1-4): ", "1234")
+        choice = show_menu("🎵 Spotify Downloader", [
+            "Download single track",
+            "Download album",
+            "Download playlist",
+            "Back to main menu",
+        ])
         if choice in (None, "4"):
             return
         try:

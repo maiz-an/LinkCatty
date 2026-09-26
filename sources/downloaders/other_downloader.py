@@ -21,12 +21,11 @@ from utils.config import is_block_error, run_with_proxy_fallback
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
-    BOLD, RESET,
     DownloadProgress, SilentLogger,
-    ask_retry_vpn, clear_screen, confirm, explain_error, format_bytes,
-    format_count, format_duration, format_eta, pause,
-    print_banner, print_error, print_info, print_warning,
-    start_spinner, stop_spinner, strip_ansi,
+    ask_retry_vpn, ask_url, card, confirm, explain_error, format_bytes,
+    format_count, format_duration, format_eta, item_line, pause,
+    note_line, plan_line, print_error, print_info, print_warning, result_card,
+    section_header, start_spinner, stop_spinner, strip_ansi,
 )
 
 _SECTION = "🌐 Other Downloader"
@@ -34,75 +33,56 @@ _SITES = (ph, xm)
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Display helpers
+#  Display helpers (all drawn with the shared UI kit)
 # ─────────────────────────────────────────────────────────────────────
-
-def _show_session_header(title: str) -> None:
-    clear_screen()
-    print_banner()
-    print(f"{BOLD}               {title}{RESET}")
-    print("=" * 61)
-
 
 def _quality_label(quality: str) -> str:
     return "Best available" if quality == "best" else f"{quality}p"
 
 
 def _display_video_info(info: dict, heights: list) -> None:
-    print("\n" + "─" * 61)
-    print("🎬 VIDEO INFORMATION")
-    print("─" * 61)
-    print(f"🎞️ Title    : {info.get('title') or 'Unknown'}")
     uploader = info.get("uploader") or info.get("channel") or info.get("uploader_id")
-    print(f"📺 Channel  : {uploader or 'Unknown'}")
-    if info.get("duration"):
-        print(f"⏱️ Duration : {format_duration(info['duration'])}")
-    if info.get("view_count"):
-        print(f"👀 Views    : {format_count(info['view_count'])}")
-    if heights:
-        print(f"🖥️ Quality  : {' · '.join(f'{h}p' for h in heights[:6])}")
-    print("─" * 61)
+    card("VIDEO", [
+        ("Title", info.get("title") or "Unknown"),
+        ("Channel", uploader or "Unknown"),
+        ("Duration", format_duration(info["duration"]) if info.get("duration") else None),
+        ("Views", format_count(info["view_count"]) if info.get("view_count") else None),
+        ("Quality", " · ".join(f"{h}p" for h in heights[:6]) if heights else None),
+    ], icon="🎬")
 
 
 def _display_playlist_info(info: dict, count: int) -> None:
-    print("\n" + "─" * 61)
-    print("📂 PLAYLIST INFORMATION")
-    print("─" * 61)
-    print(f"📋 Playlist    : {info.get('title') or 'Unknown'}")
-    uploader = info.get("uploader") or info.get("channel")
-    if uploader:
-        print(f"👤 Author      : {uploader}")
-    print(f"🎬 Total Videos: {count}")
-    print("─" * 61)
+    card("PLAYLIST", [
+        ("Name", info.get("title") or "Unknown"),
+        ("Author", info.get("uploader") or info.get("channel")),
+        ("Videos", count),
+    ], icon="📂")
 
 
 def _display_result(kind: str, name, out_folder: str, result: dict) -> None:
     downloaded, expected = result["downloaded"], result["expected"]
-    complete = downloaded >= expected
-    print("\n" + "─" * 61)
-    if complete:
-        print("✅ DOWNLOAD COMPLETE — everything downloaded")
-    else:
-        print("⚠️  DOWNLOAD FINISHED WITH MISSING VIDEOS")
-    print("─" * 61)
-    if name:
-        label = {"video": "🎬 Video", "playlist": "📋 Playlist"}[kind]
-        print(f"{label}    : {name}")
-    print(f"📁 Saved to  : {out_folder}")
-    print(f"🎞️ Files     : {downloaded}/{expected} video file(s)")
-    if result.get("size"):
-        print(f"💾 Size      : {format_bytes(result['size'])}")
-    if not complete:
-        print(f"❌ Missing   : {max(expected - downloaded, 0)}")
-        if result["breakdown"]:
-            print("   Breakdown  :")
-            for label, count in result["breakdown"].items():
-                print(f"     • {label}: {count}")
-        if result["failed_report"]:
-            print(f"📝 Failed list saved to : {result['failed_report']}")
-    print(f"⏱️ Elapsed   : {format_eta(result['elapsed'])}")
-    print("─" * 61)
-    if not complete and result.get("first_failure") and len(result["breakdown"]) == 1:
+    what = "Video" if kind == "video" else "Playlist"
+    time_text = format_eta(result["elapsed"])
+    if downloaded >= expected:
+        rows = [(what, name), ("Saved to", out_folder)]
+        if kind == "playlist":
+            rows.append(("Files", f"{downloaded} of {expected}"))
+        elif result.get("size"):
+            rows.append(("Size", format_bytes(result["size"])))
+        rows.append(("Time", time_text))
+        result_card("ok", "DOWNLOAD COMPLETE", rows)
+        return
+    rows = [(what, name), ("Saved to", out_folder)]
+    if expected > 1:
+        rows.append(("Files", f"{downloaded} of {expected}"))
+        rows.append(("Missing", expected - downloaded))
+    rows.append(("Time", time_text))
+    details = [f"{label}  ×{count}" for label, count in result["breakdown"].items()]
+    footer = [("Report", result["failed_report"])] if result.get("failed_report") else None
+    result_card("warn" if downloaded else "fail",
+                "FINISHED WITH MISSING VIDEOS" if downloaded else "DOWNLOAD FAILED",
+                rows, details, footer)
+    if result.get("first_failure") and len(result["breakdown"]) == 1:
         message, hint = result["first_failure"]
         print_error(message, hint)
 
@@ -432,8 +412,8 @@ def _attempt_entry(key, out_dir, quality, strategy, session, progress,
                    final=kind in _NON_RETRYABLE)
         progress.item_reset()
         if multi:
-            progress.say(f"❌ [{index}/{count}] {title[:40]} — "
-                         f"{_SHORT_REASONS.get(kind, _SHORT_REASONS['other'])}")
+            progress.say(item_line(False, index, count, title,
+                                   _SHORT_REASONS.get(kind, _SHORT_REASONS["other"])))
     else:
         path = _final_path(info)
         rec.update(status="success", last_error=None, hint=None,
@@ -444,8 +424,8 @@ def _attempt_entry(key, out_dir, quality, strategy, session, progress,
         if multi:
             size = ""
             if path and os.path.exists(path):
-                size = f" ({format_bytes(os.path.getsize(path))})"
-            progress.say(f"✅ [{index}/{count}] {title[:45]}{size}")
+                size = format_bytes(os.path.getsize(path))
+            progress.say(item_line(True, index, count, title, size))
     if persist:
         _save_ledger(out_dir, ledger)
 
@@ -481,16 +461,14 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
     if persist:
         _save_ledger(out_dir, ledger)
 
-    print_info(f"Quality       : {_quality_label(quality)}")
-    print_info(f"Retry passes  : up to {max_passes}")
     already = _count_success(ledger, keys)
-    if already:
-        print_info(f"Resuming      : {already}/{total} already downloaded, skipping them")
+    plan_line(_quality_label(quality), f"up to {max_passes} retry passes",
+              f"resuming, {already}/{total} done" if already else None)
 
     started = time.time()
 
     def run_round():
-        progress = DownloadProgress(f"⬇ Pass 1/{max_passes}", total)
+        progress = DownloadProgress(f"Pass 1/{max_passes}", total)
         progress.done_items = _count_success(ledger, keys)
         progress.start()
         try:
@@ -499,8 +477,7 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
                 if not pending:
                     break
                 strategy = _strategy_for_pass(pass_num)
-                progress.set_label(
-                    f"⬇ Pass {pass_num}/{max_passes} ({len(pending)} left)")
+                progress.set_label(f"Pass {pass_num}/{max_passes}")
                 start_success = _count_success(ledger, keys)
                 for index, key in enumerate(pending, 1):
                     _attempt_entry(key, out_dir, quality, strategy, session,
@@ -538,12 +515,11 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
                         for k in keys if _needs_work(ledger[k]))
                     wait = rate_cooldown if rate_limited else cooldown
                     if rate_limited:
-                        progress.say("⚠️  The site is rate-limiting this "
-                                     "connection — waiting longer before retrying.")
-                    progress.say(
-                        f"⚠️  {still_missing} video(s) still missing after pass "
-                        f"{pass_num} (+{gained} recovered). Cooling down "
-                        f"{wait}s before the next pass…")
+                        progress.say(note_line("The site is rate-limiting this "
+                                               "connection, waiting longer", "⏳"))
+                    progress.say(note_line(
+                        f"{still_missing} left after pass {pass_num} "
+                        f"(+{gained} recovered) · retrying in {wait}s"))
                     if wait:
                         time.sleep(random.uniform(wait, wait + 3))
         finally:
@@ -673,7 +649,7 @@ def _process_link(url: str, config: dict) -> None:
 
     if info.get("entries") is not None or info.get("_type") == "playlist":
         entries = _entries_from(info)
-        _show_session_header("📂 Other Downloader — Playlist")
+        section_header("📂 Other Downloader — Playlist")
         _display_playlist_info(info, len(entries))
         session.flush_notice()
         if not entries:
@@ -687,12 +663,12 @@ def _process_link(url: str, config: dict) -> None:
         out_dir = os.path.join(config["download_dir"], _safe_name(name))
         result = _download_entries(entries, out_dir, quality, session,
                                    "playlist", name, persist=True)
-        _show_session_header("📂 Other Downloader — Playlist")
+        section_header("📂 Other Downloader — Playlist")
         _display_result("playlist", name, out_dir, result)
         mode = "Playlist"
     else:
         heights = _available_heights(info)
-        _show_session_header("📥 Other Downloader — Video")
+        section_header("📥 Other Downloader — Video")
         _display_video_info(info, heights)
         session.flush_notice()
         if not confirm("Proceed with download?", default=True):
@@ -703,7 +679,7 @@ def _process_link(url: str, config: dict) -> None:
         out_dir = config["download_dir"]
         result = _download_entries(entries, out_dir, quality, session,
                                    "video", name, persist=False)
-        _show_session_header("📥 Other Downloader — Video")
+        section_header("📥 Other Downloader — Video")
         _display_result("video", name, out_dir, result)
         mode = "Single"
 
@@ -718,11 +694,11 @@ def _process_link(url: str, config: dict) -> None:
 
 
 def run_workflow(config: dict) -> None:
-    _show_session_header(_SECTION)
+    section_header(_SECTION)
     print_info("Paste a video or playlist link. The right downloader "
                "is picked automatically.")
     while True:
-        url = input("\n🎯 Enter video URL (blank to go back): ").strip()
+        url = ask_url("video or playlist")
         if not url:
             return
         if not re.match(r"^https?://", url, re.IGNORECASE):
