@@ -66,7 +66,7 @@
 - Installs everything to `%LOCALAPPDATA%\LinkCatty` (Windows) or `~/.local/share/LinkCatty` (Unix)
 - Adds the folder to your **user PATH** (persistent). On macOS/Linux it writes to the startup file of *your* shell (`~/.zshrc` for zsh, the macOS default) and, when possible, also links `linkcatty` into a folder that is already on your PATH so it works right away
 - Downloads every file from one exact GitHub commit and installs nothing unless all files arrived; your `settings.json` and history survive a reinstall
-- Creates a **Start Menu / desktop shortcut**
+- Creates a **Start Menu / Desktop shortcut**
 - Bundles FFmpeg (Windows x64, macOS Intel/ARM, Linux x64/ARM64)
 - Creates `sources/settings.json` with full defaults on first launch
 - Your downloads go to `Downloads/LinkCatty` (created on first launch)
