@@ -746,10 +746,8 @@ def run_manual_format(config):
             print_info("Fetching available formats...")
             with YoutubeDL({"quiet": True, "listformats": True}) as ydl:
                 ydl.extract_info(url, download=False)
-            format_id = input("🎯 Enter format ID: ").strip()
-            if not format_id:
-                print_error("No format ID provided",
-                            "Enter one of the listed format IDs.")
+            format_id = input("🎯 Enter format ID (0 or blank to go back): ").strip()
+            if format_id in ("", "0"):
                 continue
             progress = DownloadProgress("Downloading", 1)
             options = build_download_options(config["download_dir"], "1", config, progress)
@@ -798,9 +796,8 @@ def run(config):
             "Download video (best quality)",
             "Download audio (MP3)",
             "Manual format selection",
-            "Back to main menu",
         ])
-        if mode in (None, "4"):
+        if mode in (None, "0"):
             return
         try:
             if mode == "3":

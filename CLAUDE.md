@@ -38,8 +38,8 @@ Every downloader (YouTube, Spotify, Other) draws its screens with the shared kit
 | Component | Use |
 |---|---|
 | `section_header(title)` | clear screen + banner (logo + tagline) + bold centered title + dim version line + rule (same for the main menu and Settings). Call it again after a run so the screen shows just header + result |
-| `show_menu(title, options)` | numbered sub-menu; returns the chosen key (last option = Back) |
-| `ask_url(what)` | the URL prompt: `🎯 Enter <what> URL (blank to go back):` |
+| `show_menu(title, options)` | numbered sub-menu with `0. Back to main menu` listed last; returns the key (`"0"` for back, also on an empty Enter) |
+| `ask_url(what)` | the URL prompt: `🎯 Enter <what> URL (0 or blank to go back):`, returns `""` for back |
 | `card(title, rows, icon, details)` | info card (`┌ │ └`, dim aligned labels, optional bullets) |
 | `result_card(status, headline, rows, details, footer)` | end-of-run summary; status `ok` / `warn` / `fail`; `details` = cause bullets, `footer` = e.g. the Report path |
 | `plan_line(*parts)` | one dim line above the bar: what is about to run |
@@ -50,6 +50,7 @@ Every downloader (YouTube, Spotify, Other) draws its screens with the shared kit
 The flow every downloader follows: menu or URL prompt -> spinner -> header + info card -> `confirm("Proceed with download?", default=True)` (Enter = yes) -> plan line + live bar -> clear -> header + result card -> `Process another link?`.
 
 Other rules:
+- **Navigation is the same everywhere: `0` goes back / cancels, an empty Enter skips.** Menus list `0. Back` last (Enter also goes back); the main menu lists `0. Exit` and ignores a bare Enter so the app never closes by accident; URL and format-id prompts accept `0` or blank; `confirm` treats `0` as No; settings prompts are Enter = keep, `0` = cancel; Ctrl+C acts like back. Never number Back/Exit as the last digit
 - Menus keep `CYAN+BOLD` numbers; console width is fixed at 62 columns (`set_console_width(62)`) and the bar adapts to it, never wrap
 - `menu_choice(prompt, valid_chars)` single-key input (None on Ctrl+C); `confirm(prompt, default)` y/n; `pause()`; `start_spinner()` / `stop_spinner()` for the fetch step
 - There is no per-downloader "quiet mode": yt-dlp output is always replaced by the bar

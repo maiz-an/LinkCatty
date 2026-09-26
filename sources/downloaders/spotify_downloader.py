@@ -1033,9 +1033,8 @@ def run(config) -> None:
             "Download single track",
             "Download album",
             "Download playlist",
-            "Back to main menu",
         ])
-        if choice in (None, "4"):
+        if choice in (None, "0"):
             return
         try:
             run_spotify_workflow(config, choice)

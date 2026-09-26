@@ -61,16 +61,16 @@ def settings_menu(config):
             print("6. Restore all settings to defaults")
             print("7. Network proxy (Other Downloaders)")
             print("8. Other downloads settings")
-            print("9. Back to main menu")
+            print("0. Back to main menu")
             print("=" * 61)
-            choice = menu_choice("Select (1-9): ", "123456789")
+            choice = menu_choice("Select (0-8): ", "012345678", allow_empty=True)
 
-            if choice in (None, "9"):
+            if choice in (None, "", "0"):
                 return
 
             if choice == "1":
-                new_dir = input("New download folder (absolute path, Enter to keep): ").strip()
-                if not new_dir:
+                new_dir = input("New download folder (absolute path, 0 or Enter to keep): ").strip()
+                if new_dir in ("", "0"):
                     print_info("Download folder unchanged.")
                 else:
                     path = Path(new_dir).expanduser().resolve()
@@ -415,7 +415,7 @@ def main():
         clear_screen()
         print_banner()
         print_main_menu()
-        choice = menu_choice("Select option (1-5): ", "12345")
+        choice = menu_choice("Select option (0-4): ", "01234")
 
         try:
             if choice == "1":
@@ -426,7 +426,7 @@ def main():
                 other_downloader.run(config)
             elif choice == "4":
                 settings_menu(config)
-            elif choice in (None, "5"):
+            elif choice in (None, "0"):
                 print("\n👋 Thanks for using LinkCatty! Goodbye.")
                 return
         except Exception as error:

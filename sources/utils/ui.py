@@ -88,7 +88,7 @@ def print_main_menu():
     print(f"{CYAN}{BOLD}2.{RESET} Spotify Downloader")
     print(f"{CYAN}{BOLD}3.{RESET} Other Downloaders")
     print(f"{CYAN}{BOLD}4.{RESET} Settings")
-    print(f"{CYAN}{BOLD}5.{RESET} Exit")
+    print(f"{CYAN}{BOLD}0.{RESET} Exit")
     print(f"")
     print(f"{'=' * 61}{RESET}")
 
@@ -202,9 +202,9 @@ def confirm(prompt, default=False):
             print()
             return False
         print(choice)
-        if choice in ("y", "n"):
+        if choice in ("y", "n", "0"):        # 0 = cancel, like everywhere else
             return choice == "y"
-        print_error("Invalid answer", "Press y or n")
+        print_error("Invalid answer", "Press y or n (0 to cancel)")
 
 
 def start_spinner(text="Processing"):
@@ -449,20 +449,27 @@ def section_header(title):
     print("=" * WIDTH)
 
 
-def show_menu(title, options, prompt="Select"):
-    """Full-screen numbered menu. Returns the chosen key (or None on Ctrl+C)."""
+def show_menu(title, options, prompt="Select", back="Back to main menu"):
+    """Full-screen numbered menu where 0 (or an empty Enter) goes back.
+
+    Returns the chosen key, "0" for back, or None on Ctrl+C.
+    """
     section_header(title)
     print()
     for number, text in enumerate(options, 1):
         print(f"{CYAN}{BOLD}{number}.{RESET} {text}")
+    print(f"{CYAN}{BOLD}0.{RESET} {back}")
     print()
     print("=" * WIDTH)
-    keys = "".join(str(n) for n in range(1, len(options) + 1))
-    return menu_choice(f"{prompt} (1-{len(options)}): ", keys)
+    keys = "0" + "".join(str(n) for n in range(1, len(options) + 1))
+    choice = menu_choice(f"{prompt} (0-{len(options)}): ", keys, allow_empty=True)
+    return "0" if choice == "" else choice
 
 
 def ask_url(what):
-    return input(f"\n🎯 Enter {what} URL (blank to go back): ").strip()
+    """URL prompt. Blank or 0 means go back (returns "")."""
+    value = input(f"\n🎯 Enter {what} URL (0 or blank to go back): ").strip()
+    return "" if value == "0" else value
 
 
 def _print_card(head, accent, rows, details=None, footer=None):
