@@ -722,9 +722,62 @@ class DownloadProgress:
         self._speed = None
         self._eta = None
         self._frac = 0.0
-        self._expected_total = None
-        self._streams = 0
+        self._expected_total = None      # bytes of all planned streams (when known)
+        self._weights = None             # share of the whole item each stream stands for
+        self._planned = False
         self._finished_streams = 0
+        self._item_start = None
+        self._total_hint = None          # an exact total for the current stream, when trustworthy
+
+    def watch(self, ydl):
+        """Let yt-dlp tell us the planned streams and their sizes before the download starts.
+
+        Without this the bar has to guess how many streams (video + audio) follow and how big
+        they are. Call it right after creating YoutubeDL(...)."""
+        try:
+            from yt_dlp.postprocessor.common import PostProcessor
+            progress = self
+
+            class _Plan(PostProcessor):
+                def run(self, info):
+                    try:
+                        progress._plan(info)
+                    except Exception:
+                        pass
+                    return [], info
+
+            # before_dl is the stage that already knows the chosen formats
+            ydl.add_post_processor(_Plan(), when="before_dl")
+        except Exception:
+            pass                     # the bar then falls back to its own estimate
+
+    @staticmethod
+    def _planned_size(fmt, duration=None):
+        size = fmt.get("filesize") or fmt.get("filesize_approx")
+        length = fmt.get("duration") or duration
+        if not size and fmt.get("tbr") and length:
+            size = fmt["tbr"] * 1000 / 8 * length
+        return size or 0
+
+    def _plan(self, info):
+        with self._lock:
+            self._apply_plan(info)
+
+    def _apply_plan(self, info):
+        """Store the planned streams (caller holds the lock)."""
+        formats = info.get("requested_formats") or [info]
+        sizes = [self._planned_size(f, info.get("duration")) for f in formats]
+        if all(sizes) and sum(sizes) > 0:
+            self._weights = [x / sum(sizes) for x in sizes]
+            # a size readout only when yt-dlp really knows the file sizes; a bitrate
+            # estimate is good enough to weight the streams but not to print
+            if all(f.get("filesize") or f.get("filesize_approx") for f in formats):
+                self._expected_total = sum(sizes)
+        elif len(formats) == 2:
+            self._weights = [0.92, 0.08]        # video first, audio is small
+        else:
+            self._weights = [1.0 / len(formats)] * len(formats)
+        self._planned = True
 
     def start(self):
         self._render()
@@ -782,12 +835,11 @@ class DownloadProgress:
             return
         with self._lock:
             name = data.get("filename") or data.get("tmpfilename")
-            formats = (data.get("info_dict") or {}).get("requested_formats") or []
-            if formats and not self._streams:
-                self._streams = len(formats)
-                sizes = [f.get("filesize") or f.get("filesize_approx") or 0 for f in formats]
-                if all(sizes):
-                    self._expected_total = sum(sizes)
+            info = data.get("info_dict") or {}
+            if self._item_start is None:
+                self._item_start = time.time()
+            if not self._planned and info.get("requested_formats"):
+                self._apply_plan(info)
             if name != self._stream:
                 if self._stream is not None:
                     self._base_done += self._stream_done
@@ -796,30 +848,42 @@ class DownloadProgress:
                 self._stream = name
                 self._stream_done = 0
                 self._stream_total = None
+                self._total_hint = None
+                if not self._planned and self._finished_streams == 0:
+                    # nothing planned: a video-only stream means an audio stream follows
+                    has_video = info.get("vcodec") not in (None, "none")
+                    has_audio = info.get("acodec") not in (None, "none")
+                    self._weights = [0.92, 0.08] if has_video and not has_audio else [1.0]
             done = data.get("downloaded_bytes") or 0
-            total = data.get("total_bytes") or data.get("total_bytes_estimate")
+            total = data.get("total_bytes")
+            estimate = data.get("total_bytes_estimate")
+            fragments, fragment = data.get("fragment_count"), data.get("fragment_index")
             if status == "finished":
                 total = total or done
                 done = total
                 self.final_path = data.get("filename") or self.final_path
+                stream_frac = 1.0
+                self._total_hint = total
+            elif fragments and fragment is not None:
+                # HLS / DASH: the byte totals are estimates (the first report can even say
+                # "712 of 712 bytes"), the fragment counter is the honest measure
+                stream_frac = max(fragment - 1, 0) / fragments
+            elif total and done <= total:
+                stream_frac = done / total
+                self._total_hint = total
+            elif estimate:
+                stream_frac = min(done / estimate, 0.95)
+            else:
+                stream_frac = 0.0
             self._stream_done = done
             self._stream_total = total
             self._speed = data.get("speed")
             self._eta = data.get("eta")
-            denominator = self._base_total + (total or 0)
-            if self._expected_total:
-                seen = self._base_done + done
-                frac = seen / max(self._expected_total, seen)
-            elif self._streams > 1 and total:
-                frac = (self._finished_streams + done / total) / self._streams
-            elif denominator > 0:
-                frac = (self._base_done + done) / denominator
-            elif data.get("fragment_count"):
-                frac = (data.get("fragment_index") or 0) / data["fragment_count"]
-            else:
-                frac = 0.0
+            weights = self._weights or [1.0]
+            index = min(self._finished_streams, len(weights) - 1)
+            overall = sum(weights[:index]) + weights[index] * min(stream_frac, 1.0)
             # 100% is reserved for item_done(): another stream may still follow
-            self._frac = max(self._frac, min(frac, 0.99))
+            self._frac = max(self._frac, min(overall, 0.99))
 
     def pp_hook(self, data):
         """yt-dlp postprocessor hook (merging, audio conversion...)."""
@@ -872,7 +936,7 @@ class DownloadProgress:
                 else:
                     done = self._base_done + self._stream_done
                     total = self._expected_total or (
-                        self._base_total + (self._stream_total or 0))
+                        self._base_total + self._total_hint if self._total_hint else 0)
                     if total:
                         parts["size"] = f"{format_bytes(done)}/{format_bytes(total)}"
                     elif done:
@@ -911,6 +975,10 @@ class DownloadProgress:
 
     def _estimate_eta(self):
         if self.total_items == 1:
+            # yt-dlp's own ETA only covers the current stream; measure the whole item
+            elapsed = time.time() - self._item_start if self._item_start else 0
+            if elapsed >= 3 and self._frac >= 0.03:
+                return elapsed * (1 - self._frac) / self._frac
             return self._eta
         progressed = self._run_done + self._frac
         if progressed <= 0:

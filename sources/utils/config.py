@@ -60,7 +60,12 @@ def get_default_download_dir():
 
 DEFAULT_DOWNLOAD_DIR = get_default_download_dir()
 
+# Bump when a default changes in a way existing settings.json files must follow.
+#   2: thumbnail / .info.json files next to downloads are off by default
+CONFIG_VERSION = 2
+
 DEFAULT_CONFIG = {
+    "config_version": CONFIG_VERSION,
     "download_dir": DEFAULT_DOWNLOAD_DIR,
     "youtube": {
         "audio_quality": "320k",
@@ -74,9 +79,10 @@ DEFAULT_CONFIG = {
         "max_retry_passes": 3,
         "retry_delay_seconds": 8,
 
-        # metadata sidecars (one file per video)
-        "save_metadata": True,
-        "save_thumbnail": True,
+        # extra files next to every download (off by default: the title/artist tags are
+        # already embedded in the file itself)
+        "save_metadata": False,
+        "save_thumbnail": False,
         "save_description": False,
 
         # embed metadata directly into the media file
@@ -213,6 +219,7 @@ def load_config():
                 user_config = json.load(f)
                 if not isinstance(user_config, dict):
                     raise ValueError("settings.json must contain a JSON object")
+                saved_version = user_config.get("config_version", 1)
                 for section, values in user_config.items():
                     if section in config:
                         if isinstance(config[section], dict) and isinstance(values, dict):
@@ -221,6 +228,9 @@ def load_config():
                             config[section] = values
                     else:
                         config[section] = values
+            if not isinstance(saved_version, int) or saved_version < CONFIG_VERSION:
+                _migrate(config, saved_version if isinstance(saved_version, int) else 1)
+                save_config(config)
         except Exception as e:
             print(f"⚠️ Could not read settings.json. Defaults loaded instead: {e}")
 
@@ -231,6 +241,15 @@ def load_config():
 
     config['ffmpeg_path'] = get_ffmpeg_path()
     return config
+
+
+def _migrate(config, from_version):
+    """Bring a settings.json written by an older version in line with the current defaults."""
+    if from_version < 2:
+        # older versions saved thumbnails and .info.json next to every download by default
+        # and had no setting for it; those values were never a choice
+        config.setdefault("youtube", {}).update(save_metadata=False, save_thumbnail=False)
+    config["config_version"] = CONFIG_VERSION
 
 
 def _same_path(a, b):

@@ -277,6 +277,8 @@ def _download_one(url, out_dir, quality, strategy, session, progress):
         })
         apply_strategy(opts, strategy)
         with YoutubeDL(opts) as ydl:
+            if getattr(progress, "watch", None):
+                progress.watch(ydl)
             return ydl.extract_info(url, download=True)
 
     return session.run(go, say=progress.say)

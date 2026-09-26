@@ -40,7 +40,7 @@
 | 🌍 **Blocked network friendly** | Other Downloaders try a direct connection first and use your optional proxy only when it is blocked. If your network cuts the connection, LinkCatty asks you to turn on a VPN and retries on Enter. |
 | 🚦 **Rate‑limit aware** | Automatic cooldowns and fewer parallel workers when a site throttles; Spotify switches to non‑YouTube providers when needed. |
 | ⚡ **Parallel downloads** | 3 parallel workers for YouTube playlists, 3 batches × 2 threads for Spotify. |
-| 📝 **Full metadata** | `.info.json` sidecar files, thumbnails, and embedded tags (title/artist/album/cover) — written automatically. |
+| 📝 **Tags inside the file** | Title, artist and more are embedded in the file itself. No extra thumbnail or `.info.json` files are left next to your downloads (you can turn them on in `settings.json`). |
 | 📂 **Easy folder** | Everything is saved to `Downloads/LinkCatty` inside your system Downloads folder (Windows, macOS and Linux). Change it in Settings. |
 | ⌨️ **Consistent keys** | `0` always goes back or cancels, a bare Enter skips or keeps the default. |
 | 🔄 **Auto‑update** | Checks for new versions on every launch and updates itself in place. `linkcatty --update` forces a check. |
@@ -132,7 +132,7 @@ Every download follows the same flow:
 - Paste a YouTube link: a single video, a playlist, a channel (`@name`), or a video with an auto‑mix (only the video is downloaded)
 - Upcoming premieres and live streams are skipped and counted, not treated as errors
 - Playlist downloads create a folder named after the playlist and run 3 videos at a time
-- **Metadata is saved automatically**: `.info.json` sidecar + thumbnail + embedded tags
+- **Clean folders**: only the video or MP3 is saved (tags are embedded); the thumbnail and `.info.json` sidecar files are optional, see `settings.json`
 - Bot‑check or members‑only videos: LinkCatty offers to use your browser's cookies once
 
 ### 🎵 Spotify Downloader
@@ -203,10 +203,7 @@ Everything is written into your download folder. By default that is a `LinkCatty
 Downloads/LinkCatty/
 ├── <single videos and tracks are saved right here>
 ├── <YouTube playlist title>/
-│   ├── <title> - <uploader>.mp4
-│   ├── <title> - <uploader>.info.json      ← full yt-dlp metadata
-│   ├── <title> - <uploader>.webp           ← thumbnail
-│   ├── playlist.info.json                  ← playlist title/author/id list
+│   ├── <title> - <uploader>.mp4            ← just the file (no thumbnail / json by default)
 │   ├── .linkcatty_state.json               ← per-video ledger (resumable)
 │   └── failed_downloads.txt                ← only if any video failed
 ├── <Other Downloaders playlist>/
@@ -240,8 +237,8 @@ Located at `sources/settings.json`. Created automatically on first launch. Notab
     "auto_retry": true,
     "parallel_downloads": 3,          // concurrent yt-dlp workers
     "max_retry_passes": 3,            // silent retry rounds
-    "save_metadata": true,            // writes .info.json per video
-    "save_thumbnail": true,           // writes .webp / .jpg
+    "save_metadata": false,           // true = also write a .info.json next to every video
+    "save_thumbnail": false,          // true = also write the thumbnail (.webp / .jpg)
     "embed_metadata": true,           // ID3 / MP4 tags
     "embed_thumbnail": false          // cover art inside file (can fail on some formats)
   },

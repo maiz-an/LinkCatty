@@ -143,8 +143,8 @@ def build_download_options(output_dir, mode, config, progress=None, strategy=Non
         "ignoreerrors": False,
 
         # ── metadata sidecar files ──────────────────────────────────
-        "writeinfojson":     bool(youtube_config.get("save_metadata", True)),
-        "writethumbnail":    bool(youtube_config.get("save_thumbnail", True)),
+        "writeinfojson":     bool(youtube_config.get("save_metadata", False)),
+        "writethumbnail":    bool(youtube_config.get("save_thumbnail", False)),
         "writedescription":  bool(youtube_config.get("save_description", False)),
 
         # ── embed metadata directly into the media file ─────────────
@@ -225,6 +225,8 @@ def download_single_video(video_url, output_dir, mode, config, progress=None,
             options["cookiesfrombrowser"] = _COOKIE_OPTION
         try:
             with YoutubeDL(options) as ydl:
+                if getattr(progress, "watch", None):
+                    progress.watch(ydl)
                 ydl.download([video_url])
             return True, None
         except KeyboardInterrupt:
@@ -485,24 +487,6 @@ def _write_failed_report(folder, playlist_title, total, success_count, failed, b
     return report_path
 
 
-def _save_playlist_metadata(folder, playlist_info):
-    """Write a compact playlist.info.json to the playlist folder."""
-    try:
-        full = playlist_info.get("full_info") or {}
-        entries = [e for e in full.get("entries", []) if e]
-        summary = {
-            "title":       playlist_info.get("title"),
-            "uploader":    playlist_info.get("uploader"),
-            "video_count": playlist_info.get("video_count"),
-            "saved_at":    datetime.now().isoformat(timespec="seconds"),
-            "video_ids":   [e.get("id") for e in entries if e.get("id")],
-        }
-        with open(Path(folder) / "playlist.info.json", "w", encoding="utf-8") as f:
-            json.dump(summary, f, indent=2, ensure_ascii=False)
-    except Exception:
-        pass
-
-
 def _needs_work(rec):
     return rec["status"] != "success" and not rec.get("final")
 
@@ -528,8 +512,6 @@ def download_playlist(playlist_info, mode, config):
     except OSError as error:
         print_error(f"Could not create playlist folder: {error}")
         return
-
-    _save_playlist_metadata(playlist_folder, playlist_info)
 
     youtube_config = config["youtube"]
     max_passes, cooldown, rate_cooldown = _retry_settings(config)
