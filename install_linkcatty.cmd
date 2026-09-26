@@ -56,7 +56,8 @@ set "FILE_LIST[13]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/mai
 set "FILE_LIST[14]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
 set "FILE_LIST[15]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
 set "FILE_LIST[16]=sources\downloaders\universal.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
-set "TOTAL=17"
+set "FILE_LIST[17]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
+set "TOTAL=18"
 set /a STEPS=TOTAL+1
 
 set "FFMPEG_URL=https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/win-x64.zip"
@@ -64,7 +65,7 @@ set "FFMPEG_URL=https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/wi
 set "DL_FAILED=0"
 set "BAR_LABEL=Downloading"
 set "BAR_TOTAL=%STEPS%"
-for /l %%i in (0,1,16) do (
+for /l %%i in (0,1,17) do (
     set /a BAR_DONE=%%i
     call :ui_bar
     call :GetFile %%i
@@ -240,7 +241,6 @@ if defined ESC (
     set "RD=%ESC%[31m"
     set "C=%ESC%[36m"
 )
-for /f %%a in ('copy /Z "%~f0" nul') do set "CR=%%a"
 exit /b
 
 :ui_header
@@ -271,13 +271,20 @@ echo   %D%%~1%R%
 exit /b
 
 :ui_bar
-rem draws one in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL
+rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL. The line is redrawn with
+rem ANSI cursor codes (erase line + go to column 1); the classic "carriage return in a
+rem variable" trick prints nothing on current Windows builds. The bar is drawn with
+rem colored spaces (solid look, ASCII only). Consoles without ANSI only get a final line.
 set /a BP=BAR_DONE*100/BAR_TOTAL
-set /a BF=BAR_DONE*24/BAR_TOTAL
+set /a BF=BAR_DONE*28/BAR_TOTAL
+if not defined ESC goto :ui_bar_plain
 set "BB1="
 set "BB2="
-for /l %%k in (1,1,24) do (
-    if %%k leq !BF! (set "BB1=!BB1!#") else (set "BB2=!BB2!.")
+for /l %%k in (1,1,28) do (
+    if %%k leq !BF! (set "BB1=!BB1! ") else (set "BB2=!BB2! ")
 )
-<nul set /p "=!CR!  %C%!BAR_LABEL!%R%  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%   "
+<nul set /p "=%ESC%[2K%ESC%[1G  %C%!BAR_LABEL!%R%  %ESC%[46m!BB1!%ESC%[100m!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%"
+exit /b
+:ui_bar_plain
+if "!BAR_DONE!"=="!BAR_TOTAL!" <nul set /p "=  !BAR_LABEL!  done (!BAR_DONE!/!BAR_TOTAL!)"
 exit /b
