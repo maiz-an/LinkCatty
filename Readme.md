@@ -58,13 +58,14 @@
 | **Windows (CMD)** | `curl -L -o "%TEMP%\install_linkcatty.cmd" https://tinyurl.com/linkcattycmd && "%TEMP%\install_linkcatty.cmd"` |
 | **macOS / Linux** | `curl -L -o /tmp/install_linkcatty.sh https://tinyurl.com/linkcattysh && chmod +x /tmp/install_linkcatty.sh && /tmp/install_linkcatty.sh` |
 
-> After installation: **close and reopen your terminal** — then simply type `linkcatty` to launch.
+> After installation the installer offers to start LinkCatty right away. To launch it later, open a **new terminal window** and type `linkcatty` (on macOS/Linux you can also run `source ~/.zshrc` first, or use the full path `~/.local/share/LinkCatty/linkcatty`).
 
 ### 📦 What the installer does
 
 - Downloads the latest version from GitHub
 - Installs everything to `%LOCALAPPDATA%\LinkCatty` (Windows) or `~/.local/share/LinkCatty` (Unix)
-- Adds the folder to your **user PATH** (persistent)
+- Adds the folder to your **user PATH** (persistent). On macOS/Linux it writes to the startup file of *your* shell (`~/.zshrc` for zsh, the macOS default) and, when possible, also links `linkcatty` into a folder that is already on your PATH so it works right away
+- Downloads every file from one exact GitHub commit and installs nothing unless all files arrived; your `settings.json` and history survive a reinstall
 - Creates a **Start Menu / desktop shortcut**
 - Bundles FFmpeg (Windows x64, macOS Intel/ARM, Linux x64/ARM64)
 - Creates `sources/settings.json` with full defaults on first launch
@@ -289,7 +290,7 @@ Your downloaded files (`Downloads/LinkCatty`) are never touched.
 
 | Issue | Solution |
 |-------|----------|
-| `linkcatty` not recognized | Close and reopen your terminal. On Windows, check `%LOCALAPPDATA%\LinkCatty` is in your `PATH`. Run `linkcatty --location` to see where it is installed. |
+| `linkcatty` not recognized (`command not found`) | Open a **new** terminal window. On macOS/Linux run `source ~/.zshrc` (zsh) or `source ~/.bashrc` (bash), or start it with `~/.local/share/LinkCatty/linkcatty`. On Windows, check `%LOCALAPPDATA%\LinkCatty` is in your `PATH`. Running the installer again is safe: it repairs the PATH entry and keeps your settings. |
 | I want the newest version now | Run `linkcatty --update`. It always checks GitHub, even if you updated a moment ago. |
 | **"Could not connect – blocked by your network"** (Other Downloaders) | Your network is cutting the connection. Turn on a VPN and press Enter to retry, or set a proxy in **Settings → 7**. The proxy is only used when a direct connection is blocked, and is OFF by default. |
 | **"Nothing is running at your proxy address"** | A proxy address only works while a proxy/VPN app that provides it is running. Start it, fix the address, or clear it with `-` in Settings → 7. |
@@ -297,6 +298,7 @@ Your downloaded files (`Downloads/LinkCatty`) are never touched.
 | **Rate limited** | LinkCatty waits and slows down by itself. You can also lower `parallel_downloads` (YouTube) or `parallel_batches` (Spotify) to `1`–`2`, wait an hour, or use a VPN. |
 | **Some tracks/videos are missing** | The result card lists the causes (removed, private, region‑locked, login required…). `failed_downloads.txt` in the playlist folder has the exact URLs. Removed/private videos cannot be downloaded; for the rest, run the same link again to retry only what is missing. |
 | **"That link belongs to the YouTube/Spotify Downloader"** | You pasted a YouTube or Spotify link into Other Downloaders. Use main menu option 1 or 2 instead. |
+| **macOS/Linux: "externally managed environment" or pip errors** | LinkCatty keeps its packages in its own virtual environment (`sources/.venv`), so system Python is never touched. On Debian/Ubuntu install `python3-venv` if it is missing. |
 | FFmpeg not found (video merging may fail) | The installer bundles FFmpeg. If you see this warning, install FFmpeg manually — audio-only downloads still work. |
 | **Progress bar shows 0% but downloads finish** | This can happen if the app is writing to a slow external drive. The bar updates every 0.5 s. |
 | **A folder contains `.linkcatty_state.json` / `.spotdl_archive.spotdl` / `.spotdl_log.txt`** | These are internal state files — safe to keep (they enable resumability). Delete them only if you want a fresh start. |

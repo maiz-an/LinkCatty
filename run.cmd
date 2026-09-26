@@ -3,36 +3,13 @@ chcp 65001 >nul 2>&1
 title LinkCatty
 setlocal enabledelayedexpansion
 
-:: Check for uninstall flag
+rem LinkCatty Launcher (Windows)
+rem NOTE: this file must stay pure ASCII with CRLF line endings (see .gitattributes).
+
+rem ---- flags -----------------------------------------------------------
 echo %* | findstr /i "\-\-uninstall" >nul
-if not errorlevel 1 (
-    if exist "%~dp0uninstall_linkcatty.cmd" (
-        start "" "%~dp0uninstall_linkcatty.cmd"
-    ) else if exist "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" (
-        start "" "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd"
-    ) else (
-        echo Uninstaller not found. Downloading...
-        set "UNINSTALL_URL=https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
-        set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
-        powershell -command "& {Invoke-WebRequest -Uri '!UNINSTALL_URL!' -OutFile '!UNINSTALL_FILE!'}" >nul 2>&1
-        if exist "!UNINSTALL_FILE!" (
-            start "" "!UNINSTALL_FILE!"
-        ) else (
-            echo Failed to download uninstaller.
-            pause
-        )
-    )
-    exit /b 0
-)
+if not errorlevel 1 goto :DoUninstall
 
-:: Check for --update flag - force update by resetting local version
-echo %* | findstr /i "\-\-update" >nul
-if not errorlevel 1 (
-    echo 0.0.0> "%~dp0sources\version.txt"
-    echo Forcing update check...
-)
-
-:: Check for --location flag
 echo %* | findstr /i "\-\-location" >nul
 if not errorlevel 1 (
     echo.
@@ -41,38 +18,44 @@ if not errorlevel 1 (
     exit /b 0
 )
 
+set "FORCE_UPDATE=0"
+echo %* | findstr /i "\-\-update" >nul
+if not errorlevel 1 set "FORCE_UPDATE=1"
+
+rem --repaired / --restarted: this is a restart after an update, never update again
+set "RESTARTED=0"
+echo %* | findstr /i "\-\-repaired \-\-restarted" >nul
+if not errorlevel 1 set "RESTARTED=1"
+
 mode con cols=62 lines=30 >nul 2>&1
 
-echo.
-echo ============================================================
-echo                    LinkCatty Launcher
-echo ============================================================
-echo.
+rem ---- look and feel ---------------------------------------------------
+call :ui_init
 
-:: [1/3] Check for updates
-echo [1/3] Checking for updates...
+set "LOCAL_VER=0.0.0"
+if exist "%~dp0sources\version.txt" (
+    for /f "usebackq delims=" %%i in ("%~dp0sources\version.txt") do set "LOCAL_VER=%%i"
+)
+set "SHOW_VER=v%LOCAL_VER%"
+call :ui_header
+
+rem ---- 1. updates ------------------------------------------------------
 rem raw.githubusercontent.com caches "main" for ~5 minutes and ignores query strings.
-rem Ask git (never cached) for the latest commit SHA and download from a SHA-pinned URL instead.
+rem Ask git (never cached) for the latest commit SHA and download from a SHA-pinned URL.
 rem If the lookup fails we fall back to "main".
 set "REF=main"
 set "REF_FILE=%TEMP%\linkcatty_ref.txt"
 del "%REF_FILE%" 2>nul
-powershell -command "& { try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 8 -Uri 'https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack'; $t = if ($r.Content -is [byte[]]) { [Text.Encoding]::ASCII.GetString($r.Content) } else { [string]$r.Content }; if ($t -match '([0-9a-f]{40}) refs/heads/main') { $matches[1] | Set-Content -Encoding ascii '%REF_FILE%' } } catch {} }" >nul 2>&1
+powershell -NoProfile -Command "& { try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 8 -Uri 'https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack'; $t = if ($r.Content -is [byte[]]) { [Text.Encoding]::ASCII.GetString($r.Content) } else { [string]$r.Content }; if ($t -match '([0-9a-f]{40}) refs/heads/main') { $matches[1] | Set-Content -Encoding ascii '%REF_FILE%' } } catch {} }" >nul 2>&1
 if exist "%REF_FILE%" (
     for /f "usebackq delims=" %%R in ("%REF_FILE%") do set "REF=%%R"
     del "%REF_FILE%" 2>nul
 )
 set "RAW_BASE=https://raw.githubusercontent.com/maiz-an/LinkCatty/%REF%"
-set "REMOTE_VERSION_URL=%RAW_BASE%/sources/version.txt"
-set "LOCAL_VERSION_FILE=%~dp0sources\version.txt"
-
-set "LOCAL_VER=0.0.0"
-if exist "%LOCAL_VERSION_FILE%" (
-    for /f "usebackq delims=" %%i in ("%LOCAL_VERSION_FILE%") do set "LOCAL_VER=%%i"
-)
 
 set "TEMP_FILE=%TEMP%\remote_version.txt"
-powershell -command "& {Invoke-WebRequest -Uri '%REMOTE_VERSION_URL%' -OutFile '%TEMP_FILE%'}" >nul 2>&1
+del "%TEMP_FILE%" 2>nul
+powershell -NoProfile -Command "& { $ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 8 -Uri '%RAW_BASE%/sources/version.txt' -OutFile '%TEMP_FILE%' } catch {} }" >nul 2>&1
 set "REMOTE_VER=%LOCAL_VER%"
 if exist "%TEMP_FILE%" (
     for /f "usebackq delims=" %%A in ("%TEMP_FILE%") do set "REMOTE_VER=%%A"
@@ -96,10 +79,9 @@ set "FILE_LIST[13]=sources\downloaders\universal.py|https://raw.githubuserconten
 set "TOTAL_FILES=14"
 
 rem If a managed file is missing (e.g. a module added in a newer release), repair by
-rem re-downloading. --repaired on the restart stops this from ever looping.
+rem re-downloading. The restart flag stops any update loop.
 set "MISSING=0"
-echo %* | findstr /i "\-\-repaired" >nul
-if errorlevel 1 (
+if "%RESTARTED%"=="0" (
     for /l %%i in (0,1,99) do (
         if defined FILE_LIST[%%i] (
             for /f "tokens=1 delims=|" %%p in ("!FILE_LIST[%%i]!") do (
@@ -110,88 +92,122 @@ if errorlevel 1 (
 )
 
 set "NEED_UPDATE=0"
-set "BANNER=UPDATE AVAILABLE"
-set "RESTART_ARGS="
-if not "%LOCAL_VER%"=="%REMOTE_VER%" set "NEED_UPDATE=1"
-if "%NEED_UPDATE%"=="0" if "%MISSING%"=="1" (
-    set "NEED_UPDATE=1"
-    set "BANNER=REPAIRING MISSING FILES"
-    set "RESTART_ARGS=--repaired"
+set "UPDATE_KIND=update"
+if "%RESTARTED%"=="0" (
+    if not "%LOCAL_VER%"=="%REMOTE_VER%" set "NEED_UPDATE=1"
+    if "%FORCE_UPDATE%"=="1" set "NEED_UPDATE=1"
+    if "!NEED_UPDATE!"=="0" if "%MISSING%"=="1" (
+        set "NEED_UPDATE=1"
+        set "UPDATE_KIND=repair"
+    )
+)
+
+if "%NEED_UPDATE%"=="0" (
+    set "MSG=Up to date"
+    set "DET=v%LOCAL_VER%"
+    call :ui_ok
 )
 
 if "%NEED_UPDATE%"=="1" (
+    if "%UPDATE_KIND%"=="repair" (
+        set "MSG=Repairing missing files"
+        set "DET="
+    ) else (
+        set "MSG=Update available"
+        set "DET=%LOCAL_VER% -> %REMOTE_VER%"
+        if "%FORCE_UPDATE%"=="1" set "DET=latest is %REMOTE_VER%"
+    )
+    call :ui_arrow
     echo.
-    echo ============================================================
-    echo                      %BANNER%
-    echo ============================================================
-    echo   Current version : %LOCAL_VER%
-    echo   Latest version  : %REMOTE_VER%
-    echo.
-    echo [2/3] Downloading update...
 
+    rem Everything is downloaded to a staging folder first; the install is only touched
+    rem when every file arrived, so a dropped connection can never leave a half update.
+    set "STAGE=%TEMP%\linkcatty_stage"
+    if exist "!STAGE!" rmdir /s /q "!STAGE!" 2>nul
+    mkdir "!STAGE!" 2>nul
+    set "DL_FAILED=0"
 
-    if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
-    if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
-
-    set "DOWNLOADED=0"
+    set "BAR_LABEL=Updating"
+    set "BAR_TOTAL=%TOTAL_FILES%"
     for /l %%i in (0,1,13) do (
-        set /a DOWNLOADED+=1
-        set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL_FILES!
-        <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL_FILES!] !PERCENT!%%  "
+        set /a BAR_DONE=%%i
+        call :ui_bar
         call :DownloadFile %%i
+    )
+    set "BAR_DONE=!BAR_TOTAL!"
+    call :ui_bar
+    echo.
+    echo.
+
+    if "!DL_FAILED!"=="1" (
+        rmdir /s /q "!STAGE!" 2>nul
+        set "MSG=Could not download the update"
+        set "DET=nothing was changed"
+        call :ui_warn
+        call :ui_note "Check your connection. LinkCatty will try again next time."
         echo.
+        timeout /t 3 >nul
+        goto :AfterUpdate
     )
 
-    rem Update the launcher itself. Installed name is linkcatty.bat, repo name is run.cmd.
-    rem Download to temp and validate first so a failed download cannot corrupt the running launcher.
+    xcopy "!STAGE!\*" "%~dp0" /E /Y /Q >nul
+    rmdir /s /q "!STAGE!" 2>nul
+
+    rem The version file is written WITHOUT a BOM
+    powershell -NoProfile -Command "& { [System.IO.File]::WriteAllText('%~dp0sources\version.txt', '%REMOTE_VER%', [System.Text.UTF8Encoding]::new($false)) }" >nul 2>&1
+
+    rem Deps are re-checked after an update
+    del "%~dp0sources\.deps_installed" 2>nul
+
+    set "MSG=Updated to %REMOTE_VER%"
+    set "DET=restarting"
+    call :ui_ok
+
+    rem Update the launcher itself (installed name is linkcatty.bat, repo name is run.cmd).
+    rem Download to temp, force CRLF + ASCII, validate, then copy over the running file.
+    rem Nothing after this copy may call a label: cmd reads the new file from here on.
     set "LAUNCHER_NEW=%TEMP%\linkcatty_launcher.new"
     del "!LAUNCHER_NEW!" 2>nul
-    powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '%RAW_BASE%/run.cmd' -OutFile '!LAUNCHER_NEW!' }" >nul 2>&1
+    powershell -NoProfile -Command "& { $ProgressPreference='SilentlyContinue'; try { $t = (Invoke-WebRequest -UseBasicParsing -Uri '%RAW_BASE%/run.cmd').Content; if ($t -is [byte[]]) { $t = [Text.Encoding]::ASCII.GetString($t) }; if ($t -match 'LinkCatty Launcher') { [IO.File]::WriteAllText('!LAUNCHER_NEW!', ($t -replace '\r?\n', ([string][char]13 + [char]10)), [Text.Encoding]::ASCII) } } catch {} }" >nul 2>&1
     findstr /c:"LinkCatty Launcher" "!LAUNCHER_NEW!" >nul 2>&1
     if not errorlevel 1 copy /y "!LAUNCHER_NEW!" "%~f0" >nul
     del "!LAUNCHER_NEW!" 2>nul
     if /i not "%~nx0"=="run.cmd" del "%~dp0run.cmd" 2>nul
 
-    if exist "%TEMP%\settings_backup.json" copy "%TEMP%\settings_backup.json" "%~dp0sources\settings.json" >nul 2>&1
-    if exist "%TEMP%\download_history_backup.json" copy "%TEMP%\download_history_backup.json" "%~dp0sources\download_history.json" >nul 2>&1
-    del "%TEMP%\settings_backup.json" "%TEMP%\download_history_backup.json" 2>nul
-
-    powershell -command "& { [System.IO.File]::WriteAllText('%~dp0sources\version.txt', '%REMOTE_VER%', [System.Text.UTF8Encoding]::new($false)) }" >nul 2>&1
-
-    echo.
-    echo [3/3] Update completed. Restarting...
-    timeout /t 2 >nul
-    start "" "%~f0" %RESTART_ARGS%
-    exit /b 0
+    timeout /t 1 >nul
+    rem one line: nothing is re-read from the (replaced) file after the restart returns
+    call "%~f0" --restarted & exit /b !errorlevel!
 )
 
-:: [2/3] Python setup - find or install Python ONCE
-echo [2/3] Setting up Python...
+:AfterUpdate
 
+rem ---- 2. Python -------------------------------------------------------
 set "PORTABLE_DIR=%~dp0sources\portable_python"
 set "PYTHON_EXE="
 set "PYTHON_SCRIPTS="
+set "PY_KIND=system"
 set "DEPS_MARKER=%~dp0sources\.deps_installed"
 
-:: Check if portable python already extracted and working
 if exist "%PORTABLE_DIR%\python.exe" (
     set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
     set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
-    echo Using portable Python.
-    goto :SetupDeps
+    set "PY_KIND=portable"
+    goto :PythonFound
 )
 if exist "%PORTABLE_DIR%\Scripts\python.exe" (
     set "PYTHON_EXE=%PORTABLE_DIR%\Scripts\python.exe"
     set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
-    echo Using portable Python.
-    goto :SetupDeps
+    set "PY_KIND=portable"
+    goto :PythonFound
 )
 
-:: Try to extract portable python if zip present
+rem Extract the portable Python if the zip is present
 if exist "%~dp0sources\PortablePython.zip" (
-    echo Extracting portable Python...
+    set "MSG=Preparing Python"
+    set "DET=first run only"
+    call :ui_arrow
     if not exist "%PORTABLE_DIR%" mkdir "%PORTABLE_DIR%"
-    powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%~dp0sources\PortablePython.zip', '%PORTABLE_DIR%') }" >nul 2>&1
+    powershell -NoProfile -Command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%~dp0sources\PortablePython.zip', '%PORTABLE_DIR%') }" >nul 2>&1
     pushd "%PORTABLE_DIR%"
     for /d %%d in (*) do (
         if exist "%%d\python.exe" (
@@ -206,20 +222,20 @@ if exist "%~dp0sources\PortablePython.zip" (
     if exist "%PORTABLE_DIR%\python.exe" (
         set "PYTHON_EXE=%PORTABLE_DIR%\python.exe"
         set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
-        echo Portable Python ready.
+        set "PY_KIND=portable"
         del "%DEPS_MARKER%" 2>nul
-        goto :SetupDeps
+        goto :PythonFound
     )
     if exist "%PORTABLE_DIR%\Scripts\python.exe" (
         set "PYTHON_EXE=%PORTABLE_DIR%\Scripts\python.exe"
         set "PYTHON_SCRIPTS=%PORTABLE_DIR%\Scripts"
-        echo Portable Python ready.
+        set "PY_KIND=portable"
         del "%DEPS_MARKER%" 2>nul
-        goto :SetupDeps
+        goto :PythonFound
     )
 )
 
-:: Fall back to system Python
+rem Fall back to system Python
 for %%p in (python python3) do (
     if not defined PYTHON_EXE (
         %%p --version >nul 2>&1
@@ -234,71 +250,97 @@ if not defined PYTHON_EXE (
 )
 
 if not defined PYTHON_EXE (
-    echo.
-    echo ERROR: Python not found!
-    echo.
-    echo Please install Python from https://www.python.org/downloads/
-    echo Make sure to check "Add Python to PATH" during installation.
+    set "MSG=Python was not found"
+    set "DET="
+    call :ui_fail
+    call :ui_note "Install Python from https://www.python.org/downloads/"
+    call :ui_note "and tick 'Add Python to PATH' during setup."
     echo.
     pause
     exit /b 1
 )
-echo Using system Python.
 
 for /f "usebackq delims=" %%s in (`%PYTHON_EXE% -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2^>nul`) do (
     set "PYTHON_SCRIPTS=%%s"
 )
 
-:SetupDeps
+:PythonFound
+set "MSG=Python ready"
+set "DET=%PY_KIND%"
+call :ui_ok
+
 if defined PYTHON_SCRIPTS (
     if exist "!PYTHON_SCRIPTS!" (
         set "PATH=!PYTHON_SCRIPTS!;%PATH%"
     )
 )
 
-:: FFmpeg
+rem FFmpeg
 set "FFMPEG_DIR=%~dp0sources\FFmpeg\windows\ffmpeg\bin"
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     set "PATH=%FFMPEG_DIR%;%PATH%"
 ) else (
-    echo Warning: FFmpeg not found in sources. Some features may not work.
+    set "MSG=FFmpeg not found"
+    set "DET=video merging may not work"
+    call :ui_warn
 )
 
-:: [3/3] Install dependencies (only if not already done)
-echo [3/3] Checking dependencies...
-
+rem ---- 3. dependencies -------------------------------------------------
 if exist "%DEPS_MARKER%" (
-    echo Dependencies already installed. Skipping.
+    set "MSG=Dependencies ready"
+    set "DET="
+    call :ui_ok
 ) else (
-    echo Installing packages ^(first run or update^)...
+    set "MSG=Installing packages"
+    set "DET=first run only, one moment"
+    call :ui_arrow
     "%PYTHON_EXE%" -m pip --version >nul 2>&1
-    if errorlevel 1 (
-        echo WARNING: pip not available. Trying to bootstrap...
-        "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>&1
-    )
+    if errorlevel 1 "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>&1
     "%PYTHON_EXE%" -m pip install --quiet --upgrade pip --no-warn-script-location >nul 2>&1
     "%PYTHON_EXE%" -m pip install --quiet --upgrade yt-dlp spotipy spotdl --no-warn-script-location --no-cache-dir
     if errorlevel 1 (
-        echo ERROR: Failed to install some packages. Check your internet connection.
+        set "MSG=Could not install the packages"
+        set "DET="
+        call :ui_fail
+        call :ui_note "Check your internet connection and start LinkCatty again."
+        echo.
         pause
         exit /b 1
     )
     echo %REMOTE_VER%> "%DEPS_MARKER%"
-    echo Packages installed successfully.
+    set "MSG=Dependencies ready"
+    set "DET="
+    call :ui_ok
 )
-
-echo.
-echo Launching LinkCatty...
-echo.
 
 "%PYTHON_EXE%" "%~dp0sources\LinkCatty.py"
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% neq 0 (
     echo.
-    echo Application exited with error code %EXIT_CODE%
+    set "MSG=LinkCatty stopped unexpectedly"
+    set "DET=error code %EXIT_CODE%"
+    call :ui_fail
+    echo.
+    pause
 )
-pause
 exit /b %EXIT_CODE%
+
+rem ======================================================================
+rem  Subroutines (only reached through call; the main flow always exits above)
+rem ======================================================================
+
+:DoUninstall
+rem Every call below is one line ending in "& exit": the uninstaller deletes this very
+rem folder, so this file must not be read again afterwards.
+if exist "%~dp0uninstall_linkcatty.cmd" call "%~dp0uninstall_linkcatty.cmd" & exit /b 0
+if exist "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" call "%LOCALAPPDATA%\LinkCatty\uninstall_linkcatty.cmd" & exit /b 0
+echo Uninstaller not found. Downloading...
+set "UNINSTALL_FILE=%TEMP%\uninstall_linkcatty.cmd"
+powershell -NoProfile -Command "& { $ProgressPreference='SilentlyContinue'; try { $t = (Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd').Content; if ($t -is [byte[]]) { $t = [Text.Encoding]::ASCII.GetString($t) }; [IO.File]::WriteAllText('%UNINSTALL_FILE%', ($t -replace '\r?\n', ([string][char]13 + [char]10)), [Text.Encoding]::ASCII) } catch {} }" >nul 2>&1
+if exist "%UNINSTALL_FILE%" call "%UNINSTALL_FILE%" & exit /b 0
+echo Failed to download the uninstaller.
+pause
+exit /b 1
 
 :DownloadFile
 set "idx=%1"
@@ -308,7 +350,83 @@ for /f "tokens=1,2 delims=|" %%a in ("!entry!") do (
     set "FILE_URL=%%b"
 )
 set "FILE_URL=!FILE_URL:/LinkCatty/main/=/LinkCatty/%REF%/!"
-for %%f in ("%FILE_PATH%") do set "FILE_DIR=%%~dpf"
-if not exist "%~dp0!FILE_DIR!" mkdir "%~dp0!FILE_DIR!" 2>nul
-powershell -command "& { $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '!FILE_URL!' -OutFile '%~dp0!FILE_PATH!' }" >nul 2>&1
+for %%f in ("!STAGE!\!FILE_PATH!") do set "OUT_DIR=%%~dpf"
+if not exist "!OUT_DIR!" mkdir "!OUT_DIR!" 2>nul
+set "TRY=0"
+:DownloadTry
+set /a TRY+=1
+powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri '!FILE_URL!' -OutFile '!STAGE!\!FILE_PATH!'; exit 0 } catch { exit 1 } }" >nul 2>&1
+if errorlevel 1 (
+    if !TRY! LSS 3 goto :DownloadTry
+    set "DL_FAILED=1"
+    exit /b 1
+)
+rem .cmd files must be CRLF + ASCII whatever the server sent
+if /i "%FILE_PATH:~-4%"==".cmd" powershell -NoProfile -Command "& { $p='!STAGE!\!FILE_PATH!'; if (Test-Path $p) { $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p, ($t -replace '\r?\n', ([string][char]13 + [char]10)), [Text.Encoding]::ASCII) } }" >nul 2>&1
+exit /b
+
+:ui_init
+rem Colors only where the console understands them (Windows 10 or newer)
+set "ESC="
+set "R="
+set "B="
+set "D="
+set "G="
+set "Y="
+set "RD="
+set "C="
+set "WINVER=0"
+for /f "tokens=4 delims=. " %%v in ('ver') do set "WINVER=%%v"
+if %WINVER% GEQ 10 (
+    for /f %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+)
+if defined ESC (
+    set "R=%ESC%[0m"
+    set "B=%ESC%[1m"
+    set "D=%ESC%[2m"
+    set "G=%ESC%[32m"
+    set "Y=%ESC%[33m"
+    set "RD=%ESC%[31m"
+    set "C=%ESC%[36m"
+)
+for /f %%a in ('copy /Z "%~f0" nul') do set "CR=%%a"
+exit /b
+
+:ui_header
+echo.
+echo   %D%- a Maiz's one -%R%
+echo   %B%LinkCatty%R%  %D%%SHOW_VER%%R%
+echo   %D%----------------------------------------------------------%R%
+exit /b
+
+:ui_ok
+echo   %G%+%R% !MSG!  %D%!DET!%R%
+exit /b
+
+:ui_warn
+echo   %Y%^^!%R% !MSG!  %D%!DET!%R%
+exit /b
+
+:ui_fail
+echo   %RD%x%R% !MSG!  %D%!DET!%R%
+exit /b
+
+:ui_arrow
+echo   %C%^>%R% !MSG!  %D%!DET!%R%
+exit /b
+
+:ui_note
+echo   %D%%~1%R%
+exit /b
+
+:ui_bar
+rem draws one in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL
+set /a BP=BAR_DONE*100/BAR_TOTAL
+set /a BF=BAR_DONE*24/BAR_TOTAL
+set "BB1="
+set "BB2="
+for /l %%k in (1,1,24) do (
+    if %%k leq !BF! (set "BB1=!BB1!#") else (set "BB2=!BB2!.")
+)
+<nul set /p "=!CR!  %C%!BAR_LABEL!%R%  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%   "
 exit /b

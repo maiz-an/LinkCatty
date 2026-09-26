@@ -1,0 +1,7 @@
+# Line endings are part of the code for the launcher scripts, and GitHub serves the
+# stored bytes to the installers and updaters. So Git must NOT convert them:
+#   *.cmd / *.bat are stored with CRLF (cmd breaks labels and goto on LF-only files)
+#   *.sh          are stored with LF   (bash breaks on CRLF)
+*.cmd -text
+*.bat -text
+*.sh  -text

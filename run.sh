@@ -1,89 +1,129 @@
 #!/bin/bash
 # LinkCatty Launcher for Linux/macOS
-# Production-ready: smart Python detection, no-op on re-runs, cross-platform
+# Works with the bash 3.2 that ships with macOS (no associative arrays, no bash 4 features).
+# This file must keep LF line endings (see .gitattributes).
 
 # -------------------------------------------------------------------
-# Check for uninstall flag
+# Resolve where LinkCatty lives (also when started through a symlink)
 # -------------------------------------------------------------------
-if [[ "$*" == *"--uninstall"* ]]; then
-    if [ -f "./uninstall_linkcatty.sh" ]; then
-        ./uninstall_linkcatty.sh
-    elif [ -f "$HOME/.local/share/LinkCatty/uninstall_linkcatty.sh" ]; then
-        "$HOME/.local/share/LinkCatty/uninstall_linkcatty.sh"
-    else
-        echo "Uninstaller not found. Downloading..."
-        UNINSTALL_URL="https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
-        UNINSTALL_FILE="/tmp/uninstall_linkcatty.sh"
-        curl -s -L -o "$UNINSTALL_FILE" "$UNINSTALL_URL"
-        if [ -f "$UNINSTALL_FILE" ]; then
-            chmod +x "$UNINSTALL_FILE"
-            "$UNINSTALL_FILE"
-        else
-            echo "Failed to download uninstaller."
-            read -p "Press Enter to exit..."
-        fi
-    fi
-    exit 0
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do
+    LINK_DIR="$(cd -P "$(dirname "$SELF")" && pwd)"
+    SELF="$(readlink "$SELF")"
+    case "$SELF" in
+        /*) ;;
+        *) SELF="$LINK_DIR/$SELF" ;;
+    esac
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SELF")" && pwd)"
+SELF="$SCRIPT_DIR/$(basename "$SELF")"
+
+# -------------------------------------------------------------------
+# Look and feel (same as the app)
+# -------------------------------------------------------------------
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    C_RST=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
+    C_CY=$'\033[36m'; C_GR=$'\033[32m'; C_RD=$'\033[31m'; C_YL=$'\033[33m'
+    IS_TTY=1
+else
+    C_RST=""; C_DIM=""; C_BOLD=""; C_CY=""; C_GR=""; C_RD=""; C_YL=""
+    IS_TTY=0
 fi
+RULE=""; _i=0
+while [ $_i -lt 58 ]; do RULE="$RULE─"; _i=$((_i + 1)); done
 
-# -------------------------------------------------------------------
-# Resolve script directory (works even when called via symlink)
-# -------------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# -------------------------------------------------------------------
-# Check for --update flag — force update by resetting local version
-# -------------------------------------------------------------------
-if [[ "$*" == *"--update"* ]]; then
-    printf "0.0.0" > "$SCRIPT_DIR/sources/version.txt"
-    echo "Forcing update check..."
-fi
-
-# -------------------------------------------------------------------
-# Check for --location flag
-# -------------------------------------------------------------------
-if [[ "$*" == *"--location"* ]]; then
+ui_header() {   # title, small text
     echo ""
-    echo "LinkCatty is installed at:"
-    echo "$SCRIPT_DIR"
-    exit 0
+    printf "  %s- a Maiz's one -%s\n" "$C_DIM" "$C_RST"
+    printf "  %s%s%s  %s%s%s\n" "$C_BOLD" "$1" "$C_RST" "$C_DIM" "$2" "$C_RST"
+    printf "  %s%s%s\n" "$C_DIM" "$RULE" "$C_RST"
+}
+ui_line() {     # color, icon, text, detail
+    if [ -n "$4" ]; then
+        printf "  %s%s%s %s  %s%s%s\n" "$1" "$2" "$C_RST" "$3" "$C_DIM" "$4" "$C_RST"
+    else
+        printf "  %s%s%s %s\n" "$1" "$2" "$C_RST" "$3"
+    fi
+}
+ui_ok()    { ui_line "$C_GR" "✔" "$1" "$2"; }
+ui_fail()  { ui_line "$C_RD" "✖" "$1" "$2"; }
+ui_warn()  { ui_line "$C_YL" "⚠" "$1" "$2"; }
+ui_arrow() { ui_line "$C_CY" "›" "$1" "$2"; }
+ui_note()  { printf "  %s%s%s\n" "$C_DIM" "$1" "$C_RST"; }
+ui_bar() {      # label, done, total  (in place, only on a real terminal)
+    [ "$IS_TTY" = 1 ] || return 0
+    local label="$1" n="$2" total="$3" w=24 pct filled b1="" b2="" k=0
+    pct=$(( n * 100 / total )); filled=$(( n * w / total ))
+    while [ $k -lt $w ]; do
+        if [ $k -lt $filled ]; then b1="$b1━"; else b2="$b2─"; fi
+        k=$((k + 1))
+    done
+    printf "\r  %s%s%s  %s%s%s%s%s%s  %s%3d%%%s  %s%d/%d%s\033[K" \
+        "$C_CY" "$label" "$C_RST" "$C_CY" "$b1" "$C_RST" "$C_DIM" "$b2" "$C_RST" \
+        "$C_BOLD" "$pct" "$C_RST" "$C_DIM" "$n" "$total" "$C_RST"
+}
+
+# -------------------------------------------------------------------
+# Flags
+# -------------------------------------------------------------------
+case " $* " in
+    *" --uninstall "*)
+        if [ -f "$SCRIPT_DIR/uninstall_linkcatty.sh" ]; then
+            bash "$SCRIPT_DIR/uninstall_linkcatty.sh"
+        else
+            UN="$(mktemp "${TMPDIR:-/tmp}/linkcatty_un.XXXXXX")"
+            if curl -fsSL -o "$UN" "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"; then
+                bash "$UN"
+            else
+                echo "Could not download the uninstaller."
+            fi
+            rm -f "$UN"
+        fi
+        exit 0
+        ;;
+esac
+
+case " $* " in
+    *" --location "*)
+        echo ""
+        echo "LinkCatty is installed at:"
+        echo "$SCRIPT_DIR"
+        exit 0
+        ;;
+esac
+
+FORCE_UPDATE=0
+case " $* " in *" --update "*) FORCE_UPDATE=1 ;; esac
+RESTARTED=0
+case " $* " in *" --restarted "*|*" --repaired "*) RESTARTED=1 ;; esac
+
+LOCAL_VERSION_FILE="$SCRIPT_DIR/sources/version.txt"
+if [ -f "$LOCAL_VERSION_FILE" ]; then
+    LOCAL_VER="$(tr -d '\r\n ' < "$LOCAL_VERSION_FILE")"
+else
+    LOCAL_VER="0.0.0"
 fi
+[ -n "$LOCAL_VER" ] || LOCAL_VER="0.0.0"
 
-echo ""
-echo "============================================================"
-echo "                    LinkCatty Launcher"
-echo "============================================================"
-echo ""
+ui_header "LinkCatty" "v$LOCAL_VER"
 
 # -------------------------------------------------------------------
-# [1/3] Check for updates
+# 1. Updates
 # -------------------------------------------------------------------
-echo "[1/3] Checking for updates..."
-
 # raw.githubusercontent.com caches "main" for ~5 minutes and ignores query strings.
 # Ask git (never cached) for the latest commit SHA and download from a SHA-pinned URL.
 # If the lookup fails we fall back to "main".
 REF="main"
 LATEST_SHA="$(curl -sf --max-time 8 "https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack" 2>/dev/null \
     | grep -a -o '[0-9a-f]\{40\} refs/heads/main' | head -n1 | cut -c1-40)"
-if [[ "$LATEST_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+if [ "${#LATEST_SHA}" -eq 40 ] && echo "$LATEST_SHA" | grep -q '^[0-9a-f]*$'; then
     REF="$LATEST_SHA"
 fi
 RAW_BASE="https://raw.githubusercontent.com/maiz-an/LinkCatty/$REF"
-REMOTE_VERSION_URL="$RAW_BASE/sources/version.txt"
-LOCAL_VERSION_FILE="$SCRIPT_DIR/sources/version.txt"
 DEPS_MARKER="$SCRIPT_DIR/sources/.deps_installed"
 
-if [ -f "$LOCAL_VERSION_FILE" ]; then
-    LOCAL_VER=$(tr -d '\r\n' < "$LOCAL_VERSION_FILE" | xargs)
-else
-    LOCAL_VER="0.0.0"
-fi
-
-REMOTE_VER=$(curl -sf --max-time 5 "$REMOTE_VERSION_URL" | tr -d '\r\n' | xargs)
-if [ -z "$REMOTE_VER" ]; then
-    REMOTE_VER="$LOCAL_VER"
-fi
+REMOTE_VER="$(curl -sf --max-time 8 "$RAW_BASE/sources/version.txt" | tr -d '\r\n ')"
+[ -n "$REMOTE_VER" ] || REMOTE_VER="$LOCAL_VER"
 
 FILE_PATHS=(
     "sources/downloaders/spotify_downloader.py"
@@ -119,229 +159,224 @@ FILE_URLS=(
 )
 
 # If a managed file is missing (e.g. a module added in a newer release), repair by
-# re-downloading. --repaired on the restart stops this from ever looping.
+# re-downloading. The restart flag stops any update loop.
 NEED_UPDATE=0
-BANNER="UPDATE AVAILABLE!"
-RESTART_ARGS=()
-[ "$LOCAL_VER" != "$REMOTE_VER" ] && NEED_UPDATE=1
-if [ "$NEED_UPDATE" = 0 ] && [[ "$*" != *"--repaired"* ]]; then
-    for p in "${FILE_PATHS[@]}"; do
-        if [ ! -f "$SCRIPT_DIR/$p" ]; then
-            NEED_UPDATE=1
-            BANNER="REPAIRING MISSING FILES"
-            RESTART_ARGS=(--repaired)
+UPDATE_KIND="update"
+if [ "$RESTARTED" = 0 ]; then
+    [ "$LOCAL_VER" != "$REMOTE_VER" ] && NEED_UPDATE=1
+    [ "$FORCE_UPDATE" = 1 ] && NEED_UPDATE=1
+    if [ "$NEED_UPDATE" = 0 ]; then
+        for p in "${FILE_PATHS[@]}"; do
+            if [ ! -f "$SCRIPT_DIR/$p" ]; then
+                NEED_UPDATE=1
+                UPDATE_KIND="repair"
+                break
+            fi
+        done
+    fi
+fi
+
+if [ "$NEED_UPDATE" = 0 ]; then
+    ui_ok "Up to date" "v$LOCAL_VER"
+else
+    if [ "$UPDATE_KIND" = "repair" ]; then
+        ui_arrow "Repairing missing files"
+    elif [ "$FORCE_UPDATE" = 1 ]; then
+        ui_arrow "Update check" "latest is $REMOTE_VER"
+    else
+        ui_arrow "Update available" "$LOCAL_VER → $REMOTE_VER"
+    fi
+    echo ""
+
+    # Everything goes to a staging folder first; the install is only touched when every
+    # file arrived, so a dropped connection can never leave a half update.
+    STAGE="$(mktemp -d "${TMPDIR:-/tmp}/linkcatty.XXXXXX")"
+    trap 'rm -rf "$STAGE"; exit 130' INT TERM
+    TOTAL=${#FILE_PATHS[@]}
+    FAILED=0
+    i=0
+    while [ $i -lt $TOTAL ]; do
+        ui_bar "Updating" "$i" "$TOTAL"
+        FILE_PATH="${FILE_PATHS[$i]}"
+        PINNED_URL="${FILE_URLS[$i]/\/LinkCatty\/main\//\/LinkCatty\/$REF\/}"
+        mkdir -p "$(dirname "$STAGE/$FILE_PATH")"
+        if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 90 -o "$STAGE/$FILE_PATH" "$PINNED_URL"; then
+            FAILED=1
             break
         fi
+        case "$FILE_PATH" in
+            *.sh) tr -d '\r' < "$STAGE/$FILE_PATH" > "$STAGE/$FILE_PATH.lf" && mv -f "$STAGE/$FILE_PATH.lf" "$STAGE/$FILE_PATH" ;;
+        esac
+        i=$((i + 1))
     done
-fi
-
-if [ "$NEED_UPDATE" = 1 ]; then
-    echo ""
-    echo "============================================================"
-    echo "                     $BANNER"
-    echo "============================================================"
-    echo "  Current version : $LOCAL_VER"
-    echo "  Latest version  : $REMOTE_VER"
-    echo ""
-    echo "[2/3] Downloading update..."
-
-    TOTAL=${#FILE_PATHS[@]}
-
-    # Backup user data
-    [ -f "$SCRIPT_DIR/sources/settings.json" ] && cp "$SCRIPT_DIR/sources/settings.json" "/tmp/settings_backup.json"
-    [ -f "$SCRIPT_DIR/sources/download_history.json" ] && cp "$SCRIPT_DIR/sources/download_history.json" "/tmp/download_history_backup.json"
-
-    for i in "${!FILE_PATHS[@]}"; do
-        FILE_PATH="${FILE_PATHS[$i]}"
-        FILE_URL="${FILE_URLS[$i]}"
-        PERCENT=$(( (i+1) * 100 / TOTAL ))
-        printf "\rProgress: [%d/%d] %d%%  " "$((i+1))" "$TOTAL" "$PERCENT"
-        mkdir -p "$(dirname "$SCRIPT_DIR/$FILE_PATH")"
-        PINNED_URL="${FILE_URL/\/LinkCatty\/main\//\/LinkCatty\/$REF\/}"
-        curl -s -L -o "$SCRIPT_DIR/$FILE_PATH" "$PINNED_URL"
-    done
+    ui_bar "Updating" "$i" "$TOTAL"
+    [ "$IS_TTY" = 1 ] && printf "\n"
     echo ""
 
-    # Restore user data
-    [ -f "/tmp/settings_backup.json" ] && cp "/tmp/settings_backup.json" "$SCRIPT_DIR/sources/settings.json"
-    [ -f "/tmp/download_history_backup.json" ] && cp "/tmp/download_history_backup.json" "$SCRIPT_DIR/sources/download_history.json"
-    rm -f "/tmp/settings_backup.json" "/tmp/download_history_backup.json"
-
-    printf "%s" "$REMOTE_VER" > "$SCRIPT_DIR/sources/version.txt"
-
-    # Invalidate deps marker so deps reinstall after update
-    rm -f "$DEPS_MARKER"
-
-    # Update the launcher itself. Installed name is "linkcatty", repo name is run.sh.
-    # Download to temp, validate, then mv (atomic) so the running bash keeps its old inode.
-    SELF="$SCRIPT_DIR/$(basename "$0")"
-    LAUNCHER_NEW="$(mktemp)"
-    if curl -sf -L -o "$LAUNCHER_NEW" "$RAW_BASE/run.sh" \
-        && grep -q "LinkCatty Launcher" "$LAUNCHER_NEW"; then
-        mv -f "$LAUNCHER_NEW" "$SELF"
+    if [ "$FAILED" = 1 ]; then
+        rm -rf "$STAGE"
+        trap - INT TERM
+        ui_warn "Could not download the update" "nothing was changed"
+        ui_note "Check your connection. LinkCatty will try again next time."
+        echo ""
+        sleep 2
     else
-        rm -f "$LAUNCHER_NEW"
-    fi
-    chmod +x "$SELF" 2>/dev/null
+        cp -R "$STAGE"/. "$SCRIPT_DIR"/
+        rm -rf "$STAGE"
+        trap - INT TERM
+        chmod +x "$SCRIPT_DIR/uninstall_linkcatty.sh" 2>/dev/null
+        printf "%s" "$REMOTE_VER" > "$LOCAL_VERSION_FILE"
+        rm -f "$DEPS_MARKER"     # dependencies are re-checked after an update
 
-    echo ""
-    echo "[3/3] Update completed. Restarting..."
-    sleep 2
-    exec "$0" "${RESTART_ARGS[@]}"
-    exit 0
+        ui_ok "Updated to $REMOTE_VER" "restarting"
+
+        # Update the launcher itself. Installed name is "linkcatty", repo name is run.sh.
+        # Download to temp, validate, then mv (atomic) so the running bash keeps its old inode.
+        LAUNCHER_NEW="$(mktemp "${TMPDIR:-/tmp}/linkcatty_launcher.XXXXXX")"
+        if curl -fsSL -o "$LAUNCHER_NEW" "$RAW_BASE/run.sh" && grep -q "LinkCatty Launcher" "$LAUNCHER_NEW"; then
+            tr -d '\r' < "$LAUNCHER_NEW" > "$LAUNCHER_NEW.lf" && mv -f "$LAUNCHER_NEW.lf" "$SELF"
+        fi
+        rm -f "$LAUNCHER_NEW" "$LAUNCHER_NEW.lf"
+        chmod +x "$SELF" 2>/dev/null
+
+        sleep 1
+        exec "$SELF" --restarted
+    fi
 fi
 
 # -------------------------------------------------------------------
-# [2/3] Python setup - NO portable python on Mac/Linux
-#        Find system Python 3 (3.8+) or guide user to install it
+# 2. Python: find a system Python 3.8+ (no portable Python on macOS/Linux)
 # -------------------------------------------------------------------
-echo "[2/3] Setting up Python..."
-
 UNAME="$(uname -s)"
-PYTHON_EXE=""
 
-# Search for python3 / python in PATH, verify it's actually Python 3.8+
 find_python() {
+    local cmd path ver
     for cmd in python3 python python3.13 python3.12 python3.11 python3.10 python3.9 python3.8; do
-        if command -v "$cmd" >/dev/null 2>&1; then
-            PY_VER=$("$cmd" -c "import sys; v=sys.version_info; print(v.major*100+v.minor)" 2>/dev/null)
-            if [ -n "$PY_VER" ] && [ "$PY_VER" -ge 308 ]; then
-                echo "$cmd"
-                return 0
-            fi
+        path="$(command -v "$cmd" 2>/dev/null)" || continue
+        # macOS ships a /usr/bin/python3 stub that pops up an installer when the
+        # developer tools are missing; do not run it in that case.
+        if [ "$UNAME" = "Darwin" ] && [ "$path" = "/usr/bin/python3" ] && ! xcode-select -p >/dev/null 2>&1; then
+            continue
+        fi
+        ver="$("$cmd" -c "import sys; v=sys.version_info; print(v.major*100+v.minor)" 2>/dev/null)"
+        if [ -n "$ver" ] && [ "$ver" -ge 308 ] 2>/dev/null; then
+            echo "$cmd"
+            return 0
         fi
     done
     return 1
 }
 
-PYTHON_EXE=$(find_python)
+PYTHON_EXE="$(find_python)"
 
 if [ -z "$PYTHON_EXE" ]; then
-    echo ""
-    echo "ERROR: Python 3.8+ not found!"
-    echo ""
+    ui_fail "Python 3.8 or newer was not found"
     if [ "$UNAME" = "Darwin" ]; then
-        echo "Install Python on macOS with one of:"
-        echo "  brew install python          (Homebrew)"
-        echo "  https://www.python.org/downloads/"
-    elif [ "$UNAME" = "Linux" ]; then
-        echo "Install Python on Linux with:"
-        echo "  sudo apt install python3      (Debian/Ubuntu)"
-        echo "  sudo dnf install python3      (Fedora/RHEL)"
-        echo "  sudo pacman -S python         (Arch)"
+        ui_note "Install it with Homebrew:   brew install python"
+        ui_note "or from https://www.python.org/downloads/"
+    else
+        ui_note "Debian/Ubuntu:  sudo apt install python3 python3-venv"
+        ui_note "Fedora/RHEL:    sudo dnf install python3"
+        ui_note "Arch:           sudo pacman -S python"
     fi
     echo ""
-    read -p "Press Enter to exit..."
+    read -r -p "  Press Enter to exit..." _
     exit 1
 fi
+PY_VERSION="$("$PYTHON_EXE" -c "import sys; print('%d.%d.%d' % sys.version_info[:3])" 2>/dev/null)"
+ui_ok "Python ready" "$PY_VERSION"
 
-echo "Using Python: $PYTHON_EXE ($($PYTHON_EXE --version 2>&1))"
+# FFmpeg: downloaded once per OS/arch, never again
+download_ffmpeg() {   # os-folder name, release asset name
+    local dir="$SCRIPT_DIR/sources/FFmpeg/$1" zip found
+    mkdir -p "$dir"
+    zip="$dir/ffmpeg_dl.zip"
+    if curl -fsSL --retry 2 -o "$zip" "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/$2" \
+        && unzip -q -o "$zip" -d "$dir/extract" 2>/dev/null; then
+        found="$(find "$dir/extract" -name ffmpeg -type f 2>/dev/null | head -n1)"
+        if [ -n "$found" ]; then
+            mv -f "$found" "$dir/ffmpeg"
+            chmod +x "$dir/ffmpeg" 2>/dev/null
+        fi
+    fi
+    rm -rf "$dir/extract" "$zip"
+    [ -x "$dir/ffmpeg" ]
+}
 
-# Add user scripts dir to PATH so installed tools (yt-dlp etc.) are usable
-USER_SCRIPTS=$("$PYTHON_EXE" -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>/dev/null)
-if [ -n "$USER_SCRIPTS" ] && [ -d "$USER_SCRIPTS" ]; then
-    export PATH="$USER_SCRIPTS:$PATH"
-fi
-# Also add --user scripts location
-USER_BASE=$("$PYTHON_EXE" -m site --user-base 2>/dev/null)
-if [ -n "$USER_BASE" ]; then
-    export PATH="$USER_BASE/bin:$PATH"
-fi
-
-# ── FFmpeg: download once per OS/arch, never again
+ARCH_RAW="$(uname -m)"
+case "$ARCH_RAW" in
+    aarch64|arm64) ARCH_NAME="arm64" ;;
+    *) ARCH_NAME="x64" ;;
+esac
+FFMPEG_DIR=""
 if [ "$UNAME" = "Darwin" ]; then
     FFMPEG_DIR="$SCRIPT_DIR/sources/FFmpeg/macos"
-    FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
-    if [ ! -f "$FFMPEG_BIN" ]; then
-        echo "Downloading FFmpeg for macOS (first run only)..."
-        mkdir -p "$FFMPEG_DIR"
-        ARCH_RAW="$(uname -m)"
-        if [ "$ARCH_RAW" = "arm64" ]; then
-            # Apple Silicon
-            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
-                "https://evermeet.cx/ffmpeg/ffmpeg-7.0.1.zip" 2>&1 || \
-            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
-                "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/macos-arm64.zip" 2>&1
-        else
-            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
-                "https://evermeet.cx/ffmpeg/ffmpeg-7.0.1.zip" 2>&1 || \
-            curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg.zip" \
-                "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/macos-x64.zip" 2>&1
-        fi
-        if [ -f "$FFMPEG_DIR/ffmpeg.zip" ]; then
-            unzip -q "$FFMPEG_DIR/ffmpeg.zip" -d "$FFMPEG_DIR"
-            rm -f "$FFMPEG_DIR/ffmpeg.zip"
-            chmod +x "$FFMPEG_BIN" 2>/dev/null
-        fi
+    if [ ! -x "$FFMPEG_DIR/ffmpeg" ]; then
+        ui_arrow "Getting FFmpeg" "first run only"
+        download_ffmpeg "macos" "macos-$ARCH_NAME.zip"
     fi
-    [ -f "$FFMPEG_BIN" ] && export PATH="$FFMPEG_DIR:$PATH" || echo "Warning: FFmpeg not available."
-
 elif [ "$UNAME" = "Linux" ]; then
-    ARCH_RAW="$(uname -m)"
     FFMPEG_DIR="$SCRIPT_DIR/sources/FFmpeg/linux"
-    FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
-    if [ ! -f "$FFMPEG_BIN" ]; then
-        echo "Downloading FFmpeg for Linux (first run only)..."
-        mkdir -p "$FFMPEG_DIR"
-        if [ "$ARCH_RAW" = "aarch64" ] || [ "$ARCH_RAW" = "arm64" ]; then
-            FFMPEG_URL="https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/linux-arm64.zip"
-        else
-            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-git-amd64-static.tar.xz"
-        fi
-        curl -L --progress-bar -o "$FFMPEG_DIR/ffmpeg_dl" "$FFMPEG_URL"
-        if [[ "$FFMPEG_URL" == *.tar.xz ]]; then
-            tar -xf "$FFMPEG_DIR/ffmpeg_dl" -C "$FFMPEG_DIR" 2>/dev/null
-            EXTRACTED=$(find "$FFMPEG_DIR" -maxdepth 2 -name "ffmpeg" -type f | head -n1)
-            if [ -n "$EXTRACTED" ]; then
-                cp "$EXTRACTED" "$FFMPEG_BIN"
-                rm -rf "$FFMPEG_DIR"/ffmpeg-*/ "$FFMPEG_DIR/ffmpeg_dl"
-            fi
-        else
-            unzip -q "$FFMPEG_DIR/ffmpeg_dl" -d "$FFMPEG_DIR" 2>/dev/null
-            EXTRACTED=$(find "$FFMPEG_DIR" -maxdepth 2 -name "ffmpeg" -type f | head -n1)
-            [ -n "$EXTRACTED" ] && mv "$EXTRACTED" "$FFMPEG_BIN"
-            rm -f "$FFMPEG_DIR/ffmpeg_dl"
-        fi
-        chmod +x "$FFMPEG_BIN" 2>/dev/null
+    if [ ! -x "$FFMPEG_DIR/ffmpeg" ]; then
+        ui_arrow "Getting FFmpeg" "first run only"
+        download_ffmpeg "linux" "linux-$ARCH_NAME.zip"
     fi
-    [ -f "$FFMPEG_BIN" ] && export PATH="$FFMPEG_DIR:$PATH" || echo "Warning: FFmpeg not available."
+fi
+if [ -n "$FFMPEG_DIR" ] && [ -x "$FFMPEG_DIR/ffmpeg" ]; then
+    export PATH="$FFMPEG_DIR:$PATH"
+elif command -v ffmpeg >/dev/null 2>&1; then
+    :
+else
+    ui_warn "FFmpeg is not available" "video merging and MP3 conversion need it"
 fi
 
 # -------------------------------------------------------------------
-# [3/3] Install dependencies (only if not already done)
+# 3. Dependencies, kept in a private virtual environment. Homebrew and newer Linux
+#    Pythons refuse "pip install" into the system ("externally managed environment").
 # -------------------------------------------------------------------
-echo "[3/3] Checking dependencies..."
-
-if [ -f "$DEPS_MARKER" ]; then
-    echo "Dependencies already installed. Skipping."
+VENV_DIR="$SCRIPT_DIR/sources/.venv"
+if [ -f "$DEPS_MARKER" ] && { [ -x "$VENV_DIR/bin/python" ] || [ ! -d "$VENV_DIR" ]; }; then
+    ui_ok "Dependencies ready"
 else
-    echo "Installing packages (first run or after update)..."
-    # Upgrade pip
-    "$PYTHON_EXE" -m pip install --quiet --upgrade pip --no-warn-script-location 2>/dev/null || true
-    # Install deps
-    if "$PYTHON_EXE" -m pip install --quiet --upgrade yt-dlp spotipy spotdl \
-        --no-warn-script-location --no-cache-dir; then
-        # Re-source user scripts after install
-        USER_BASE=$("$PYTHON_EXE" -m site --user-base 2>/dev/null)
-        [ -n "$USER_BASE" ] && export PATH="$USER_BASE/bin:$PATH"
-        printf "%s" "$LOCAL_VER" > "$DEPS_MARKER"
-        echo "Packages installed successfully."
+    ui_arrow "Installing packages" "first run only, one moment"
+    RUN_PY="$PYTHON_EXE"
+    if [ ! -x "$VENV_DIR/bin/python" ]; then
+        rm -rf "$VENV_DIR"
+        "$PYTHON_EXE" -m venv "$VENV_DIR" >/dev/null 2>&1 || rm -rf "$VENV_DIR"
+    fi
+    if [ -x "$VENV_DIR/bin/python" ]; then
+        RUN_PY="$VENV_DIR/bin/python"
+        PIP_EXTRA=""
     else
-        echo "ERROR: Failed to install some packages. Check your internet connection."
-        read -p "Press Enter to exit..."
+        # no venv module (some Debian/Ubuntu installs): fall back to the user site
+        PIP_EXTRA="--user --break-system-packages"
+    fi
+    "$RUN_PY" -m pip install --quiet --upgrade pip $PIP_EXTRA >/dev/null 2>&1 || true
+    if "$RUN_PY" -m pip install --quiet --upgrade $PIP_EXTRA yt-dlp spotipy spotdl --no-cache-dir 2>/dev/null \
+        || "$RUN_PY" -m pip install --quiet --upgrade --user yt-dlp spotipy spotdl --no-cache-dir; then
+        printf "%s" "$LOCAL_VER" > "$DEPS_MARKER"
+        ui_ok "Dependencies ready"
+    else
+        ui_fail "Could not install the packages"
+        ui_note "Check your internet connection and start LinkCatty again."
+        echo ""
+        read -r -p "  Press Enter to exit..." _
         exit 1
     fi
 fi
-
-echo ""
-echo "Launching LinkCatty..."
-echo ""
+if [ -x "$VENV_DIR/bin/python" ]; then
+    PYTHON_EXE="$VENV_DIR/bin/python"
+    export PATH="$VENV_DIR/bin:$PATH"
+fi
+USER_BASE="$("$PYTHON_EXE" -m site --user-base 2>/dev/null)"
+[ -n "$USER_BASE" ] && export PATH="$USER_BASE/bin:$PATH"
 
 "$PYTHON_EXE" "$SCRIPT_DIR/sources/LinkCatty.py"
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
     echo ""
-    echo "Application exited with error code $EXIT_CODE"
+    ui_fail "LinkCatty stopped unexpectedly" "error code $EXIT_CODE"
+    echo ""
+    read -r -p "  Press Enter to exit..." _
 fi
-read -p "Press Enter to exit..."
 exit $EXIT_CODE
