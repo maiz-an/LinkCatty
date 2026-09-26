@@ -80,7 +80,7 @@ def print_version():
 
 
 def print_main_menu():
-    print(f"{BOLD}{WHITE}{center_text('🎯 Main Menu')}{RESET}")
+    print(f"{BOLD}{WHITE}{center_text('🎯 MAIN MENU')}{RESET}")
     print_version()
     print("=" * 61)
     print(f"")

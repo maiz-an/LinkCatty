@@ -49,7 +49,7 @@ def settings_menu(config):
 
     while True:
         try:
-            section_header("⚙️  SETTINGS")
+            section_header("⚙️ SETTINGS")
             print(f"📍 Install location : {APP_ROOT}")
             print(f"📂 Download folder  : {config['download_dir']}")
             print("=" * 61)
