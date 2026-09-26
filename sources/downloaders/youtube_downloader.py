@@ -5,6 +5,7 @@ import threading
 import os
 from collections import Counter
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -222,16 +223,61 @@ def download_single_video(video_url, output_dir, mode, config, progress=None):
 #  Info fetching
 # ─────────────────────────────────────────────────────────────────────
 
+def _normalize_url(url):
+    """Turn what people paste into what we actually want to download.
+
+    * video + auto-generated "mix" (list=RD...)  -> just that video
+    * channel page (@name, /channel/, /c/, /user/) -> its Videos tab (uploads)
+    """
+    parts = urlsplit(url)
+    query = parse_qs(parts.query)
+    host = (parts.hostname or "").lower()
+    if query.get("list", [""])[0].startswith("RD") and (
+            "v" in query or host.endswith("youtu.be")):
+        keep = {k: v for k, v in query.items() if k == "v"}
+        return urlunsplit((parts.scheme, parts.netloc, parts.path,
+                           urlencode(keep, doseq=True), ""))
+    if re.fullmatch(r"/(@[^/]+|channel/[^/]+|c/[^/]+|user/[^/]+)/?", parts.path):
+        return urlunsplit((parts.scheme, parts.netloc,
+                           parts.path.rstrip("/") + "/videos", "", ""))
+    return url
+
+
+def _info_options(cookie_option=None):
+    """Fast info fetch: playlists/channels are listed flat (titles and ids
+    only) instead of loading every single video, and one bad entry cannot
+    abort the whole listing."""
+    options = {
+        "quiet": True,
+        "no_warnings": True,
+        "logger": SilentLogger(),
+        "extract_flat": "in_playlist",
+    }
+    if cookie_option:
+        options["cookiesfrombrowser"] = cookie_option
+    return options
+
+
+def _fetch_hint(error):
+    text = _clean_error(error).lower()
+    if any(t in text for t in ("premieres in", "will begin in", "live event",
+                               "upcoming")):
+        return "It is not available yet. Try again once it has started."
+    if any(t in text for t in ("private video", "unavailable", "removed")):
+        return "The video may be private, removed or region-locked."
+    return "Check your internet connection and URL."
+
+
 def get_url_info(url):
     try:
-        with YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        with YoutubeDL(_info_options()) as ydl:
             info = ydl.extract_info(url, download=False)
         return parse_info(info)
     except Exception as error:
         error_message = _clean_error(error)
         if "Sign in to confirm" not in error_message and "bot" not in error_message:
             print_error(f"Could not fetch info: {_short_reason(error, 120)}",
-                        "Check your internet connection and URL.")
+                        _fetch_hint(error))
             return None
         print_warning("Info fetch blocked. Trying browser cookies.")
 
@@ -240,12 +286,12 @@ def get_url_info(url):
         print_error("No working browser cookies.")
         return None
     try:
-        with YoutubeDL({"quiet": True, "no_warnings": True,
-                        "cookiesfrombrowser": cookie_option}) as ydl:
+        with YoutubeDL(_info_options(cookie_option)) as ydl:
             info = ydl.extract_info(url, download=False)
         return parse_info(info)
     except Exception as error:
-        print_error(f"Could not fetch info with cookies: {_short_reason(error, 100)}")
+        print_error(f"Could not fetch info with cookies: {_short_reason(error, 100)}",
+                    _fetch_hint(error))
         return None
 
 
@@ -253,12 +299,17 @@ def parse_info(info):
     if not isinstance(info, dict):
         raise ValueError("YouTube returned an unexpected response.")
     if "entries" in info:
-        entries = [entry for entry in info["entries"] if entry]
+        listed = [entry for entry in info["entries"] if entry]
+        # not-yet-released premieres and live streams cannot be downloaded
+        entries = [e for e in listed
+                   if e.get("live_status") not in ("is_upcoming", "is_live")]
+        info["entries"] = entries          # a list, so it can be read again later
         return {
             "type": "playlist",
             "title": info.get("title", "Unknown Playlist"),
             "uploader": info.get("uploader", "Unknown"),
             "video_count": len(entries),
+            "skipped": len(listed) - len(entries),
             "videos": [entry.get("title", f"Video {i+1}")
                        for i, entry in enumerate(entries[:5])],
             "full_info": info,
@@ -294,6 +345,7 @@ def display_playlist_info(info):
         ("Name", info["title"]),
         ("Channel", info["uploader"]),
         ("Videos", info["video_count"]),
+        ("Skipped", f'{info["skipped"]} upcoming/live' if info.get("skipped") else None),
     ], icon="📂",
         details=[f"{index}. {title}" for index, title in enumerate(info["videos"], 1)])
 
@@ -617,6 +669,7 @@ def _file_size(path):
 
 
 def download_content(url, mode, config):
+    url = _normalize_url(url)
     start_spinner("🎬 Fetching video/playlist information")
     info = get_url_info(url)
     stop_spinner()
@@ -688,6 +741,7 @@ def run_manual_format(config):
             print_error("Not a valid YouTube URL",
                         "URL should start with http(s) and contain youtube.com or youtu.be.")
             continue
+        url = _normalize_url(url)
         try:
             print_info("Fetching available formats...")
             with YoutubeDL({"quiet": True, "listformats": True}) as ydl:

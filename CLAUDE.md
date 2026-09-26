@@ -37,7 +37,7 @@ Every downloader (YouTube, Spotify, Other) draws its screens with the shared kit
 
 | Component | Use |
 |---|---|
-| `section_header(title)` | clear screen + banner (logo + tagline) + dim centered title + dim version line + rule (same for the main menu and Settings). Call it again after a run so the screen shows just header + result |
+| `section_header(title)` | clear screen + banner (logo + tagline) + bold centered title + dim version line + rule (same for the main menu and Settings). Call it again after a run so the screen shows just header + result |
 | `show_menu(title, options)` | numbered sub-menu; returns the chosen key (last option = Back) |
 | `ask_url(what)` | the URL prompt: `🎯 Enter <what> URL (blank to go back):` |
 | `card(title, rows, icon, details)` | info card (`┌ │ └`, dim aligned labels, optional bullets) |
@@ -102,4 +102,5 @@ Then bump `sources/version.txt` (updates only trigger when the version string di
 - **`.cmd` files must be pure ASCII.** `run.cmd` runs `chcp 65001`; any multi-byte character (e.g. an em dash in a comment) makes cmd misread later lines (`'tle' is not recognized`). Check with `grep -nP '[^\x00-\x7F]' *.cmd`.
 - **`version.txt` must have no BOM.** In Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds one. Write it with `printf "1.0.x" > sources/version.txt`.
 - Inside parenthesized blocks in `.cmd` files use `rem`, not `::`.
+- **YouTube info must be fetched flat.** `get_url_info` uses `extract_flat: "in_playlist"` (titles and ids only). Loading every entry made playlists/channels take minutes, and one premiere or unavailable entry aborted the whole fetch ("Premieres in 11 hours"). `_normalize_url` also turns a video + auto-mix link (`list=RD...`) into just the video and a channel page (`@name`, `/channel/`, `/c/`, `/user/`) into its `/videos` tab; upcoming/live entries are skipped and counted.
 - **A brand-new source file is not fetched by launchers older than the missing-file repair** (added in 1.0.31). An update runs with the *installed* launcher's embedded file list, so a file added in version N is missing for users updating from N-1. Since 1.0.31 the launcher also treats a missing listed file as a reason to update: it re-downloads and restarts once with `--repaired` (which skips the check, so a failing download can never loop). The hop therefore self-heals on the next start; keep the file lists complete and prefer extending existing files when possible.

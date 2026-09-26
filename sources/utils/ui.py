@@ -80,7 +80,7 @@ def print_version():
 
 
 def print_main_menu():
-    print(f"{DIM}{center_text('🎯 MAIN MENU')}{RESET}")
+    print(f"{BOLD}{WHITE}{center_text('🎯 Main Menu')}{RESET}")
     print_version()
     print("=" * 61)
     print(f"")
@@ -444,7 +444,7 @@ def section_header(title):
     """Clear the screen and draw: banner, centered title, rule."""
     clear_screen()
     print_banner()
-    print(f"{DIM}{center_text(title)}{RESET}")
+    print(f"{BOLD}{center_text(title)}{RESET}")
     print_version()
     print("=" * WIDTH)
 
