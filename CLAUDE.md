@@ -27,7 +27,6 @@ LinkCatty/
 │   ├── download_history.json
 │   ├── requirements.txt        # yt-dlp, spotipy, spotdl
 │   └── version.txt
-├── downloads/                  # Default download folder
 ├── run.cmd / run.sh            # Launchers (auto-update + dep install)
 └── CLAUDE.md
 ```
@@ -71,7 +70,7 @@ Behavior worth knowing: video quality comes from Settings > 8 (`other.video_qual
 ## Config Structure (settings.json)
 ```json
 {
-  "download_dir": "...",
+  "download_dir": "<Downloads>/LinkCatty",
   "youtube": { "audio_quality": "320k", "video_quality": "best", ... },
   "spotify":  { "audio_format": "mp3", "audio_quality": "320k", ... },
   "network":  { "proxy": "" },
@@ -79,6 +78,9 @@ Behavior worth knowing: video quality comes from Settings > 8 (`other.video_qual
 }
 ```
 `network.proxy` (Settings > 7) applies to Other Downloaders only. It is used **only as a fallback**: downloaders call `run_with_proxy_fallback(func, config, proxy=None)` from `utils/config.py`, which tries a direct connection first and retries once through the proxy only when the error looks like a blocked/reset connection (`is_block_error`). Reuse it in any new site handler; keep it preserved across "restore defaults".
+
+## Download folder
+Default: `<system Downloads folder>/LinkCatty` (`get_default_download_dir()` in `utils/config.py`: the Windows known-folder API so a moved/OneDrive Downloads works, `XDG_DOWNLOAD_DIR` on Linux, `~/Downloads` on macOS and as the fallback). `main()` creates it on first launch. `load_config()` migrates a `download_dir` that still equals the old built-in default (`<install>/downloads`) to the new one and saves it; a folder the user picked is never touched, and files already in the old folder are not moved. "Restore defaults" resets to the new default.
 
 ## Key Dependencies
 - `yt-dlp` — handles YouTube and 1000+ other sites

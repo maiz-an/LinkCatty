@@ -1,6 +1,8 @@
 import json
+import os
 import re
 import socket
+import sys
 from copy import deepcopy
 from urllib.parse import urlsplit
 from pathlib import Path
@@ -11,9 +13,52 @@ BASE_DIR = Path(__file__).parent.parent  # sources folder
 CONFIG_FILE = BASE_DIR / "settings.json"
 VERSION_FILE = BASE_DIR / "version.txt"
 
-# Download folder stays in root (user's files)
 ROOT_DIR = BASE_DIR.parent
-DEFAULT_DOWNLOAD_DIR = str(ROOT_DIR / "downloads")
+# Before 1.0.34 the default download folder lived inside the install folder.
+LEGACY_DOWNLOAD_DIR = str(ROOT_DIR / "downloads")
+
+
+def _system_downloads_dir():
+    """The user's real Downloads folder (follows a moved/OneDrive one)."""
+    home = Path.home()
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            from ctypes import wintypes
+
+            class GUID(ctypes.Structure):
+                _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                            ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
+
+            downloads = GUID(0x374DE290, 0x123F, 0x4565,
+                             (ctypes.c_ubyte * 8)(0x91, 0x64, 0x39, 0xC4, 0x92, 0x5E, 0x46, 0x7E))
+            fn = ctypes.windll.shell32.SHGetKnownFolderPath
+            fn.argtypes = [ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE,
+                           ctypes.POINTER(ctypes.c_wchar_p)]
+            fn.restype = ctypes.c_long
+            out = ctypes.c_wchar_p()
+            if fn(ctypes.byref(downloads), 0, None, ctypes.byref(out)) == 0 and out.value:
+                path = out.value
+                ctypes.windll.ole32.CoTaskMemFree(out)
+                return Path(path)
+        elif sys.platform != "darwin":       # Linux: honour XDG user-dirs
+            rc = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "user-dirs.dirs"
+            if rc.is_file():
+                for line in rc.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    match = re.match(r'\s*XDG_DOWNLOAD_DIR\s*=\s*"?([^"]+)"?', line)
+                    if match:
+                        return Path(match.group(1).replace("$HOME", str(home)))
+    except Exception:
+        pass
+    return home / "Downloads"                # macOS and every fallback
+
+
+def get_default_download_dir():
+    """<your Downloads folder>/LinkCatty - one short, easy-to-find place."""
+    return str(_system_downloads_dir() / "LinkCatty")
+
+
+DEFAULT_DOWNLOAD_DIR = get_default_download_dir()
 
 DEFAULT_CONFIG = {
     "download_dir": DEFAULT_DOWNLOAD_DIR,
@@ -179,8 +224,20 @@ def load_config():
         except Exception as e:
             print(f"⚠️ Could not read settings.json. Defaults loaded instead: {e}")
 
+    if _same_path(config.get("download_dir"), LEGACY_DOWNLOAD_DIR):
+        # still on the old built-in default: move to the Downloads folder
+        config["download_dir"] = DEFAULT_DOWNLOAD_DIR
+        save_config(config)
+
     config['ffmpeg_path'] = get_ffmpeg_path()
     return config
+
+
+def _same_path(a, b):
+    try:
+        return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+    except Exception:
+        return False
 
 def save_config(config):
     to_save = {k: v for k, v in config.items() if k != 'ffmpeg_path'}
