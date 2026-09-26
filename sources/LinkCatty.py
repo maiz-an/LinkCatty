@@ -30,6 +30,7 @@ from utils.ui import (
     print_main_menu,
     print_success,
     print_warning,
+    section_header,
     set_console_width,
 )
 
@@ -48,10 +49,7 @@ def settings_menu(config):
 
     while True:
         try:
-            clear_screen()
-            print_banner()
-            print("                        ⚙️  SETTINGS")
-            print("=" * 61)
+            section_header("⚙️  SETTINGS")
             print(f"📍 Install location : {APP_ROOT}")
             print(f"📂 Download folder  : {config['download_dir']}")
             print("=" * 61)

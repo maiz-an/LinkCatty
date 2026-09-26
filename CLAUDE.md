@@ -17,8 +17,7 @@ LinkCatty/
 │   │   ├── youtube_downloader.py
 │   │   ├── spotify_downloader.py
 │   │   ├── other_downloader.py  # Option 3: Spotify-style UI + engine (progress, retry passes, ledger, report)
-│   │   ├── ph.py                # site profile: URL match + member login via browser cookies
-│   │   └── xm.py                # site profile: URL match
+│   │   └── universal.py         # profile for every non-YouTube/Spotify link: redirect hints + member login
 │   ├── utils/
 │   │   ├── ui.py               # UI kit (header, menu, cards, progress bar) + CLI helpers
 │   │   ├── config.py           # JSON settings load/save
@@ -38,7 +37,7 @@ Every downloader (YouTube, Spotify, Other) draws its screens with the shared kit
 
 | Component | Use |
 |---|---|
-| `section_header(title)` | clear screen + banner + centered title. Call it again after a run so the screen shows just header + result |
+| `section_header(title)` | clear screen + banner (logo + tagline) + dim centered title + dim version line + rule (same for the main menu and Settings). Call it again after a run so the screen shows just header + result |
 | `show_menu(title, options)` | numbered sub-menu; returns the chosen key (last option = Back) |
 | `ask_url(what)` | the URL prompt: `🎯 Enter <what> URL (blank to go back):` |
 | `card(title, rows, icon, details)` | info card (`┌ │ └`, dim aligned labels, optional bullets) |
@@ -58,10 +57,10 @@ Other rules:
 
 ## Adding a New Downloader (Other Downloader sites)
 `other_downloader.py` owns the whole flow (info card, single live progress bar, classified errors, multi-pass retries with cooldowns, ledger/report for playlists, VPN retry prompt, workflow guard). A site file is only a small **profile**:
-1. Create `sources/downloaders/<site>.py` with `KEY = "<short code>"` and `matches(url) -> bool`
-2. Optional: `login_options(config, proxy=None) -> dict | None` returning extra yt-dlp options (e.g. browser cookies); the engine calls it once when a login-class error appears
-3. Add the module to `_SITES` in `other_downloader.py`, and to the four file lists (see the checklist below)
-Links matching no profile use the generic yt-dlp path (`KEY` shown as `Generic`).
+There are no per-site files: every link that is not YouTube or Spotify goes through `universal.py` and the generic yt-dlp engine, so most new sites need no code.
+- `universal.dedicated(url)` returns `(name, menu number)` for links that have their own menu entry (YouTube, Spotify); the Other Downloader then tells the user to use that entry instead. To add a new *dedicated* downloader: create `downloaders/<name>.py` with a `run(config)`, add its menu entry in `LinkCatty.py`, add it to `_DEDICATED` in `universal.py`, and add the file to the four file lists (see the checklist below).
+- `universal.login_options(config, proxy)` loads browser cookies for sites that need an account; the engine calls it once when a login-class error appears.
+- History source key for these links is `Other`.
 
 Behavior worth knowing: video quality comes from Settings > 8 (`other.video_quality`, default `best`); there is no per-download quality prompt, only `Proceed with download?` (Enter = yes). When a run ends the screen is cleared to the banner + section header + result panel, so the info panel and progress lines are gone. Single videos keep no ledger/report files (nothing extra on disk); playlists write `.linkcatty_state.json` + `failed_downloads.txt` in their folder and resume on re-run. Errors are classified (`login`, `blocked`, `network`, `rate_limited`, `unavailable`, `unsupported`, `format`, `disk`); `login`, `blocked`, `unavailable`, `unsupported` and `disk` are not retried by passes. Blocked errors end the round and ask the user to turn on a VPN, then retry.
 
@@ -86,7 +85,7 @@ Behavior worth knowing: video quality comes from Settings > 8 (`other.video_qual
 ## Auto-Update Mechanism
 `run.cmd` compares `sources/version.txt` against the remote `version.txt` on GitHub main branch. If versions differ, it re-downloads all listed source files before launching, then replaces the running launcher itself.
 
-Flags: `--update` (force update check), `--location` (print install dir), `--uninstall`.
+Flags: `--update` (force update check), `--location` (print install dir), `--uninstall`. Internal: `--repaired` (set by the launcher on its own restart after repairing missing files; never pass it by hand).
 
 **Never stale:** `raw.githubusercontent.com` caches `main` for ~5 minutes and ignores `?query` cache-busting (verified: fresh query strings still return `X-Cache: HIT`). So on every launch the launcher asks `https://github.com/maiz-an/LinkCatty.git/info/refs?service=git-upload-pack` (sent `no-cache`) for the latest commit SHA and downloads `version.txt`, all files and the launcher from `raw.githubusercontent.com/maiz-an/LinkCatty/<sha>/...` (a new SHA is never cached). If the lookup fails it falls back to `main`. File-list URLs stay written with `/LinkCatty/main/`; the launcher rewrites that substring to the SHA, so keep it in every new entry. The installers still use `main`, so a fresh install right after a push can be up to 5 minutes stale.
 
@@ -103,4 +102,4 @@ Then bump `sources/version.txt` (updates only trigger when the version string di
 - **`.cmd` files must be pure ASCII.** `run.cmd` runs `chcp 65001`; any multi-byte character (e.g. an em dash in a comment) makes cmd misread later lines (`'tle' is not recognized`). Check with `grep -nP '[^\x00-\x7F]' *.cmd`.
 - **`version.txt` must have no BOM.** In Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds one. Write it with `printf "1.0.x" > sources/version.txt`.
 - Inside parenthesized blocks in `.cmd` files use `rem`, not `::`.
-- **A brand-new source file is not fetched by older launchers.** An update runs with the *installed* launcher's embedded file list, so a file added in version N is missing for users updating from N-1 (ImportError). Prefer extending an existing file (this is why the proxy helpers live in `utils/config.py`), or ship the new file in the lists one release before anything imports it.
+- **A brand-new source file is not fetched by launchers older than the missing-file repair** (added in 1.0.31). An update runs with the *installed* launcher's embedded file list, so a file added in version N is missing for users updating from N-1. Since 1.0.31 the launcher also treats a missing listed file as a reason to update: it re-downloads and restarts once with `--repaired` (which skips the check, so a failing download can never loop). The hop therefore self-heals on the next start; keep the file lists complete and prefer extending existing files when possible.

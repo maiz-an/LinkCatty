@@ -57,7 +57,8 @@ def _resolve_version(version=None):
         return None
 
 
-def print_banner(version=None):
+def print_banner():
+    tagline = "- a Maiz's one -".center(61)
     logo = f"""
 =============================================================
 
@@ -65,18 +66,23 @@ def print_banner(version=None):
     ██     ██ ███▄██ ██▄█▀ ██     ██▀██  ██     ██   ▀███▀ 
     ██████ ██ ██ ▀██ ██ ██ ▀█████ ██▀██  ██     ██     █{RESET}
 
+{DIM}{tagline}{RESET}
+
 ============================================================="""
     print(logo)
-    resolved = _resolve_version(version)
-    if not resolved:
-        return
-    tag = resolved if resolved.lower().startswith("v") else f"v{resolved}"
-    print(f"{DIM}{tag.center(61)}{RESET}")
+
+
+def print_version():
+    resolved = _resolve_version()
+    if resolved:
+        tag = resolved if resolved.lower().startswith("v") else f"v{resolved}"
+        print(f"{DIM}{tag.center(61)}{RESET}")
 
 
 def print_main_menu():
-    print(f"{BOLD}{WHITE}                       🎯 MAIN MENU{RESET}")
-    print(f"{'=' * 61}{RESET}")
+    print(f"{DIM}{center_text('🎯 MAIN MENU')}{RESET}")
+    print_version()
+    print("=" * 61)
     print(f"")
     print(f"{CYAN}{BOLD}1.{RESET} YouTube Downloader")
     print(f"{CYAN}{BOLD}2.{RESET} Spotify Downloader")
@@ -438,7 +444,8 @@ def section_header(title):
     """Clear the screen and draw: banner, centered title, rule."""
     clear_screen()
     print_banner()
-    print(f"{BOLD}{center_text(title)}{RESET}")
+    print(f"{DIM}{center_text(title)}{RESET}")
+    print_version()
     print("=" * WIDTH)
 
 
@@ -561,6 +568,9 @@ class DownloadProgress:
         self._speed = None
         self._eta = None
         self._frac = 0.0
+        self._expected_total = None
+        self._streams = 0
+        self._finished_streams = 0
 
     def start(self):
         self._render()
@@ -618,10 +628,17 @@ class DownloadProgress:
             return
         with self._lock:
             name = data.get("filename") or data.get("tmpfilename")
+            formats = (data.get("info_dict") or {}).get("requested_formats") or []
+            if formats and not self._streams:
+                self._streams = len(formats)
+                sizes = [f.get("filesize") or f.get("filesize_approx") or 0 for f in formats]
+                if all(sizes):
+                    self._expected_total = sum(sizes)
             if name != self._stream:
                 if self._stream is not None:
                     self._base_done += self._stream_done
                     self._base_total += self._stream_total or self._stream_done
+                    self._finished_streams += 1
                 self._stream = name
                 self._stream_done = 0
                 self._stream_total = None
@@ -636,13 +653,19 @@ class DownloadProgress:
             self._speed = data.get("speed")
             self._eta = data.get("eta")
             denominator = self._base_total + (total or 0)
-            if denominator > 0:
+            if self._expected_total:
+                seen = self._base_done + done
+                frac = seen / max(self._expected_total, seen)
+            elif self._streams > 1 and total:
+                frac = (self._finished_streams + done / total) / self._streams
+            elif denominator > 0:
                 frac = (self._base_done + done) / denominator
             elif data.get("fragment_count"):
                 frac = (data.get("fragment_index") or 0) / data["fragment_count"]
             else:
                 frac = 0.0
-            self._frac = max(self._frac, min(frac, 1.0))
+            # 100% is reserved for item_done(): another stream may still follow
+            self._frac = max(self._frac, min(frac, 0.99))
 
     def pp_hook(self, data):
         """yt-dlp postprocessor hook (merging, audio conversion...)."""
@@ -694,7 +717,8 @@ class DownloadProgress:
                     parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
                 else:
                     done = self._base_done + self._stream_done
-                    total = self._base_total + (self._stream_total or 0)
+                    total = self._expected_total or (
+                        self._base_total + (self._stream_total or 0))
                     if total:
                         parts["size"] = f"{format_bytes(done)}/{format_bytes(total)}"
                     elif done:

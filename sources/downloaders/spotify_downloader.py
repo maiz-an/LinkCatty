@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import subprocess
 import re
 import json
@@ -48,6 +49,23 @@ except ImportError:
     _SPOTDL_AVAILABLE = False
 
 
+def _find_spotdl_command() -> list:
+    """How to run spotdl, without relying on PATH.
+
+    pip often puts spotdl.exe in a Scripts folder that is not on PATH, so
+    run it through the interpreter that is running LinkCatty instead.
+    """
+    if _SPOTDL_AVAILABLE:
+        return [sys.executable, "-m", "spotdl"]
+    found = shutil.which("spotdl")
+    if found:
+        return [found]
+    raise RuntimeError(
+        "spotdl is not installed for this Python.\n"
+        "  → Run: pip install spotdl"
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────
 #  Deno – install once per process, never again
 # ─────────────────────────────────────────────────────────────────────
@@ -62,7 +80,7 @@ def _deno_already_available() -> bool:
         return bool(shutil.which("deno"))
 
 
-def _ensure_deno(spotdl_path: str) -> None:
+def _ensure_deno(spotdl_cmd: list) -> None:
     global _DENO_READY
     if _DENO_READY:
         return
@@ -72,7 +90,7 @@ def _ensure_deno(spotdl_path: str) -> None:
     print_info("Deno not found – installing automatically (one-time setup)…")
     try:
         proc = subprocess.Popen(
-            [spotdl_path, "--download-deno"],
+            [*spotdl_cmd, "--download-deno"],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -346,19 +364,14 @@ class SpotifyDownloader:
         self.download_dir  = Path(config["download_dir"])
         self.download_dir.mkdir(parents=True, exist_ok=True)
 
-        self.spotdl_path = shutil.which("spotdl")
-        if not self.spotdl_path:
-            raise RuntimeError(
-                "spotdl is not installed or not in PATH.\n"
-                "  → Run: pip install spotdl"
-            )
+        self.spotdl_cmd = _find_spotdl_command()
 
         self.client_id     = self.spotify_config.get("client_id", "").strip()
         self.client_secret = self.spotify_config.get("client_secret", "").strip()
 
         self._client = _get_free_client()
 
-        _ensure_deno(self.spotdl_path)
+        _ensure_deno(self.spotdl_cmd)
 
         # ── pacing / anti-rate-limit settings (all overridable in config) ──
         #
@@ -453,7 +466,7 @@ class SpotifyDownloader:
             os.remove(errors_file)
 
         cmd = [
-            self.spotdl_path,
+            *self.spotdl_cmd,
             "download",
             *urls,
             "--output", template,

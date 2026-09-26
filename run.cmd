@@ -79,38 +79,62 @@ if exist "%TEMP_FILE%" (
     del "%TEMP_FILE%"
 )
 
-if not "%LOCAL_VER%"=="%REMOTE_VER%" (
+set "FILE_LIST[0]=sources\downloaders\spotify_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
+set "FILE_LIST[1]=sources\downloaders\youtube_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py"
+set "FILE_LIST[2]=sources\utils\config.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py"
+set "FILE_LIST[3]=sources\utils\ffmpeg.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py"
+set "FILE_LIST[4]=sources\utils\logger.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py"
+set "FILE_LIST[5]=sources\utils\ui.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
+set "FILE_LIST[6]=sources\requirements.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
+set "FILE_LIST[7]=sources\version.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
+set "FILE_LIST[8]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
+set "FILE_LIST[9]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
+set "FILE_LIST[10]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
+set "FILE_LIST[11]=sources\LinkCatty.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
+set "FILE_LIST[12]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
+set "FILE_LIST[13]=sources\downloaders\universal.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
+set "TOTAL_FILES=14"
+
+rem If a managed file is missing (e.g. a module added in a newer release), repair by
+rem re-downloading. --repaired on the restart stops this from ever looping.
+set "MISSING=0"
+echo %* | findstr /i "\-\-repaired" >nul
+if errorlevel 1 (
+    for /l %%i in (0,1,99) do (
+        if defined FILE_LIST[%%i] (
+            for /f "tokens=1 delims=|" %%p in ("!FILE_LIST[%%i]!") do (
+                if not exist "%~dp0%%p" set "MISSING=1"
+            )
+        )
+    )
+)
+
+set "NEED_UPDATE=0"
+set "BANNER=UPDATE AVAILABLE"
+set "RESTART_ARGS="
+if not "%LOCAL_VER%"=="%REMOTE_VER%" set "NEED_UPDATE=1"
+if "%NEED_UPDATE%"=="0" if "%MISSING%"=="1" (
+    set "NEED_UPDATE=1"
+    set "BANNER=REPAIRING MISSING FILES"
+    set "RESTART_ARGS=--repaired"
+)
+
+if "%NEED_UPDATE%"=="1" (
     echo.
     echo ============================================================
-    echo                      UPDATE AVAILABLE!
+    echo                      %BANNER%
     echo ============================================================
     echo   Current version : %LOCAL_VER%
     echo   Latest version  : %REMOTE_VER%
     echo.
     echo [2/3] Downloading update...
 
-    set "FILE_LIST[0]=sources\downloaders\spotify_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
-    set "FILE_LIST[1]=sources\downloaders\youtube_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py"
-    set "FILE_LIST[2]=sources\utils\config.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py"
-    set "FILE_LIST[3]=sources\utils\ffmpeg.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py"
-    set "FILE_LIST[4]=sources\utils\logger.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py"
-    set "FILE_LIST[5]=sources\utils\ui.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
-    set "FILE_LIST[6]=sources\requirements.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
-    set "FILE_LIST[7]=sources\version.txt|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-    set "FILE_LIST[8]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
-    set "FILE_LIST[9]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
-    set "FILE_LIST[10]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
-    set "FILE_LIST[11]=sources\LinkCatty.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
-    set "FILE_LIST[12]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
-    set "FILE_LIST[13]=sources\downloaders\ph.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
-    set "FILE_LIST[14]=sources\downloaders\xm.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
-    set "TOTAL_FILES=15"
 
     if exist "%~dp0sources\settings.json" copy "%~dp0sources\settings.json" "%TEMP%\settings_backup.json" >nul
     if exist "%~dp0sources\download_history.json" copy "%~dp0sources\download_history.json" "%TEMP%\download_history_backup.json" >nul
 
     set "DOWNLOADED=0"
-    for /l %%i in (0,1,14) do (
+    for /l %%i in (0,1,13) do (
         set /a DOWNLOADED+=1
         set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL_FILES!
         <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL_FILES!] !PERCENT!%%  "
@@ -137,7 +161,7 @@ if not "%LOCAL_VER%"=="%REMOTE_VER%" (
     echo.
     echo [3/3] Update completed. Restarting...
     timeout /t 2 >nul
-    start "" "%~f0"
+    start "" "%~f0" %RESTART_ARGS%
     exit /b 0
 )
 

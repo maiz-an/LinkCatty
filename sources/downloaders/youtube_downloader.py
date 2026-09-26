@@ -649,6 +649,8 @@ def download_content(url, mode, config):
         success, error = download_single_video(
             url, config["download_dir"], mode, config, progress
         )
+        if success:
+            progress.item_done()
     finally:
         progress.stop()
     elapsed = time.time() - start
@@ -703,6 +705,7 @@ def run_manual_format(config):
             try:
                 with YoutubeDL(options) as ydl:
                     ydl.download([url])
+                progress.item_done()
             finally:
                 progress.stop()
             section_header(title)

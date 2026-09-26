@@ -85,50 +85,66 @@ if [ -z "$REMOTE_VER" ]; then
     REMOTE_VER="$LOCAL_VER"
 fi
 
-if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
+FILE_PATHS=(
+    "sources/downloaders/spotify_downloader.py"
+    "sources/downloaders/youtube_downloader.py"
+    "sources/utils/config.py"
+    "sources/utils/ffmpeg.py"
+    "sources/utils/logger.py"
+    "sources/utils/ui.py"
+    "sources/requirements.txt"
+    "sources/version.txt"
+    "run.cmd"
+    "uninstall_linkcatty.cmd"
+    "uninstall_linkcatty.sh"
+    "sources/LinkCatty.py"
+    "sources/downloaders/other_downloader.py"
+    "sources/downloaders/universal.py"
+)
+FILE_URLS=(
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
+    "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
+)
+
+# If a managed file is missing (e.g. a module added in a newer release), repair by
+# re-downloading. --repaired on the restart stops this from ever looping.
+NEED_UPDATE=0
+BANNER="UPDATE AVAILABLE!"
+RESTART_ARGS=()
+[ "$LOCAL_VER" != "$REMOTE_VER" ] && NEED_UPDATE=1
+if [ "$NEED_UPDATE" = 0 ] && [[ "$*" != *"--repaired"* ]]; then
+    for p in "${FILE_PATHS[@]}"; do
+        if [ ! -f "$SCRIPT_DIR/$p" ]; then
+            NEED_UPDATE=1
+            BANNER="REPAIRING MISSING FILES"
+            RESTART_ARGS=(--repaired)
+            break
+        fi
+    done
+fi
+
+if [ "$NEED_UPDATE" = 1 ]; then
     echo ""
     echo "============================================================"
-    echo "                     UPDATE AVAILABLE!"
+    echo "                     $BANNER"
     echo "============================================================"
     echo "  Current version : $LOCAL_VER"
     echo "  Latest version  : $REMOTE_VER"
     echo ""
     echo "[2/3] Downloading update..."
 
-    FILE_PATHS=(
-        "sources/downloaders/spotify_downloader.py"
-        "sources/downloaders/youtube_downloader.py"
-        "sources/utils/config.py"
-        "sources/utils/ffmpeg.py"
-        "sources/utils/logger.py"
-        "sources/utils/ui.py"
-        "sources/requirements.txt"
-        "sources/version.txt"
-        "run.cmd"
-        "uninstall_linkcatty.cmd"
-        "uninstall_linkcatty.sh"
-        "sources/LinkCatty.py"
-        "sources/downloaders/other_downloader.py"
-        "sources/downloaders/ph.py"
-        "sources/downloaders/xm.py"
-    )
-    FILE_URLS=(
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/spotify_downloader.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/youtube_downloader.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/config.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ffmpeg.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/logger.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/utils/ui.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/requirements.txt"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/version.txt"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.cmd"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
-        "https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
-    )
     TOTAL=${#FILE_PATHS[@]}
 
     # Backup user data
@@ -171,7 +187,7 @@ if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
     echo ""
     echo "[3/3] Update completed. Restarting..."
     sleep 2
-    exec "$0"
+    exec "$0" "${RESTART_ARGS[@]}"
     exit 0
 fi
 

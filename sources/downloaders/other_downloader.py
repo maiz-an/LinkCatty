@@ -16,7 +16,7 @@ from datetime import datetime
 
 from yt_dlp import YoutubeDL
 
-from downloaders import ph, xm
+from downloaders import universal
 from utils.config import is_block_error, run_with_proxy_fallback
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
@@ -29,7 +29,6 @@ from utils.ui import (
 )
 
 _SECTION = "🌐 Other Downloader"
-_SITES = (ph, xm)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -571,13 +570,6 @@ def _download_entries(entries, out_dir, quality, session, kind, name, persist):
 #  Link workflow
 # ─────────────────────────────────────────────────────────────────────
 
-def _pick_handler(url: str):
-    for site in _SITES:
-        if site.matches(url):
-            return site
-    return None
-
-
 def _available_heights(info: dict) -> list:
     heights = set()
     for fmt in info.get("formats") or []:
@@ -639,9 +631,8 @@ def _fetch_with_recovery(url: str, session: _Session):
 
 
 def _process_link(url: str, config: dict) -> None:
-    handler = _pick_handler(url)
-    session = _Session(config, handler)
-    site_key = handler.KEY if handler else "Generic"
+    session = _Session(config, universal)
+    site_key = universal.KEY
 
     info = _fetch_with_recovery(url, session)
     if info is None:
@@ -695,14 +686,20 @@ def _process_link(url: str, config: dict) -> None:
 
 def run_workflow(config: dict) -> None:
     section_header(_SECTION)
-    print_info("Paste a video or playlist link. The right downloader "
-               "is picked automatically.")
+    print_info("Paste a video or playlist link from any site. "
+               "YouTube and Spotify have their own menu entries.")
     while True:
         url = ask_url("video or playlist")
         if not url:
             return
         if not re.match(r"^https?://", url, re.IGNORECASE):
             print_error("Invalid URL", "Use a full link starting with http:// or https://.")
+            continue
+        pointer = universal.dedicated(url)
+        if pointer:
+            name, number = pointer
+            print_warning(f"That link belongs to the {name}.")
+            print_info(f"Use it for best results: Main menu > {number}. {name}")
             continue
         try:
             _process_link(url, config)

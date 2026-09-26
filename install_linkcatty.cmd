@@ -50,15 +50,14 @@ set "FILE_LIST[13]=sources\__init__.py|https://raw.githubusercontent.com/maiz-an
 set "FILE_LIST[14]=uninstall_linkcatty.cmd|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.cmd"
 set "FILE_LIST[15]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/uninstall_linkcatty.sh"
 set "FILE_LIST[16]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
-set "FILE_LIST[17]=sources\downloaders\ph.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/ph.py"
-set "FILE_LIST[18]=sources\downloaders\xm.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/xm.py"
-set "TOTAL=19"
+set "FILE_LIST[17]=sources\downloaders\universal.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
+set "TOTAL=18"
 
 :: Download FFmpeg separately
 set "FFMPEG_URL=https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/win-x64.zip"
 
 set "DOWNLOADED=0"
-for /l %%i in (0,1,18) do (
+for /l %%i in (0,1,17) do (
     set /a DOWNLOADED+=1
     set /a PERCENT=!DOWNLOADED! * 100 / !TOTAL!
     <nul set /p "=Progress: [!DOWNLOADED!/!TOTAL!] !PERCENT!%%  "
@@ -75,8 +74,8 @@ for /l %%i in (0,1,18) do (
 
 :: Download FFmpeg
 set /a DOWNLOADED+=1
-set /a PERCENT=!DOWNLOADED! * 100 / 20
-<nul set /p "=Progress: [20/20] - Downloading FFmpeg... "
+set /a PERCENT=!DOWNLOADED! * 100 / 19
+<nul set /p "=Progress: [19/19] - Downloading FFmpeg... "
 mkdir "%TEMP_DIR%\sources\FFmpeg\windows\ffmpeg\bin" 2>nul
 set "FFMPEG_ZIP=%TEMP%\ffmpeg_win64.zip"
 set "FFMPEG_EXTRACT=%TEMP%\ffmpeg_extract"
