@@ -208,7 +208,10 @@ set "TRY=0"
 set /a TRY+=1
 powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri '!FILE_URL!' -OutFile '%TEMP_DIR%\!FILE_PATH!'; exit 0 } catch { exit 1 } }" >nul 2>&1
 if errorlevel 1 (
-    if !TRY! LSS 3 goto :GetTry
+    if !TRY! LSS 3 (
+        ping -n 2 127.0.0.1 >nul
+        goto :GetTry
+    )
     set "DL_FAILED=1"
     set "FAILED_FILE=!FILE_PATH!"
     exit /b 1

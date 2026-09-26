@@ -146,7 +146,7 @@ if "%NEED_UPDATE%"=="1" (
         call :ui_warn
         call :ui_note "Check your connection. LinkCatty will try again next time."
         echo.
-        timeout /t 3 >nul
+        ping -n 4 127.0.0.1 >nul
         goto :AfterUpdate
     )
 
@@ -174,7 +174,7 @@ if "%NEED_UPDATE%"=="1" (
     del "!LAUNCHER_NEW!" 2>nul
     if /i not "%~nx0"=="run.cmd" del "%~dp0run.cmd" 2>nul
 
-    timeout /t 1 >nul
+    ping -n 2 127.0.0.1 >nul
     rem one line: nothing is re-read from the (replaced) file after the restart returns
     call "%~f0" --restarted & exit /b !errorlevel!
 )
@@ -357,7 +357,10 @@ set "TRY=0"
 set /a TRY+=1
 powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri '!FILE_URL!' -OutFile '!STAGE!\!FILE_PATH!'; exit 0 } catch { exit 1 } }" >nul 2>&1
 if errorlevel 1 (
-    if !TRY! LSS 3 goto :DownloadTry
+    if !TRY! LSS 3 (
+        ping -n 2 127.0.0.1 >nul
+        goto :DownloadTry
+    )
     set "DL_FAILED=1"
     exit /b 1
 )
