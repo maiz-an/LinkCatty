@@ -31,6 +31,7 @@ from utils.ui import (
     show_menu,
     start_spinner,
     stop_spinner,
+    strip_ansi,
 )
 
 # ─────────────────────────────────────────────────────────────────────
@@ -205,15 +206,31 @@ _ERROR_LABELS = {
     "no_match":                "No matching track found (search/lookup miss)",
     "network":                 "Network / timeout error",
     "unavailable":             "Video removed, private, or region-locked",
+    "ffmpeg":                  "FFmpeg is missing (spotdl needs it)",
+    "runtime":                 "YouTube needs its JavaScript runtime (Deno)",
+    "youtube":                 "YouTube download failed",
     "other":                   "Other / unclassified error",
 }
+
+# Environment problems: every track fails the same way, so more passes cannot help.
+_SYSTEMIC = {"ffmpeg", "runtime"}
 
 
 def _classify_error(message: str) -> str:
     msg = (message or "").lower()
     if any(term in msg for term in (
+        "ffmpegerror", "ffmpeg is not installed", "ffmpeg not found",
+        "ffmpeg executable",
+    )):
+        return "ffmpeg"
+    if any(term in msg for term in (
+        "js runtime", "javascript runtime", "no supported javascript",
+        "n challenge", "deno",
+    )):
+        return "runtime"
+    if any(term in msg for term in (
         "blocked by youtube", "rate/request limit", "rate limit",
-        "429", "too many requests",
+        "429", "too many requests", "sign in to confirm",
     )):
         return "blocked_or_rate_limited"
     if "no results found" in msg or "lookuperror" in msg:
@@ -228,7 +245,35 @@ def _classify_error(message: str) -> str:
         "removed", "copyright",
     )):
         return "unavailable"
+    if any(term in msg for term in (
+        "yt-dlp download error", "requested format is not available",
+        "audioprovidererror", "downloaderror",
+    )):
+        return "youtube"
     return "other"
+
+
+def _batch_log_reason(path) -> str | None:
+    """The last error spotdl printed into a batch log, as one clean line.
+
+    spotdl crashes (missing FFmpeg, ...) write no per-track error file, so the
+    real reason only exists in its output."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            text = f.read()[-8000:]
+    except Exception:
+        return None
+    text = re.sub(r"[│┃┌┐└┘─━╭╮╰╯]", " ", strip_ansi(text))
+    text = re.sub(r"[ \t]+", " ", text)
+    matches = re.findall(r"(?:FFmpeg is not installed|\b\w*(?:Error|Exception)\b:)[^\n]*", text)
+    if not matches:
+        return None
+    return matches[-1].strip()[:160] or None
+
+
+def _short(text, width=60) -> str:
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    return text if len(text) <= width else text[:width - 1] + "…"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -356,6 +401,13 @@ def _jitter_sleep(low: float, high: float) -> None:
 #  SpotifyDownloader
 # ─────────────────────────────────────────────────────────────────────
 
+class _SetupError(Exception):
+    """The machine cannot run spotdl yet (not a per-track failure)."""
+    def __init__(self, message, hint=None):
+        super().__init__(message)
+        self.hint = hint
+
+
 class SpotifyDownloader:
     def __init__(self, config):
         self.config        = config
@@ -388,6 +440,39 @@ class SpotifyDownloader:
         self.max_passes               = (max(1, int(self.spotify_config.get("max_retry_passes", 4)))
                                          if self.spotify_config.get("auto_retry", True) else 1)
         self.base_threads             = int(self.spotify_config.get("threads", 2))
+
+    def _find_ffmpeg(self):
+        """FFmpeg for spotdl: bundled, on PATH, or spotdl's own copy (downloaded on demand).
+
+        spotdl refuses to start without it and every track would fail at once."""
+        if getattr(self, "_ffmpeg_checked", False):
+            return self.ffmpeg
+        self._ffmpeg_checked = True
+        self.ffmpeg = get_ffmpeg_path()
+        if not self.ffmpeg and _SPOTDL_AVAILABLE:
+            try:
+                from spotdl.utils.ffmpeg import download_ffmpeg, get_local_ffmpeg
+                local = get_local_ffmpeg()
+                if not local:
+                    start_spinner("🔧 Getting FFmpeg (one-time setup)")
+                    try:
+                        download_ffmpeg()
+                    finally:
+                        stop_spinner()
+                    local = get_local_ffmpeg()
+                self.ffmpeg = str(local) if local else None
+            except Exception:
+                self.ffmpeg = None
+        return self.ffmpeg
+
+    def _download_tracks_safe(self, songs, item_type, meta_name, title):
+        """_download_tracks, but an unusable setup becomes a clear message."""
+        try:
+            return self._download_tracks(songs, item_type, meta_name)
+        except _SetupError as exc:
+            section_header(title)
+            print_error(str(exc), exc.hint)
+            return None
 
     # ── metadata ──────────────────────────────────────────────────────
 
@@ -479,6 +564,8 @@ class SpotifyDownloader:
             "--overwrite", "skip",
             "--audio", *providers,
         ]
+        if getattr(self, "ffmpeg", None):
+            cmd += ["--ffmpeg", self.ffmpeg]
         if dont_filter:
             cmd.append("--dont-filter-results")
         if self.client_id and self.client_secret:
@@ -561,6 +648,10 @@ class SpotifyDownloader:
         Returns (final_count, out_dir, expected_total,
                  failed_report_path, error_breakdown).
         """
+        if not self._find_ffmpeg():
+            raise _SetupError(
+                "FFmpeg is missing, so Spotify downloads cannot start.",
+                "Run  linkcatty --update  to fetch it, or install FFmpeg and try again.")
         audio_format = self.spotify_config.get("audio_format", "mp3").lower()
         quality  = self.spotify_config.get("audio_quality", "320k").replace("k", "")
         bitrate_arg = "disable" if audio_format in ("flac", "wav") else f"{quality}k"
@@ -571,7 +662,7 @@ class SpotifyDownloader:
             out_dir = os.path.join(base_dir, folder_name)
         else:
             out_dir = base_dir
-        template = os.path.join(out_dir, "{title} - {artists}.{ext}")
+        template = os.path.join(out_dir, "{title} - {artists}.{output-ext}")
         os.makedirs(out_dir, exist_ok=True)
 
         archive_file = os.path.join(out_dir, ".spotdl_archive.spotdl")
@@ -700,11 +791,12 @@ class SpotifyDownloader:
                                 elif exit_code != 0:
                                     rec["status"]     = "failed"
                                     rec["last_error"] = (
-                                        f"spotdl exited with code {exit_code} "
-                                        f"(no per-track error captured; see "
-                                        f"{os.path.basename(log_file)})"
+                                        (batch_log_path and _batch_log_reason(batch_log_path))
+                                        or f"spotdl exited with code {exit_code} "
+                                           f"(no per-track error captured; see "
+                                           f"{os.path.basename(log_file)})"
                                     )
-                                    rec["error_type"] = "other"
+                                    rec["error_type"] = _classify_error(rec["last_error"])
                                 else:
                                     rec["status"]     = "success"
                                     rec["last_error"] = None
@@ -723,6 +815,11 @@ class SpotifyDownloader:
                 if still_missing <= 0:
                     break
 
+                if pass_end_success == 0 and any(
+                        r.get("error_type") in _SYSTEMIC
+                        for u, r in ledger.items() if u in song_urls):
+                    break
+
                 if pass_num < self.max_passes:
                     cooldown = (self.blocked_cooldown_seconds
                                 if youtube_blocked
@@ -738,7 +835,9 @@ class SpotifyDownloader:
         error_breakdown = {}
         for r in failed_records:
             etype = r.get("error_type") or "other"
-            label = _ERROR_LABELS.get(etype, etype)
+            label = _ERROR_LABELS.get(etype)
+            if etype == "other" or label is None:
+                label = "Error: " + _short(r.get("last_error") or "unknown")
             error_breakdown[label] = error_breakdown.get(label, 0) + 1
 
         failed_report_path = None
@@ -763,9 +862,10 @@ class SpotifyDownloader:
             return
         song = {"url": url, "name": meta.get("title"), "artist": meta.get("artist")}
         started = time.time()
-        count, out_folder, expected, failed_report, breakdown = self._download_tracks(
-            [song], "track", meta.get("title")
-        )
+        outcome = self._download_tracks_safe([song], "track", meta.get("title"), title)
+        if outcome is None:
+            return
+        count, out_folder, expected, failed_report, breakdown = outcome
         section_header(title)
         _display_download_result("track", meta.get("title"), out_folder,
                                   count, expected, failed_report, breakdown,
@@ -789,9 +889,10 @@ class SpotifyDownloader:
             songs = [{"url": url, "name": meta.get("name"),
                       "artist": meta.get("artist")}]
         started = time.time()
-        count, out_folder, expected, failed_report, breakdown = self._download_tracks(
-            songs, "album", meta["name"]
-        )
+        outcome = self._download_tracks_safe(songs, "album", meta["name"], title)
+        if outcome is None:
+            return
+        count, out_folder, expected, failed_report, breakdown = outcome
         section_header(title)
         _display_download_result("album", meta["name"], out_folder,
                                   count, expected, failed_report, breakdown,
@@ -814,9 +915,10 @@ class SpotifyDownloader:
             songs = [{"url": url, "name": meta.get("name"),
                       "artist": meta.get("author")}]
         started = time.time()
-        count, out_folder, expected, failed_report, breakdown = self._download_tracks(
-            songs, "playlist", meta["name"]
-        )
+        outcome = self._download_tracks_safe(songs, "playlist", meta["name"], title)
+        if outcome is None:
+            return
+        count, out_folder, expected, failed_report, breakdown = outcome
         section_header(title)
         _display_download_result("playlist", meta["name"], out_folder,
                                   count, expected, failed_report, breakdown,
