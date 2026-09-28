@@ -13,6 +13,8 @@ from pathlib import Path
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import logging
+
 from yt_dlp import YoutubeDL
 
 from utils.ffmpeg import get_ffmpeg_path
@@ -37,6 +39,14 @@ from utils.ui import (
     stop_spinner,
     strip_ansi,
 )
+
+# The lyrics providers log their timeouts ("An error occurred while searching for an LRC ...")
+# straight to the console, in the middle of the progress bar. Lyrics are optional, so silence them.
+for _noisy in ("syncedlyrics", "spotdl", "urllib3"):
+    _log = logging.getLogger(_noisy)
+    _log.setLevel(logging.CRITICAL)
+    _log.addHandler(logging.NullHandler())
+    _log.propagate = False
 
 # ─────────────────────────────────────────────────────────────────────
 #  spotdl imports  (metadata only – no official Spotify API ever)
@@ -196,9 +206,13 @@ def _display_download_result(item_type: str, name: str | None, out_folder: str,
             ("Time", time_text)]
     details = [f"{label}  ×{count}"
                for label, count in (error_breakdown or {}).items() if count]
+    footer = [("Report", failed_report)]
+    json_path = os.path.splitext(failed_report)[0] + ".json"
+    if os.path.exists(json_path):
+        footer.append(("JSON", json_path))
     result_card("warn" if downloaded else "fail",
                 "FINISHED WITH MISSING TRACKS" if downloaded else "DOWNLOAD FAILED",
-                rows, details, [("Report", failed_report)])
+                rows, details, footer)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -206,7 +220,7 @@ def _display_download_result(item_type: str, name: str | None, out_folder: str,
 # ─────────────────────────────────────────────────────────────────────
 
 _ERROR_LABELS = {
-    "blocked_or_rate_limited": "Blocked / rate-limited by provider",
+    "blocked_or_rate_limited": "YouTube is limiting this connection (bot check)",
     "no_match":                "No matching track found (search/lookup miss)",
     "network":                 "Network / timeout error",
     "unavailable":             "Video removed, private, or region-locked",
@@ -218,6 +232,14 @@ _ERROR_LABELS = {
 
 # Environment problems: every track fails the same way, so more passes cannot help.
 _SYSTEMIC = {"ffmpeg", "runtime"}
+
+# A retry cannot help with these: the setup is broken, the video is gone or nobody has the song.
+_NOT_FIXABLE_BY_RETRY = {_ERROR_LABELS["ffmpeg"], _ERROR_LABELS["runtime"], _ERROR_LABELS["unavailable"],
+                         _ERROR_LABELS["no_match"]}
+
+# Failures spotdl may still fix (its YouTube Music search finds different videos). It cannot
+# get past YouTube's bot check (same yt-dlp underneath) and costs minutes, so it is skipped then.
+_SPOTDL_HELPS = {"no_match", "other", "youtube"}
 
 
 def _classify_error(message: str) -> str:
@@ -330,7 +352,9 @@ _CODECS = {"mp3": "mp3", "m4a": "m4a", "opus": "opus", "ogg": "vorbis",
            "flac": "flac", "wav": "wav"}
 _UNWANTED = ("live", "cover", "remix", "karaoke", "instrumental", "acoustic",
              "sped up", "slowed", "nightcore", "reverb", "8d", "tribute",
-             "reaction", "mashup", "loop", "hour", "parody", "lofi")
+             "reaction", "mashup", "loop", "hour", "parody", "lofi",
+             "version", "ver", "male", "female", "acapella", "cappella", "piano",
+             "guitar", "orchestral", "extended", "stripped", "demo", "remake")
 
 
 def _words(text) -> list:
@@ -418,6 +442,23 @@ def _fetch_lyrics(title, artists):
     return None
 
 
+_VERSION_NOISE = {"feat", "ft", "featuring", "with", "version", "ver", "remastered", "remaster",
+                  "original", "mono", "stereo", "deluxe", "edit", "single", "album", "from"}
+
+
+def _version_words(title) -> list:
+    """Words that name a version of the song: the 'Acoustic Ver.' in 'WHISTLE - Acoustic Ver.'
+    or the 'Japanese' in 'DDU-DU DDU-DU (Japanese Version)'. Featured artists do not count."""
+    text = str(title or "")
+    parts = re.findall(r"[\(\[](.*?)[\)\]]", text) + re.split(r"\s+-\s+", text)[1:]
+    words = []
+    for part in parts:
+        if re.match(r"\s*(feat|ft|featuring|with)\b", part, re.I):
+            continue
+        words += [w for w in _words(part) if w not in _VERSION_NOISE and not w.isdigit()]
+    return words
+
+
 def _score_candidate(entry: dict, info: dict) -> float:
     """How well a YouTube search result matches the Spotify track (higher is better)."""
     title_words = set(_words(entry.get("title")))
@@ -440,11 +481,18 @@ def _score_candidate(entry: dict, info: dict) -> float:
     if "official audio" in " ".join(_words(entry.get("title"))):
         score += 8
     title_text = " ".join(_words(entry.get("title")))
-    for word in _UNWANTED:
-        if word in title_text and word not in want_full:
+    entry["_unwanted"] = False
+    for word in _UNWANTED:            # an edit of the song (live, cover, "male version", ...) unless Spotify's title says so too
+        pattern = r"\b" + re.escape(word) + r"\b"
+        if re.search(pattern, title_text) and not re.search(pattern, want_full):
             score -= 35
+            entry["_unwanted"] = True
             break
+    version = _version_words(info["title"])
+    if version:                          # the right version of the song, not just the same title
+        score += 20 * sum(1 for w in version if w in title_words) / len(version)
     entry["_title_hit"] = title_hit
+    entry["_score"] = score
     return score
 
 
@@ -652,11 +700,126 @@ class _ByteTally:
             return downloaded, max(total, downloaded)
 
 
+class _BlockGate:
+    """Shared by the workers of one pass. When YouTube's bot check trips, everybody waits a
+    little before the next track; after several blocks in a row YouTube is skipped for the
+    rest of the pass (hammering it only prolongs the block)."""
+    LIMIT = 4
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._until = 0.0
+        self._streak = 0
+
+    @property
+    def dead(self) -> bool:
+        return self._streak >= self.LIMIT
+
+    def blocked(self, pause: bool = True) -> None:
+        """One more block. `pause` = the track failed, so give YouTube a rest; without it
+        (SoundCloud saved the track) it only counts toward skipping YouTube."""
+        with self._lock:
+            self._streak += 1
+            if pause:
+                self._until = max(self._until, time.time() + min(15 * self._streak, 45))
+
+    def ok(self) -> None:
+        with self._lock:
+            self._streak = 0
+
+    def wait(self) -> None:
+        while not self.dead:
+            left = self._until - time.time()
+            if left <= 0:
+                return
+            time.sleep(min(left, 1.0))
+
+
+_BLOCKED_TEXT = ("YT-DLP download error - Sign in to confirm you're not a bot: "
+                 "YouTube is limiting this connection")
+
+
+def _clean_reason(text) -> str:
+    text = strip_ansi(str(text or "")).strip()
+    text = re.sub(r"^ERROR:\s*(\[[^\]]+\]\s*[\w.-]+:\s*)?", "", text)
+    return re.sub(r"\s+", " ", text)[:200]
+
+
+def _dedupe(entries: list) -> list:
+    seen, out = set(), []
+    for entry in entries:
+        key = (entry or {}).get("id") or (entry or {}).get("url")
+        if key and key not in seen:
+            seen.add(key)
+            out.append(entry)
+    return out
+
+
+def _flat_search(prefix: str, query: str, extra: dict) -> list:
+    opts = {"quiet": True, "no_warnings": True, "logger": SilentLogger(),
+            "extract_flat": True, "socket_timeout": 20}
+    opts.update(extra)
+    with YoutubeDL(opts) as ydl:
+        found = ydl.extract_info(f"{prefix}:{query}", download=False)
+    return list((found or {}).get("entries") or [])
+
+
+def _rank_candidates(entries: list, info: dict, source: str = "youtube") -> list:
+    """The acceptable search results, best first. SoundCloud is full of edits and previews,
+    so its length has to match the Spotify track closely."""
+    ranked = []
+    for entry in entries:
+        if not entry or not (entry.get("id") or entry.get("url")):
+            continue
+        score = _score_candidate(entry, info)
+        if score < 55 or entry.get("_title_hit", 0) < 0.5 or entry.get("_unwanted"):
+            continue
+        if source == "soundcloud":
+            length, want = entry.get("duration"), info.get("duration")
+            if score < 80 or not length or (want and abs(float(length) - want) > 8):
+                continue
+        ranked.append((score, entry))
+    ranked.sort(key=lambda pair: -pair[0])
+    return [entry for _, entry in ranked]
+
+
+def _download_audio(target: str, tmp: str, fmt: str, quality: str, ffmpeg,
+                    on_progress, extra: dict) -> str:
+    """Download one page with yt-dlp and convert it. Returns the audio file."""
+    post = {"key": "FFmpegExtractAudio", "preferredcodec": _CODECS.get(fmt, "mp3")}
+    if fmt not in ("flac", "wav"):
+        post["preferredquality"] = quality
+    opts = {"quiet": True, "no_warnings": True, "noprogress": True, "logger": SilentLogger(),
+            "format": "bestaudio/best", "outtmpl": os.path.join(tmp, "audio.%(ext)s"),
+            "noplaylist": True, "retries": 5, "fragment_retries": 5, "socket_timeout": 30,
+            "postprocessors": [post]}
+    opts.update(extra)
+    if ffmpeg:
+        opts["ffmpeg_location"] = ffmpeg
+    if on_progress:
+        def hook(data):
+            fraction = _download_fraction(data)
+            if fraction is not None:
+                # an exact total only for plain downloads (fragmented streams report estimates)
+                exact = None if data.get("fragment_count") else data.get("total_bytes")
+                on_progress(fraction, data.get("downloaded_bytes") or 0, exact)
+        opts["progress_hooks"] = [hook]
+    with YoutubeDL(opts) as ydl:
+        ydl.download([target])
+    produced = [f for f in os.listdir(tmp) if f.lower().endswith("." + fmt)]
+    if not produced:
+        raise RuntimeError("YT-DLP download error - no audio file was produced")
+    return os.path.join(tmp, produced[0])
+
+
 def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
                     ffmpeg, cover_cache: dict, cover_lock, on_progress=None,
-                    full_metadata: bool = True, want_lyrics: bool = True) -> str:
+                    full_metadata: bool = True, want_lyrics: bool = True,
+                    sources=("youtube",), extra_opts=None) -> str:
     """Search, download, convert and tag one track. Returns the final file path.
 
+    Several matching videos are tried in order, and SoundCloud when `sources` allows it, so
+    one unavailable video does not lose the track. `info["_source"]` names the source used.
     Raises an Exception whose text is the reason when the track cannot be done."""
     title = info["title"] or "Unknown"
     artist_text = ", ".join(info["artists"]) or info["artist"] or "Unknown"
@@ -664,6 +827,7 @@ def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
     final = os.path.join(out_dir, f"{name[:150]}.{fmt}")
     if os.path.exists(final):
         return final                                   # done in an earlier run
+    extra = dict(extra_opts or {})
 
     # the complete Spotify data and the lyrics load in the background while the audio downloads
     box = {}
@@ -676,61 +840,71 @@ def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
     for job, _ in jobs:
         job.start()
 
-    # 1. find the video: two queries, the second only when the first found nothing usable
-    match = None
+    # 1. find the videos: two queries (the second only when the first has no clear winner)
     core = _title_core(title)
-    for query in (f"{info['artist'] or artist_text} {core}", f"{core} {artist_text} audio"):
+    attempts, search_error, searched = [], None, False
+    if "youtube" in sources:
+        pool = []
+        for query in (f"{info['artist'] or artist_text} {core}", f"{core} {artist_text} audio"):
+            try:
+                pool = _dedupe(pool + _flat_search("ytsearch8", query, extra))
+                searched = True
+            except Exception as exc:
+                search_error = search_error or exc
+                continue
+            best = _rank_candidates(pool, info)
+            if best and best[0]["_score"] >= 100:
+                break
+        attempts += [("youtube", e) for e in _rank_candidates(pool, info)[:3]]
+    if "soundcloud" in sources:
         try:
-            with YoutubeDL({"quiet": True, "no_warnings": True, "logger": SilentLogger(),
-                            "extract_flat": True, "socket_timeout": 20}) as ydl:
-                found = ydl.extract_info(f"ytsearch8:{query}", download=False)
-        except Exception as exc:
-            raise RuntimeError(f"YT-DLP download error - search failed: {exc}")
-        match = _pick_match(list((found or {}).get("entries") or []), info)
-        if match:
-            break
-    if not match:
+            found = _flat_search("scsearch8", f"{info['artist'] or artist_text} {core}", extra)
+            attempts += [("soundcloud", e) for e in _rank_candidates(found, info, "soundcloud")[:2]]
+            searched = True
+        except Exception:
+            pass
+    if not attempts:
+        if search_error is not None and not searched:
+            raise RuntimeError(f"YT-DLP download error - search failed: {_clean_reason(search_error)}")
         raise LookupError(f"No results found for song: {artist_text} - {title}")
 
-    # 2. download the audio and convert it
-    tmp = os.path.join(out_dir, ".linkcatty_tmp", match["id"])
-    shutil.rmtree(tmp, ignore_errors=True)
-    os.makedirs(tmp, exist_ok=True)
-    post = {"key": "FFmpegExtractAudio", "preferredcodec": _CODECS.get(fmt, "mp3")}
-    if fmt not in ("flac", "wav"):
-        post["preferredquality"] = quality
-    opts = {"quiet": True, "no_warnings": True, "noprogress": True, "logger": SilentLogger(),
-            "format": "bestaudio/best", "outtmpl": os.path.join(tmp, "audio.%(ext)s"),
-            "noplaylist": True, "retries": 5, "fragment_retries": 5, "socket_timeout": 30,
-            "postprocessors": [post]}
-    if ffmpeg:
-        opts["ffmpeg_location"] = ffmpeg
-    if on_progress:
-        def hook(data):
-            fraction = _download_fraction(data)
-            if fraction is not None:
-                # an exact total only for plain downloads (fragmented streams report estimates)
-                exact = None if data.get("fragment_count") else data.get("total_bytes")
-                on_progress(fraction, data.get("downloaded_bytes") or 0, exact)
-        opts["progress_hooks"] = [hook]
-    try:
-        with YoutubeDL(opts) as ydl:
-            ydl.download([f"https://www.youtube.com/watch?v={match['id']}"])
-        produced = [f for f in os.listdir(tmp) if f.lower().endswith("." + fmt)]
-        if not produced:
-            raise RuntimeError("YT-DLP download error - no audio file was produced")
-        src = os.path.join(tmp, produced[0])
+    # 2. download the audio and convert it: the next candidate takes over when one fails
+    reasons, blocked, src, tmp, page_url = [], False, None, None, None
+    for source, entry in attempts:
+        if blocked and source == "youtube":
+            continue                                   # the same connection would get the same answer
+        target = (entry.get("url") if source == "soundcloud"
+                  else f"https://www.youtube.com/watch?v={entry['id']}")
+        attempt_tmp = os.path.join(out_dir, ".linkcatty_tmp",
+                                   re.sub(r"\W", "_", str(entry.get("id") or entry.get("url")))[-48:])
+        shutil.rmtree(attempt_tmp, ignore_errors=True)
+        os.makedirs(attempt_tmp, exist_ok=True)
+        try:
+            src = _download_audio(target, attempt_tmp, fmt, quality, ffmpeg, on_progress, extra)
+            tmp, page_url = attempt_tmp, target
+            info["_source"] = source
+            break
+        except Exception as exc:
+            shutil.rmtree(attempt_tmp, ignore_errors=True)
+            reasons.append(_clean_reason(exc))
+            if _classify_error(reasons[-1]) == "blocked_or_rate_limited":
+                blocked = True
+    info["_blocked"] = blocked
+    if src is None:
+        if blocked:
+            raise RuntimeError(_BLOCKED_TEXT)
+        raise RuntimeError("YT-DLP download error - " + (reasons[-1] if reasons else "no usable source"))
 
+    try:
         # 3. every tag spotdl used to write (from the complete Spotify data), then move into place
         for job, wait in jobs:
             job.join(timeout=wait)
         song, lyrics = box.get("song"), box.get("lyrics")
-        video_url = f"https://www.youtube.com/watch?v={match['id']}"
         tagged = False
         if song is not None:
             try:
                 from spotdl.utils.metadata import embed_metadata
-                song.download_url = video_url
+                song.download_url = page_url
                 if lyrics:
                     song.lyrics = lyrics
                 embed_metadata(Path(src), song, "/")
@@ -739,7 +913,7 @@ def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
                 tagged = False
         if not tagged:                                  # partial data: tag with everything we have
             more = dict(info)
-            more.update(lyrics=lyrics, youtube_url=video_url)
+            more.update(lyrics=lyrics, youtube_url=page_url)
             _tag_file(src, more, _cover_bytes(info.get("cover_url"), cover_cache, cover_lock), fmt)
         os.replace(src, final)
     finally:
@@ -904,23 +1078,56 @@ class SpotifyDownloader:
                 self.ffmpeg = None
         return self.ffmpeg
 
-    def _fast_pass(self, pending_urls, songs_by_url, out_dir, ledger, fmt, quality, reporter, inflight, tally=None):
+    def _fast_pass(self, pending_urls, songs_by_url, out_dir, ledger, fmt, quality, reporter,
+                   inflight, tally=None, pass_num=1, throttled=False):
         """Try every pending track with the fast engine (in parallel). Failures stay
-        pending for spotdl. Returns True when YouTube looked rate-limited."""
+        pending. Returns True when YouTube looked rate-limited.
+
+        The first pass uses YouTube only; later passes may use SoundCloud for what YouTube
+        would not give (a lower-quality copy is better than a missing song). While YouTube
+        is refusing this connection the workers back off instead of hammering it."""
         workers = max(1, self.parallel_batches * self.base_threads)
+        if throttled:
+            workers = max(2, workers // 2)
         cover_cache, cover_lock = {}, threading.Lock()
+        gate = _BlockGate()
         blocked = False
+        wanted = ("youtube",)
+        if pass_num > 1 and self.spotify_config.get("soundcloud_fallback", True):
+            wanted = ("youtube", "soundcloud")
+        browser = str(self.spotify_config.get("cookies_from_browser") or "").strip()
+        extra = {"cookiesfrombrowser": (browser,)} if browser else {}
 
         def work(url):
+            gate.wait()
+            sources = tuple(x for x in wanted if not (x == "youtube" and gate.dead))
+            if not sources:
+                raise RuntimeError(_BLOCKED_TEXT)
             info = _track_info(songs_by_url[url])
-            # the audio download is ~90% of a track; converting and tagging is the rest
-            return _fast_fetch_one(info, out_dir, fmt, quality, self.ffmpeg,
-                                   cover_cache, cover_lock,
-                                   full_metadata=bool(self.spotify_config.get("full_metadata", True)),
-                                   want_lyrics=bool(self.spotify_config.get("lyrics", True)),
-                                   on_progress=lambda f, d=0, t=None: (
-                                       inflight.__setitem__(url, f * 0.9),
-                                       tally.update(url, d, t) if tally else None))
+            try:
+                # the audio download is ~90% of a track; converting and tagging is the rest
+                _fast_fetch_one(info, out_dir, fmt, quality, self.ffmpeg,
+                                cover_cache, cover_lock,
+                                full_metadata=bool(self.spotify_config.get("full_metadata", True)),
+                                want_lyrics=bool(self.spotify_config.get("lyrics", True)),
+                                sources=sources, extra_opts=extra,
+                                on_progress=lambda f, d=0, t=None: (
+                                    inflight.__setitem__(url, f * 0.9),
+                                    tally.update(url, d, t) if tally else None))
+            except Exception as exc:
+                if _classify_error(strip_ansi(str(exc))) == "blocked_or_rate_limited":
+                    gate.blocked()
+                    raise
+                if "youtube" in wanted and "youtube" not in sources:
+                    # YouTube was not even tried (it keeps refusing) and the other source
+                    # failed too: this is still the block, not a problem with the track
+                    raise RuntimeError(_BLOCKED_TEXT) from exc
+                raise
+            if info.get("_blocked"):
+                gate.blocked(pause=False)
+            elif info.get("_source") != "soundcloud":
+                gate.ok()
+            return info.get("_source")
 
         if tally:
             tally.active = True
@@ -935,14 +1142,16 @@ class SpotifyDownloader:
                 if "fast" not in rec["providers_tried"]:
                     rec["providers_tried"].append("fast")
                 try:
-                    future.result()
+                    source = future.result()
                     rec.update(status="success", last_error=None, error_type=None)
+                    if source and source not in rec["providers_tried"]:
+                        rec["providers_tried"].append(source)
                     if tally:
                         tally.finish(url, ok=True)
                 except Exception as exc:
                     if tally:
                         tally.finish(url, ok=False)
-                    message = strip_ansi(str(exc)).strip()
+                    message = _clean_reason(exc)
                     rec.update(status="failed", last_error=message,
                                error_type=_classify_error(message))
                     if rec["error_type"] == "blocked_or_rate_limited":
@@ -961,6 +1170,43 @@ class SpotifyDownloader:
             section_header(title)
             print_error(str(exc), exc.hint)
             return None
+
+    def _download_until_done(self, songs, item_type, name, title):
+        """Download; while tracks are missing, offer to retry just those (the ledger resumes).
+
+        Returns (outcome, seconds spent downloading)."""
+        spent = 0.0
+        started = time.time()
+        outcome = self._download_tracks_safe(songs, item_type, name, title)
+        spent += time.time() - started
+        last_missing = None
+        for _ in range(5):
+            if outcome is None:
+                break
+            count, out_folder, expected, failed_report, breakdown = outcome
+            missing = expected - count
+            if failed_report is None or missing <= 0:
+                break
+            # nothing to retry when the machine is missing something or the videos are gone
+            fixable = [label for label in breakdown if label not in _NOT_FIXABLE_BY_RETRY]
+            if not fixable:
+                break
+            section_header(title)
+            _display_download_result(item_type, name, out_folder, count, expected,
+                                     failed_report, breakdown, elapsed=spent)
+            if _ERROR_LABELS["blocked_or_rate_limited"] in breakdown:
+                print_info("YouTube is limiting this connection. Waiting a few minutes or "
+                           "turning on a VPN usually clears it.")
+            progressed = last_missing is None or missing < last_missing
+            plural = "s" if missing != 1 else ""
+            if not confirm(f"Retry the {missing} missing track{plural} now?", default=progressed):
+                break
+            last_missing = missing
+            section_header(title)
+            started = time.time()
+            outcome = self._download_tracks_safe(songs, item_type, name, title)
+            spent += time.time() - started
+        return outcome, spent
 
     # ── metadata ──────────────────────────────────────────────────────
 
@@ -1195,6 +1441,7 @@ class SpotifyDownloader:
         _save_ledger(out_dir, ledger)
 
         youtube_blocked = False
+        spotdl_runs = 0
         songs_by_url = {_song_url(s): s for s in songs if _song_url(s)}
         use_fast = self.engine != "spotdl" and bool(songs_by_url) and \
             all(u.startswith("http") and "/track/" in u for u in songs_by_url)
@@ -1217,11 +1464,12 @@ class SpotifyDownloader:
                 if not pending_urls:
                     break
 
-                if use_fast and pass_num == 1:
-                    # the fast engine goes first; whatever it cannot do falls straight
-                    # through to spotdl below, in this same pass
+                if use_fast:
+                    # the fast engine goes first in every pass (later passes are more patient and
+                    # may use SoundCloud); spotdl only gets what the search could not find
                     if self._fast_pass(pending_urls, songs_by_url, out_dir, ledger,
-                                       audio_format, quality, reporter, inflight, tally):
+                                       audio_format, quality, reporter, inflight, tally,
+                                       pass_num=pass_num, throttled=youtube_blocked):
                         youtube_blocked = True
                     pending_urls = [
                         u for u, rec in ledger.items()
@@ -1229,110 +1477,116 @@ class SpotifyDownloader:
                     ]
                     if not pending_urls:
                         break
+                    pending_urls = [u for u in pending_urls
+                                    if ledger[u].get("error_type") in _SPOTDL_HELPS] \
+                        if spotdl_runs < 2 else []
+                    if pending_urls:
+                        spotdl_runs += 1
 
                 providers, dont_filter, divisor, max_retries = \
-                    _strategy_for_pass(pass_num, youtube_blocked)
-                threads = max(1, self.base_threads // divisor)
+                    _strategy_for_pass(spotdl_runs if use_fast else pass_num, youtube_blocked)
+                if pending_urls:
+                    threads = max(1, self.base_threads // divisor)
 
-                batches = [
-                    pending_urls[i:i + self.batch_size]
-                    for i in range(0, len(pending_urls), self.batch_size)
-                ]
+                    batches = [
+                        pending_urls[i:i + self.batch_size]
+                        for i in range(0, len(pending_urls), self.batch_size)
+                    ]
 
-                # Per-pass scratch dir for per-batch archive/errors/log.
-                pass_temp = os.path.join(out_dir, f".linkcatty_pass{pass_num}")
-                shutil.rmtree(pass_temp, ignore_errors=True)
-                os.makedirs(pass_temp, exist_ok=True)
-
-                try:
-                    with ThreadPoolExecutor(max_workers=self.parallel_batches) as executor:
-                        futures = {
-                            executor.submit(
-                                self._run_spotdl_batch_isolated,
-                                batch_urls, b_idx, pass_temp, out_dir, template,
-                                audio_format, bitrate_arg, archive_file,
-                                providers, dont_filter, threads, max_retries,
-                            ): (b_idx, batch_urls)
-                            for b_idx, batch_urls in enumerate(batches)
-                        }
-
-                        for future in as_completed(futures):
-                            b_idx, batch_urls = futures[future]
-
-                            try:
-                                result       = future.result()
-                                exit_code    = result["exit_code"]
-                                batch_errors = result["errors"]
-                                batch_archive_set = result["archive"]
-                                batch_archive_path = result["archive_path"]
-                                batch_log_path     = result["log_path"]
-                            except Exception as exc:
-                                exit_code = -1
-                                batch_errors = {}
-                                batch_archive_set = set()
-                                batch_archive_path = None
-                                batch_log_path = None
-
-                            # Merge archive & append log
-                            if batch_archive_path:
-                                self._merge_archive(archive_file, batch_archive_path)
-                            if batch_log_path and os.path.exists(batch_log_path):
-                                try:
-                                    with open(batch_log_path, "r",
-                                              encoding="utf-8",
-                                              errors="ignore") as src:
-                                        with open(log_file, "a",
-                                                  encoding="utf-8") as dst:
-                                            dst.write(
-                                                f"\n\n===== Pass {pass_num} "
-                                                f"batch {b_idx} =====\n"
-                                            )
-                                            dst.write(src.read())
-                                except Exception:
-                                    pass
-
-                            # Update ledger (main thread only — no lock needed)
-                            now = datetime.now().isoformat(timespec="seconds")
-                            for url in batch_urls:
-                                rec = ledger.get(url)
-                                if rec is None:
-                                    continue
-                                rec["attempts"] += 1
-                                rec["last_attempt"] = now
-                                for p in providers:
-                                    if p not in rec["providers_tried"]:
-                                        rec["providers_tried"].append(p)
-
-                                if url in batch_errors:
-                                    msg = batch_errors[url]
-                                    rec["status"]     = "failed"
-                                    rec["last_error"] = msg
-                                    rec["error_type"] = _classify_error(msg)
-                                    if rec["error_type"] == "blocked_or_rate_limited":
-                                        youtube_blocked = True
-                                elif url in batch_archive_set:
-                                    rec["status"]     = "success"
-                                    rec["last_error"] = None
-                                    rec["error_type"] = None
-                                elif exit_code != 0:
-                                    rec["status"]     = "failed"
-                                    rec["last_error"] = (
-                                        (batch_log_path and _batch_log_reason(batch_log_path))
-                                        or f"spotdl exited with code {exit_code} "
-                                           f"(no per-track error captured; see "
-                                           f"{os.path.basename(log_file)})"
-                                    )
-                                    rec["error_type"] = _classify_error(rec["last_error"])
-                                else:
-                                    rec["status"]     = "success"
-                                    rec["last_error"] = None
-                                    rec["error_type"] = None
-
-                            _save_ledger(out_dir, ledger)
-
-                            reporter._render()
-                finally:
+                    # Per-pass scratch dir for per-batch archive/errors/log.
+                    pass_temp = os.path.join(out_dir, f".linkcatty_pass{pass_num}")
                     shutil.rmtree(pass_temp, ignore_errors=True)
+                    os.makedirs(pass_temp, exist_ok=True)
+
+                    try:
+                        with ThreadPoolExecutor(max_workers=self.parallel_batches) as executor:
+                            futures = {
+                                executor.submit(
+                                    self._run_spotdl_batch_isolated,
+                                    batch_urls, b_idx, pass_temp, out_dir, template,
+                                    audio_format, bitrate_arg, archive_file,
+                                    providers, dont_filter, threads, max_retries,
+                                ): (b_idx, batch_urls)
+                                for b_idx, batch_urls in enumerate(batches)
+                            }
+
+                            for future in as_completed(futures):
+                                b_idx, batch_urls = futures[future]
+
+                                try:
+                                    result       = future.result()
+                                    exit_code    = result["exit_code"]
+                                    batch_errors = result["errors"]
+                                    batch_archive_set = result["archive"]
+                                    batch_archive_path = result["archive_path"]
+                                    batch_log_path     = result["log_path"]
+                                except Exception as exc:
+                                    exit_code = -1
+                                    batch_errors = {}
+                                    batch_archive_set = set()
+                                    batch_archive_path = None
+                                    batch_log_path = None
+
+                                # Merge archive & append log
+                                if batch_archive_path:
+                                    self._merge_archive(archive_file, batch_archive_path)
+                                if batch_log_path and os.path.exists(batch_log_path):
+                                    try:
+                                        with open(batch_log_path, "r",
+                                                  encoding="utf-8",
+                                                  errors="ignore") as src:
+                                            with open(log_file, "a",
+                                                      encoding="utf-8") as dst:
+                                                dst.write(
+                                                    f"\n\n===== Pass {pass_num} "
+                                                    f"batch {b_idx} =====\n"
+                                                )
+                                                dst.write(src.read())
+                                    except Exception:
+                                        pass
+
+                                # Update ledger (main thread only — no lock needed)
+                                now = datetime.now().isoformat(timespec="seconds")
+                                for url in batch_urls:
+                                    rec = ledger.get(url)
+                                    if rec is None:
+                                        continue
+                                    rec["attempts"] += 1
+                                    rec["last_attempt"] = now
+                                    for p in providers:
+                                        if p not in rec["providers_tried"]:
+                                            rec["providers_tried"].append(p)
+
+                                    if url in batch_errors:
+                                        msg = batch_errors[url]
+                                        rec["status"]     = "failed"
+                                        rec["last_error"] = msg
+                                        rec["error_type"] = _classify_error(msg)
+                                        if rec["error_type"] == "blocked_or_rate_limited":
+                                            youtube_blocked = True
+                                    elif url in batch_archive_set:
+                                        rec["status"]     = "success"
+                                        rec["last_error"] = None
+                                        rec["error_type"] = None
+                                    elif exit_code != 0:
+                                        rec["status"]     = "failed"
+                                        rec["last_error"] = (
+                                            (batch_log_path and _batch_log_reason(batch_log_path))
+                                            or f"spotdl exited with code {exit_code} "
+                                               f"(no per-track error captured; see "
+                                               f"{os.path.basename(log_file)})"
+                                        )
+                                        rec["error_type"] = _classify_error(rec["last_error"])
+                                    else:
+                                        rec["status"]     = "success"
+                                        rec["last_error"] = None
+                                        rec["error_type"] = None
+
+                                _save_ledger(out_dir, ledger)
+
+                                reporter._render()
+                    finally:
+                        shutil.rmtree(pass_temp, ignore_errors=True)
 
                 pass_end_success = sum(
                     1 for r in ledger.values() if r["status"] == "success")
@@ -1372,6 +1626,12 @@ class SpotifyDownloader:
                 out_dir, meta_name, failed_records,
                 expected_total, final_count, error_breakdown
             )
+        else:                                 # everything is here: an old report would only mislead
+            for stale in ("failed_downloads.txt", "failed_downloads.json"):
+                try:
+                    os.remove(os.path.join(out_dir, stale))
+                except OSError:
+                    pass
 
         return final_count, out_dir, expected_total, failed_report_path, error_breakdown
 
@@ -1392,15 +1652,14 @@ class SpotifyDownloader:
                 "year": meta.get("year"), "track_number": meta.get("track_number"),
                 "tracks_count": meta.get("tracks_count"), "disc_number": meta.get("disc_number"),
                 "cover_url": meta.get("cover_url"), "isrc": meta.get("isrc")}
-        started = time.time()
-        outcome = self._download_tracks_safe([song], "track", meta.get("title"), title)
+        outcome, elapsed = self._download_until_done([song], "track", meta.get("title"), title)
         if outcome is None:
             return
         count, out_folder, expected, failed_report, breakdown = outcome
         section_header(title)
         _display_download_result("track", meta.get("title"), out_folder,
                                   count, expected, failed_report, breakdown,
-                                  elapsed=time.time() - started)
+                                  elapsed=elapsed)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist=meta.get("artist", "spotdl"),
                      mode="Single", status=status)
@@ -1419,15 +1678,14 @@ class SpotifyDownloader:
                         "Falling back to a single bulk download via spotdl.")
             songs = [{"url": url, "name": meta.get("name"),
                       "artist": meta.get("artist")}]
-        started = time.time()
-        outcome = self._download_tracks_safe(songs, "album", meta["name"], title)
+        outcome, elapsed = self._download_until_done(songs, "album", meta["name"], title)
         if outcome is None:
             return
         count, out_folder, expected, failed_report, breakdown = outcome
         section_header(title)
         _display_download_result("album", meta["name"], out_folder,
                                   count, expected, failed_report, breakdown,
-                                  elapsed=time.time() - started)
+                                  elapsed=elapsed)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist="spotdl", mode="Album", status=status)
 
@@ -1445,15 +1703,14 @@ class SpotifyDownloader:
                         "Falling back to a single bulk download via spotdl.")
             songs = [{"url": url, "name": meta.get("name"),
                       "artist": meta.get("author")}]
-        started = time.time()
-        outcome = self._download_tracks_safe(songs, "playlist", meta["name"], title)
+        outcome, elapsed = self._download_until_done(songs, "playlist", meta["name"], title)
         if outcome is None:
             return
         count, out_folder, expected, failed_report, breakdown = outcome
         section_header(title)
         _display_download_result("playlist", meta["name"], out_folder,
                                   count, expected, failed_report, breakdown,
-                                  elapsed=time.time() - started)
+                                  elapsed=elapsed)
         status = "Success" if failed_report is None else "Partial"
         log_download("Spotify", url, artist="spotdl", mode="Playlist", status=status)
 
@@ -1583,6 +1840,7 @@ def _write_failed_report(out_dir: str, meta_name: str | None, failed_records: li
             f.write(f"    Providers tried : {tried}\n")
             f.write(f"    Attempts   : {r.get('attempts', 0)}\n\n")
         f.write("-" * 60 + "\n")
+        f.write("The same list, machine-readable: failed_downloads.json (same folder).\n\n")
         f.write(
             "Tip: re-run the same playlist/album download again (even in a new\n"
             "session). LinkCatty keeps a machine-readable ledger next to this\n"
@@ -1599,11 +1857,38 @@ def _write_failed_report(out_dir: str, meta_name: str | None, failed_records: li
             )
         if error_breakdown and _ERROR_LABELS["blocked_or_rate_limited"] in error_breakdown:
             f.write(
-                "\nSome failures were YouTube blocking/rate-limiting this\n"
-                "connection. Lower parallel_batches or threads in settings,\n"
-                "wait longer between runs, or use a proxy (spotdl --proxy).\n"
+                "\nSome failures were YouTube's bot check on this connection.\n"
+                "Wait a few minutes, turn on a VPN, or set spotify.cookies_from_browser\n"
+                "(for example \"firefox\") in settings.json to use your logged-in browser,\n"
+                "then run the same link again: only the missing tracks are retried.\n"
             )
+    _write_failed_json(out_dir, meta_name, failed_records, expected_total, final_count)
     return report_path
+
+
+def _write_failed_json(out_dir, meta_name, failed_records, expected_total, final_count) -> None:
+    """failed_downloads.json: what is missing and why, for people and for scripts."""
+    try:
+        data = {
+            "name": meta_name or "Unknown",
+            "generated": datetime.now().isoformat(timespec="seconds"),
+            "expected": expected_total,
+            "downloaded": final_count,
+            "missing": len(failed_records),
+            "tracks": [{
+                "url": r.get("url"), "title": r.get("title"), "artist": r.get("artist"),
+                "cause": _ERROR_LABELS.get(r.get("error_type"), r.get("error_type") or "other"),
+                "cause_key": r.get("error_type") or "other",
+                "last_error": r.get("last_error"),
+                "attempts": r.get("attempts", 0),
+                "sources_tried": r.get("providers_tried") or [],
+                "last_attempt": r.get("last_attempt"),
+            } for r in failed_records],
+        }
+        with open(os.path.join(out_dir, "failed_downloads.json"), "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
 
 
 def extract_spotify_id(url: str, item_type: str) -> str | None:

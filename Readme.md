@@ -148,7 +148,10 @@ Every download follows the same flow:
 - LinkCatty reads the track list from Spotify (no account or API key needed), then finds every song on YouTube itself: it searches, scores the results by duration, title, artist and "Topic" (official audio) channels, and skips live, cover, remix and karaoke versions
 - It downloads and converts the audio with the bundled FFmpeg and writes the tags and the Spotify cover art into the file
 - **6 songs at a time**, one live progress bar that starts at 0% and follows the real download, with the size (`4.6MB/10.2MB`), the tracks done and the time left, like YouTube's bar (on a narrow console the track count is dropped first)
-- Anything the fast engine cannot match goes to **spotdl** automatically, with progressively wider provider sets, so nothing is given up on early
+- **Nothing is given up on early.** A song is tried on several matching videos (the right *version* too: `Acoustic Ver.`, `Japanese Version`), and again in later rounds with more patience. If YouTube keeps refusing this connection ("Sign in to confirm you're not a bot") LinkCatty backs off instead of hammering it and, in the later rounds, takes a same-length copy from **SoundCloud** rather than leave a hole (`"soundcloud_fallback": false` turns that off). **spotdl** is only used for songs the search could not find at all
+- If a few songs are still missing at the end, LinkCatty asks **"Retry the N missing tracks now?"** (Enter = yes): wait a few minutes or turn on a VPN first when YouTube is limiting you, then answer yes; only the missing songs are fetched
+- Whatever cannot be downloaded is listed in the folder, for you and for scripts: `failed_downloads.txt` (readable) and `failed_downloads.json` (title, artist, Spotify link, cause, last error, sources tried per track). Both disappear once everything is downloaded
+- Still blocked? Set `"cookies_from_browser": "firefox"` (or `chrome`, `edge`, `brave`) under `spotify` to let YouTube see your logged-in browser
 - Prefer spotdl only? Set `"engine": "spotdl"` under `spotify` in `settings.json`
 
 ### 🌐 Other Downloaders
@@ -224,7 +227,8 @@ Downloads/LinkCatty/
     ├── .spotdl_archive.spotdl              ← spotdl's own skip-list
     ├── .spotdl_log.txt                     ← full spotdl output
     ├── .linkcatty_state.json               ← per-track ledger (resumable)
-    └── failed_downloads.txt                ← only if any track failed
+    ├── failed_downloads.txt                ← only if any track failed
+    └── failed_downloads.json               ← the same list, for scripts
 ```
 
 **Re-running a playlist**: just run it again. The ledger means only missing tracks/videos are attempted; a file you deleted is downloaded again.
@@ -258,6 +262,8 @@ Located at `sources/settings.json`. Created automatically on first launch. Notab
     "engine": "fast",                 // fast = LinkCatty finds and downloads, spotdl only as a fallback | spotdl = spotdl only
     "full_metadata": true,            // complete Spotify data per song (the same tags spotdl writes), fetched while the audio downloads
     "lyrics": true,                   // embed lyrics; false = a bit quicker for single tracks
+    "soundcloud_fallback": true,      // later rounds may take a same-length SoundCloud copy when YouTube refuses
+    "cookies_from_browser": "",       // "firefox" | "chrome" | "edge" | "brave": use your logged-in browser against the bot check
     "parallel_batches": 3,
     "threads": 2,
     "batch_size": 10,
@@ -304,7 +310,8 @@ Your downloaded files (`Downloads/LinkCatty`) are never touched.
 | **"Could not connect – blocked by your network"** (Other Downloaders) | Your network is cutting the connection. Turn on a VPN and press Enter to retry, or set a proxy in **Settings → 7**. The proxy is only used when a direct connection is blocked, and is OFF by default. |
 | **"Nothing is running at your proxy address"** | A proxy address only works while a proxy/VPN app that provides it is running. Start it, fix the address, or clear it with `-` in Settings → 7. |
 | **YouTube "Sign in to confirm you're not a bot"** | LinkCatty offers to use your browser cookies (Chrome → Firefox → Edge → Brave) **once per session** — close your browser first. If no browser works, export cookies with the "Get cookies.txt LOCALLY" extension to `sources/cookies.txt`. |
-| **A Spotify song was not found / "No matching track"** | The fast engine could not match it, so spotdl already tried too. Check `failed_downloads.txt` in the folder for the real reason (the result card also names it). Some tracks simply are not on YouTube. |
+| **A Spotify song was not found / "No matching track"** | The fast engine could not match it, so spotdl already tried too. Check `failed_downloads.txt` / `failed_downloads.json` in the folder for the real reason (the result card also names it). Some tracks simply are not on YouTube. |
+| **Spotify: "YouTube is limiting this connection (bot check)"** | Too many requests from your connection made YouTube ask for a sign-in. It usually passes after a few minutes. LinkCatty pauses, uses SoundCloud for the rest of that round and then offers to retry the missing songs; a VPN or `"cookies_from_browser"` (see above) clears it at once. |
 | **Spotify is still slow** | The remaining time is YouTube's audio speed (roughly 3 to 4 MB per song). More songs at once help: albums and playlists run 6 in parallel. |
 | **Rate limited** | LinkCatty waits and slows down by itself. You can also lower `parallel_downloads` (YouTube) or `parallel_batches` (Spotify) to `1`–`2`, wait an hour, or use a VPN. |
 | **Some tracks/videos are missing** | The result card lists the causes (removed, private, region‑locked, login required…). `failed_downloads.txt` in the playlist folder has the exact URLs. Removed/private videos cannot be downloaded; for the rest, run the same link again to retry only what is missing. |
