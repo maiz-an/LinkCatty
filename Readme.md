@@ -35,7 +35,7 @@
 | Area | Description |
 |------|-------------|
 | 📹 **YouTube** | Single videos, playlists, channels, custom format selection, MP3 conversion. Quality up to 4K / 1080p / 720p / best available. Video + auto‑mix links download just the video; channel links download the uploads. |
-| 🎵 **Spotify** | Tracks, albums, playlists. Downloads as MP3 (320k / 192k), FLAC, M4A, OPUS, OGG, or WAV, tagged with title, artist, album, track number, year and the Spotify cover art. A fast built-in engine finds each song on YouTube by duration and title; `spotdl` takes over automatically for anything it cannot match. |
+| 🎵 **Spotify** | Tracks, albums, playlists. Downloads as MP3 (320k / 192k), FLAC, M4A, OPUS, OGG, or WAV, with the **complete tags**: title, artist, album, album artist, full release date, track and disc numbers, genres, copyright, publisher, ISRC, popularity, the Spotify and YouTube links, lyrics and the Spotify cover art. A fast built-in engine finds each song on YouTube by duration and title; `spotdl` takes over automatically for anything it cannot match. |
 | 🌐 **Other Downloaders** | Paste a link from almost any other site that `yt-dlp` supports (1000+). Video quality comes from Settings; playlists get a folder, a resumable ledger and a failed‑items report. |
 | 🎨 **One clean look** | All three downloaders share the same minimal UI: header, info card, one live progress bar, and a result card. No walls of scrolling text. |
 | 🔁 **Silent auto‑retry** | Failed items are retried in the background with more patience each time. You never see "pass 1/3" or retry noise – only finished items and, at the end, what could not be downloaded and why. |
@@ -256,6 +256,8 @@ Located at `sources/settings.json`. Created automatically on first launch. Notab
     "audio_quality": "320k",          // only for lossy formats
     "auto_retry": true,
     "engine": "fast",                 // fast = LinkCatty finds and downloads, spotdl only as a fallback | spotdl = spotdl only
+    "full_metadata": true,            // complete Spotify data per song (the same tags spotdl writes), fetched while the audio downloads
+    "lyrics": true,                   // embed lyrics; false = a bit quicker for single tracks
     "parallel_batches": 3,
     "threads": 2,
     "batch_size": 10,

@@ -369,7 +369,53 @@ def _track_info(song) -> dict:
         "tracks_count": _song_field(song, "tracks_count"),
         "disc_number": _song_field(song, "disc_number"),
         "cover_url": _song_field(song, "cover_url"), "isrc": _song_field(song, "isrc"),
+        "date": _song_field(song, "date"), "disc_count": _song_field(song, "disc_count"),
+        "genres": [g for g in (_song_field(song, "genres") or []) if g],
+        "copyright": _song_field(song, "copyright_text"),
+        "publisher": _song_field(song, "publisher"),
     }
+
+
+def _full_song(url):
+    """The complete Spotify track object (ISRC, genres, copyright, popularity, ...).
+
+    Album and playlist listings only carry a partial one. This is the ~20 s call spotdl
+    used to make for every track; the fast engine runs it next to the YouTube search and
+    download, so it costs no extra waiting time."""
+    try:
+        from spotdl.types.song import Song
+        return Song.from_url(url)
+    except Exception:
+        return None
+
+
+def _fetch_lyrics(title, artists):
+    """Plain lyrics from spotdl's providers (best effort, never fatal)."""
+    try:
+        from spotdl.providers.lyrics import MusixMatch, Synced
+        providers = []
+        try:
+            from spotdl.providers.lyrics import Genius
+            from spotdl.utils.config import DEFAULT_CONFIG
+            if DEFAULT_CONFIG.get("genius_token"):
+                providers.append((Genius, (DEFAULT_CONFIG["genius_token"],)))
+        except Exception:
+            pass
+        providers += [(MusixMatch, ()), (Synced, ())]
+        for provider, args in providers:
+            try:
+                text = provider(*args).get_lyrics(title, list(artists))
+            except Exception:
+                continue
+            if text:
+                if provider is Synced:            # "[00:18.90] line" -> "line"
+                    text = re.sub(r"^\[\d+:\d+(?:\.\d+)?\]\s*", "", text, flags=re.M)
+                text = text.strip()
+                if text:
+                    return text
+    except Exception:
+        pass
+    return None
 
 
 def _score_candidate(entry: dict, info: dict) -> float:
@@ -438,17 +484,22 @@ def _tag_file(path: str, info: dict, cover: bytes | None, fmt: str) -> None:
     title, artists = info["title"] or "", info["artists"] or []
     artist_text = ", ".join(artists)
     album, album_artist = info.get("album"), info.get("album_artist") or (artists[0] if artists else None)
-    year = str(info.get("year") or "")[:4]
+    year = str(info.get("date") or info.get("year") or "")[:10]
+    genres = [g for g in (info.get("genres") or []) if g]
+    copyright_text = info.get("copyright") or None
+    lyrics, spotify_url, source_url = info.get("lyrics"), info.get("url"), info.get("youtube_url")
     try:
         track = int(info.get("track_number") or 0)
         total = int(info.get("tracks_count") or 0)
         disc = int(info.get("disc_number") or 0)
+        disc_total = int(info.get("disc_count") or 0)
     except (TypeError, ValueError):
-        track = total = disc = 0
+        track = total = disc = disc_total = 0
     try:
         if fmt == "mp3":
-            from mutagen.id3 import (APIC, ID3, ID3NoHeaderError, TALB, TDRC, TIT2,
-                                     TPE1, TPE2, TPOS, TRCK, TSRC)
+            from mutagen.id3 import (APIC, COMM, ID3, ID3NoHeaderError, TALB, TCON, TCOP,
+                                     TDRC, TENC, TIT2, TPE1, TPE2, TPOS, TRCK, TSRC,
+                                     USLT, WOAS)
             try:
                 tags = ID3(path)
             except ID3NoHeaderError:
@@ -462,9 +513,21 @@ def _tag_file(path: str, info: dict, cover: bytes | None, fmt: str) -> None:
             if track:
                 tags.add(TRCK(encoding=3, text=f"{track}/{total}" if total else str(track)))
             if disc:
-                tags.add(TPOS(encoding=3, text=str(disc)))
+                tags.add(TPOS(encoding=3, text=f"{disc}/{disc_total}" if disc_total else str(disc)))
             if year:
                 tags.add(TDRC(encoding=3, text=year))
+            if genres:
+                tags.add(TCON(encoding=3, text=genres))
+            if copyright_text:
+                tags.add(TCOP(encoding=3, text=copyright_text))
+            if info.get("publisher"):
+                tags.add(TENC(encoding=3, text=info["publisher"]))
+            if spotify_url:
+                tags.add(WOAS(url=spotify_url))
+            if source_url:
+                tags.add(COMM(encoding=3, lang="XXX", desc="", text=source_url))
+            if lyrics:
+                tags.add(USLT(encoding=3, lang="XXX", desc="", text=lyrics))
             if info.get("isrc"):
                 tags.add(TSRC(encoding=3, text=str(info["isrc"])))
             if cover:
@@ -485,6 +548,14 @@ def _tag_file(path: str, info: dict, cover: bytes | None, fmt: str) -> None:
                 f["disk"] = [(disc, 0)]
             if year:
                 f["\xa9day"] = [year]
+            if genres:
+                f["\xa9gen"] = [", ".join(genres)]
+            if copyright_text:
+                f["cprt"] = [copyright_text]
+            if lyrics:
+                f["\xa9lyr"] = [lyrics]
+            if source_url:
+                f["\xa9cmt"] = [source_url]
             if cover:
                 f["covr"] = [MP4Cover(cover, imageformat=MP4Cover.FORMAT_JPEG)]
             f.save()
@@ -508,6 +579,14 @@ def _tag_file(path: str, info: dict, cover: bytes | None, fmt: str) -> None:
                 f["tracknumber"] = [str(track)]
             if year:
                 f["date"] = [year]
+            if genres:
+                f["genre"] = genres
+            if copyright_text:
+                f["copyright"] = [copyright_text]
+            if lyrics:
+                f["lyrics"] = [lyrics]
+            if source_url:
+                f["comment"] = [source_url]
             if cover:
                 pic = Picture()
                 pic.type, pic.mime, pic.data = 3, "image/jpeg", cover
@@ -574,7 +653,8 @@ class _ByteTally:
 
 
 def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
-                    ffmpeg, cover_cache: dict, cover_lock, on_progress=None) -> str:
+                    ffmpeg, cover_cache: dict, cover_lock, on_progress=None,
+                    full_metadata: bool = True, want_lyrics: bool = True) -> str:
     """Search, download, convert and tag one track. Returns the final file path.
 
     Raises an Exception whose text is the reason when the track cannot be done."""
@@ -584,6 +664,17 @@ def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
     final = os.path.join(out_dir, f"{name[:150]}.{fmt}")
     if os.path.exists(final):
         return final                                   # done in an earlier run
+
+    # the complete Spotify data and the lyrics load in the background while the audio downloads
+    box = {}
+    jobs = []
+    if full_metadata and info.get("url"):
+        jobs.append((threading.Thread(target=lambda: box.__setitem__("song", _full_song(info["url"])), daemon=True), 90))
+    if want_lyrics:
+        jobs.append((threading.Thread(target=lambda: box.__setitem__(
+            "lyrics", _fetch_lyrics(_title_core(title), info["artists"] or [artist_text])), daemon=True), 25))
+    for job, _ in jobs:
+        job.start()
 
     # 1. find the video: two queries, the second only when the first found nothing usable
     match = None
@@ -630,8 +721,26 @@ def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
             raise RuntimeError("YT-DLP download error - no audio file was produced")
         src = os.path.join(tmp, produced[0])
 
-        # 3. tags + cover, then move into place
-        _tag_file(src, info, _cover_bytes(info.get("cover_url"), cover_cache, cover_lock), fmt)
+        # 3. every tag spotdl used to write (from the complete Spotify data), then move into place
+        for job, wait in jobs:
+            job.join(timeout=wait)
+        song, lyrics = box.get("song"), box.get("lyrics")
+        video_url = f"https://www.youtube.com/watch?v={match['id']}"
+        tagged = False
+        if song is not None:
+            try:
+                from spotdl.utils.metadata import embed_metadata
+                song.download_url = video_url
+                if lyrics:
+                    song.lyrics = lyrics
+                embed_metadata(Path(src), song, "/")
+                tagged = True
+            except Exception:
+                tagged = False
+        if not tagged:                                  # partial data: tag with everything we have
+            more = dict(info)
+            more.update(lyrics=lyrics, youtube_url=video_url)
+            _tag_file(src, more, _cover_bytes(info.get("cover_url"), cover_cache, cover_lock), fmt)
         os.replace(src, final)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -807,6 +916,8 @@ class SpotifyDownloader:
             # the audio download is ~90% of a track; converting and tagging is the rest
             return _fast_fetch_one(info, out_dir, fmt, quality, self.ffmpeg,
                                    cover_cache, cover_lock,
+                                   full_metadata=bool(self.spotify_config.get("full_metadata", True)),
+                                   want_lyrics=bool(self.spotify_config.get("lyrics", True)),
                                    on_progress=lambda f, d=0, t=None: (
                                        inflight.__setitem__(url, f * 0.9),
                                        tally.update(url, d, t) if tally else None))
