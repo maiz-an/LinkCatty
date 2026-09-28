@@ -710,13 +710,14 @@ class DownloadProgress:
     Use .say() to print above the bar and .paused() around prompts.
     """
 
-    def __init__(self, label, total_items=1, unit="videos", count_fn=None):
+    def __init__(self, label, total_items=1, unit="videos", count_fn=None, partial_fn=None):
         self.label = label
         self.total_items = max(int(total_items), 1)
         self.unit = unit
         self.done_items = 0
         self.final_path = None
         self._count_fn = count_fn
+        self._partial_fn = partial_fn      # items currently in flight, as a fraction (e.g. 2.4 = two and a bit)
         self._count_val = None
         self._spin = 0
         self._tick = 0
@@ -951,13 +952,21 @@ class DownloadProgress:
                         self._count_val = self.done_items
                 done = self._count_val
                 self.done_items = min(done, self.total_items)
-                frac = self.done_items / self.total_items
-                parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
                 remaining = self.total_items - self.done_items
-                if self.done_items > 0 and remaining > 0:
-                    rate = self.done_items / max(self.elapsed, 0.001)
+                partial = 0.0
+                if self._partial_fn:
+                    try:
+                        partial = max(0.0, float(self._partial_fn()))
+                    except Exception:
+                        partial = 0.0
+                    partial = min(partial, max(self.total_items * 0.99 - self.done_items, 0.0))   # 100% only when items are done
+                progressed = self.done_items + partial
+                frac = progressed / self.total_items
+                parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
+                if progressed > 0 and remaining > 0:
+                    rate = progressed / max(self.elapsed, 0.001)
                     if rate > 0:
-                        parts["eta"] = format_eta(remaining / rate)
+                        parts["eta"] = format_eta((self.total_items - progressed) / rate)
             else:
                 frac = min((self.done_items + self._frac) / self.total_items, 1.0)
                 if self.total_items > 1:

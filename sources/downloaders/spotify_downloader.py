@@ -10,12 +10,16 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from yt_dlp import YoutubeDL
 
 from utils.ffmpeg import get_ffmpeg_path
 from utils.logger import log_download
 from utils.ui import (
     DownloadProgress,
+    SilentLogger,
     ask_url,
     card,
     confirm,
@@ -312,6 +316,288 @@ def _strategy_for_pass(pass_num: int, youtube_blocked: bool) -> tuple:
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  Fast engine
+#
+#  spotdl spends ~85 s per track on work LinkCatty can skip: it fetches the
+#  Spotify metadata again (19 s), lyrics nobody asked for, retries YouTube
+#  Music, scores results slowly and starts yt-dlp slowly. The fast engine
+#  searches YouTube itself, picks the best match by duration / title /
+#  artist, downloads and converts with yt-dlp and tags the file with the
+#  Spotify data and cover. Tracks it cannot match go to spotdl unchanged.
+# ─────────────────────────────────────────────────────────────────────
+
+_CODECS = {"mp3": "mp3", "m4a": "m4a", "opus": "opus", "ogg": "vorbis",
+           "flac": "flac", "wav": "wav"}
+_UNWANTED = ("live", "cover", "remix", "karaoke", "instrumental", "acoustic",
+             "sped up", "slowed", "nightcore", "reverb", "8d", "tribute",
+             "reaction", "mashup", "loop", "hour", "parody", "lofi")
+
+
+def _words(text) -> list:
+    text = re.sub(r"[^\w\s]", " ", str(text or "").lower())
+    return [w for w in text.split() if w]
+
+
+def _title_core(title) -> str:
+    """The song title without '(feat. ...)', '[...]' and ' - Remastered 2011' parts."""
+    text = re.sub(r"[\(\[].*?[\)\]]", " ", str(title or ""))
+    text = re.split(r"\s+-\s+", text)[0]
+    return re.sub(r"\s+", " ", text).strip() or str(title or "")
+
+
+def _track_info(song) -> dict:
+    """One flat dict from a spotdl Song, or from the plain dict of a single track."""
+    artist = _song_artist(song)
+    raw = _song_field(song, "artists") or []
+    artists = []
+    for a in raw:
+        name = a if isinstance(a, str) else (a.get("name") if isinstance(a, dict) else None)
+        if name:
+            artists.append(name)
+    if not artists and artist:
+        artists = [artist]
+    duration = _song_field(song, "duration")
+    try:
+        duration = float(duration) if duration else None
+    except (TypeError, ValueError):
+        duration = None
+    return {
+        "url": _song_url(song), "title": _song_title(song), "artist": artist,
+        "artists": artists, "album": _song_field(song, "album_name", "album"),
+        "album_artist": _song_field(song, "album_artist"), "duration": duration,
+        "year": _song_field(song, "year"), "track_number": _song_field(song, "track_number"),
+        "tracks_count": _song_field(song, "tracks_count"),
+        "disc_number": _song_field(song, "disc_number"),
+        "cover_url": _song_field(song, "cover_url"), "isrc": _song_field(song, "isrc"),
+    }
+
+
+def _score_candidate(entry: dict, info: dict) -> float:
+    """How well a YouTube search result matches the Spotify track (higher is better)."""
+    title_words = set(_words(entry.get("title")))
+    channel = " ".join(_words(entry.get("channel") or entry.get("uploader")))
+    want_words = _words(_title_core(info["title"]))
+    want_full = " ".join(_words(info["title"]))
+    artist_words = set(w for a in info["artists"] for w in _words(a))
+    score = 0.0
+    title_hit = (sum(1 for w in want_words if w in title_words) / len(want_words)) if want_words else 0
+    score += 45 * title_hit
+    if artist_words:
+        seen = title_words | set(channel.split())
+        score += 25 * min(1.0, sum(1 for w in artist_words if w in seen) / len(artist_words))
+    length, want = entry.get("duration"), info.get("duration")
+    if length and want:
+        gap = abs(float(length) - want)
+        score += 30 if gap <= 3 else 22 if gap <= 8 else 10 if gap <= 15 else (-60 if gap > 30 else 0)
+    if channel.endswith("topic"):
+        score += 15                      # YouTube's auto-generated official audio
+    if "official audio" in " ".join(_words(entry.get("title"))):
+        score += 8
+    title_text = " ".join(_words(entry.get("title")))
+    for word in _UNWANTED:
+        if word in title_text and word not in want_full:
+            score -= 35
+            break
+    entry["_title_hit"] = title_hit
+    return score
+
+
+def _pick_match(entries: list, info: dict):
+    best, best_score = None, -1e9
+    for entry in entries:
+        if not entry or not entry.get("id"):
+            continue
+        score = _score_candidate(entry, info)
+        if score > best_score:
+            best, best_score = entry, score
+    if best is not None and best_score >= 55 and best.get("_title_hit", 0) >= 0.5:
+        return best
+    return None
+
+
+def _cover_bytes(url, cache: dict, lock) -> bytes | None:
+    if not url:
+        return None
+    with lock:
+        if url in cache:
+            return cache[url]
+    data = None
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = resp.read()
+    except Exception:
+        data = None
+    with lock:
+        cache[url] = data
+    return data
+
+
+def _tag_file(path: str, info: dict, cover: bytes | None, fmt: str) -> None:
+    """Title, artist, album, track numbers, year, ISRC and cover art. Never fatal."""
+    title, artists = info["title"] or "", info["artists"] or []
+    artist_text = ", ".join(artists)
+    album, album_artist = info.get("album"), info.get("album_artist") or (artists[0] if artists else None)
+    year = str(info.get("year") or "")[:4]
+    try:
+        track = int(info.get("track_number") or 0)
+        total = int(info.get("tracks_count") or 0)
+        disc = int(info.get("disc_number") or 0)
+    except (TypeError, ValueError):
+        track = total = disc = 0
+    try:
+        if fmt == "mp3":
+            from mutagen.id3 import (APIC, ID3, ID3NoHeaderError, TALB, TDRC, TIT2,
+                                     TPE1, TPE2, TPOS, TRCK, TSRC)
+            try:
+                tags = ID3(path)
+            except ID3NoHeaderError:
+                tags = ID3()
+            tags.add(TIT2(encoding=3, text=title))
+            tags.add(TPE1(encoding=3, text=artists or [""]))
+            if album:
+                tags.add(TALB(encoding=3, text=album))
+            if album_artist:
+                tags.add(TPE2(encoding=3, text=album_artist))
+            if track:
+                tags.add(TRCK(encoding=3, text=f"{track}/{total}" if total else str(track)))
+            if disc:
+                tags.add(TPOS(encoding=3, text=str(disc)))
+            if year:
+                tags.add(TDRC(encoding=3, text=year))
+            if info.get("isrc"):
+                tags.add(TSRC(encoding=3, text=str(info["isrc"])))
+            if cover:
+                tags.delall("APIC")
+                tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover))
+            tags.save(path, v2_version=3)
+        elif fmt == "m4a":
+            from mutagen.mp4 import MP4, MP4Cover
+            f = MP4(path)
+            f["\xa9nam"], f["\xa9ART"] = [title], [artist_text]
+            if album:
+                f["\xa9alb"] = [album]
+            if album_artist:
+                f["aART"] = [album_artist]
+            if track:
+                f["trkn"] = [(track, total)]
+            if disc:
+                f["disk"] = [(disc, 0)]
+            if year:
+                f["\xa9day"] = [year]
+            if cover:
+                f["covr"] = [MP4Cover(cover, imageformat=MP4Cover.FORMAT_JPEG)]
+            f.save()
+        elif fmt in ("flac", "opus", "ogg"):
+            import base64
+            from mutagen.flac import FLAC, Picture
+            if fmt == "flac":
+                f = FLAC(path)
+            elif fmt == "opus":
+                from mutagen.oggopus import OggOpus
+                f = OggOpus(path)
+            else:
+                from mutagen.oggvorbis import OggVorbis
+                f = OggVorbis(path)
+            f["title"], f["artist"] = [title], artists or [""]
+            if album:
+                f["album"] = [album]
+            if album_artist:
+                f["albumartist"] = [album_artist]
+            if track:
+                f["tracknumber"] = [str(track)]
+            if year:
+                f["date"] = [year]
+            if cover:
+                pic = Picture()
+                pic.type, pic.mime, pic.data = 3, "image/jpeg", cover
+                if fmt == "flac":
+                    f.add_picture(pic)
+                else:
+                    f["metadata_block_picture"] = [base64.b64encode(pic.write()).decode("ascii")]
+            f.save()
+    except Exception:
+        pass
+
+
+def _download_fraction(data: dict) -> float | None:
+    """How far a yt-dlp download is (0..1), from its progress event."""
+    if data.get("status") == "finished":
+        return 1.0
+    fragments, fragment = data.get("fragment_count"), data.get("fragment_index")
+    if fragments and fragment is not None:
+        return max(fragment - 1, 0) / fragments
+    done = data.get("downloaded_bytes") or 0
+    total = data.get("total_bytes") or data.get("total_bytes_estimate")
+    if total and total > 0:
+        return min(done / total, 0.99)
+    return None
+
+
+def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
+                    ffmpeg, cover_cache: dict, cover_lock, on_progress=None) -> str:
+    """Search, download, convert and tag one track. Returns the final file path.
+
+    Raises an Exception whose text is the reason when the track cannot be done."""
+    title = info["title"] or "Unknown"
+    artist_text = ", ".join(info["artists"]) or info["artist"] or "Unknown"
+    name = _safe_name(f"{title} - {artist_text}") or "track"
+    final = os.path.join(out_dir, f"{name[:150]}.{fmt}")
+    if os.path.exists(final):
+        return final                                   # done in an earlier run
+
+    # 1. find the video: two queries, the second only when the first found nothing usable
+    match = None
+    core = _title_core(title)
+    for query in (f"{info['artist'] or artist_text} {core}", f"{core} {artist_text} audio"):
+        try:
+            with YoutubeDL({"quiet": True, "no_warnings": True, "logger": SilentLogger(),
+                            "extract_flat": True, "socket_timeout": 20}) as ydl:
+                found = ydl.extract_info(f"ytsearch8:{query}", download=False)
+        except Exception as exc:
+            raise RuntimeError(f"YT-DLP download error - search failed: {exc}")
+        match = _pick_match(list((found or {}).get("entries") or []), info)
+        if match:
+            break
+    if not match:
+        raise LookupError(f"No results found for song: {artist_text} - {title}")
+
+    # 2. download the audio and convert it
+    tmp = os.path.join(out_dir, ".linkcatty_tmp", match["id"])
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp, exist_ok=True)
+    post = {"key": "FFmpegExtractAudio", "preferredcodec": _CODECS.get(fmt, "mp3")}
+    if fmt not in ("flac", "wav"):
+        post["preferredquality"] = quality
+    opts = {"quiet": True, "no_warnings": True, "noprogress": True, "logger": SilentLogger(),
+            "format": "bestaudio/best", "outtmpl": os.path.join(tmp, "audio.%(ext)s"),
+            "noplaylist": True, "retries": 5, "fragment_retries": 5, "socket_timeout": 30,
+            "postprocessors": [post]}
+    if ffmpeg:
+        opts["ffmpeg_location"] = ffmpeg
+    if on_progress:
+        def hook(data):
+            fraction = _download_fraction(data)
+            if fraction is not None:
+                on_progress(fraction)
+        opts["progress_hooks"] = [hook]
+    try:
+        with YoutubeDL(opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={match['id']}"])
+        produced = [f for f in os.listdir(tmp) if f.lower().endswith("." + fmt)]
+        if not produced:
+            raise RuntimeError("YT-DLP download error - no audio file was produced")
+        src = os.path.join(tmp, produced[0])
+
+        # 3. tags + cover, then move into place
+        _tag_file(src, info, _cover_bytes(info.get("cover_url"), cover_cache, cover_lock), fmt)
+        os.replace(src, final)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return final
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  JSON track ledger
 # ─────────────────────────────────────────────────────────────────────
 
@@ -440,6 +726,9 @@ class SpotifyDownloader:
         self.max_passes               = (max(1, int(self.spotify_config.get("max_retry_passes", 4)))
                                          if self.spotify_config.get("auto_retry", True) else 1)
         self.base_threads             = int(self.spotify_config.get("threads", 2))
+        # "fast" = LinkCatty's own search + download first, spotdl for what it cannot match;
+        # "spotdl" = spotdl only (slower, the previous behaviour)
+        self.engine                   = str(self.spotify_config.get("engine", "fast")).lower()
 
     def _find_ffmpeg(self):
         """FFmpeg for spotdl: bundled, on PATH, or spotdl's own copy (downloaded on demand).
@@ -464,6 +753,43 @@ class SpotifyDownloader:
             except Exception:
                 self.ffmpeg = None
         return self.ffmpeg
+
+    def _fast_pass(self, pending_urls, songs_by_url, out_dir, ledger, fmt, quality, reporter, inflight):
+        """Try every pending track with the fast engine (in parallel). Failures stay
+        pending for spotdl. Returns True when YouTube looked rate-limited."""
+        workers = max(1, self.parallel_batches * self.base_threads)
+        cover_cache, cover_lock = {}, threading.Lock()
+        blocked = False
+
+        def work(url):
+            info = _track_info(songs_by_url[url])
+            # the audio download is ~90% of a track; converting and tagging is the rest
+            return _fast_fetch_one(info, out_dir, fmt, quality, self.ffmpeg,
+                                   cover_cache, cover_lock,
+                                   on_progress=lambda f: inflight.__setitem__(url, f * 0.9))
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(work, u): u for u in pending_urls}
+            for future in as_completed(futures):
+                url = futures[future]
+                inflight.pop(url, None)
+                rec = ledger[url]
+                rec["attempts"] += 1
+                rec["last_attempt"] = datetime.now().isoformat(timespec="seconds")
+                if "fast" not in rec["providers_tried"]:
+                    rec["providers_tried"].append("fast")
+                try:
+                    future.result()
+                    rec.update(status="success", last_error=None, error_type=None)
+                except Exception as exc:
+                    message = strip_ansi(str(exc)).strip()
+                    rec.update(status="failed", last_error=message,
+                               error_type=_classify_error(message))
+                    if rec["error_type"] == "blocked_or_rate_limited":
+                        blocked = True
+                _save_ledger(out_dir, ledger)
+                reporter._render()
+        return blocked
 
     def _download_tracks_safe(self, songs, item_type, meta_name, title):
         """_download_tracks, but an unusable setup becomes a clear message."""
@@ -509,19 +835,36 @@ class SpotifyDownloader:
         return meta, songs
 
     def _get_track_meta(self, url: str) -> dict:
-        meta = {"title": None, "artist": None, "album": None}
+        meta = {"title": None, "artist": None, "album": None, "artists": [],
+                "album_artist": None, "duration": None, "year": None,
+                "track_number": None, "tracks_count": None, "disc_number": None,
+                "cover_url": None, "isrc": None}
         if self._client is not None:
             try:
                 track_id = url.split("/track/")[-1].split("?")[0]
                 tr = self._client.track(track_id)
                 meta["title"]  = tr.get("name")
                 artists = tr.get("artists", [])
-                if artists:
-                    a = artists[0]
-                    meta["artist"] = a.get("name") if isinstance(a, dict) else str(a)
+                names = [a.get("name") if isinstance(a, dict) else str(a) for a in artists]
+                meta["artists"] = [n for n in names if n]
+                if meta["artists"]:
+                    meta["artist"] = meta["artists"][0]
+                if tr.get("duration_ms"):
+                    meta["duration"] = tr["duration_ms"] / 1000
+                meta["track_number"] = tr.get("track_number")
+                meta["disc_number"] = tr.get("disc_number")
+                meta["isrc"] = (tr.get("external_ids") or {}).get("isrc")
                 alb = tr.get("album")
                 if isinstance(alb, dict):
                     meta["album"] = alb.get("name")
+                    meta["tracks_count"] = alb.get("total_tracks")
+                    meta["year"] = str(alb.get("release_date") or "")[:4] or None
+                    images = alb.get("images") or []
+                    if images and isinstance(images[0], dict):
+                        meta["cover_url"] = images[0].get("url")
+                    alb_artists = alb.get("artists") or []
+                    if alb_artists and isinstance(alb_artists[0], dict):
+                        meta["album_artist"] = alb_artists[0].get("name")
                 return meta
             except Exception:
                 pass
@@ -530,6 +873,7 @@ class SpotifyDownloader:
             parts = title.split(" - ", 1)
             meta["title"]  = parts[0].strip()
             meta["artist"] = parts[1].strip() if len(parts) > 1 else None
+            meta["artists"] = [meta["artist"]] if meta["artist"] else []
         return meta
 
     # ── core download engine (parallel batches, ledger-driven, adaptive) ──
@@ -689,10 +1033,15 @@ class SpotifyDownloader:
         _save_ledger(out_dir, ledger)
 
         youtube_blocked = False
+        songs_by_url = {_song_url(s): s for s in songs if _song_url(s)}
+        use_fast = self.engine != "spotdl" and bool(songs_by_url) and \
+            all(u.startswith("http") and "/track/" in u for u in songs_by_url)
 
+        inflight = {}                        # url -> how far its download is (fast engine)
         reporter = DownloadProgress(
             "Downloading", expected_total, unit="tracks",
-            count_fn=lambda: _count_audio_files(out_dir))
+            count_fn=_make_progress_counter(out_dir, ledger, song_urls, expected_total),
+            partial_fn=lambda: sum(list(inflight.values())))
         reporter.start()
 
         try:
@@ -703,6 +1052,19 @@ class SpotifyDownloader:
                 ]
                 if not pending_urls:
                     break
+
+                if use_fast and pass_num == 1:
+                    # the fast engine goes first; whatever it cannot do falls straight
+                    # through to spotdl below, in this same pass
+                    if self._fast_pass(pending_urls, songs_by_url, out_dir, ledger,
+                                       audio_format, quality, reporter, inflight):
+                        youtube_blocked = True
+                    pending_urls = [
+                        u for u, rec in ledger.items()
+                        if u in song_urls and rec["status"] != "success"
+                    ]
+                    if not pending_urls:
+                        break
 
                 providers, dont_filter, divisor, max_retries = \
                     _strategy_for_pass(pass_num, youtube_blocked)
@@ -828,8 +1190,8 @@ class SpotifyDownloader:
         finally:
             reporter.stop()
 
-        final_count = _count_audio_files(out_dir)
         relevant_records = [ledger[u] for u in song_urls if u in ledger]
+        final_count = sum(1 for r in relevant_records if r["status"] == "success")
         failed_records   = [r for r in relevant_records if r["status"] != "success"]
 
         error_breakdown = {}
@@ -860,7 +1222,12 @@ class SpotifyDownloader:
         _display_track_info(meta)
         if not confirm("Proceed with download?", default=True):
             return
-        song = {"url": url, "name": meta.get("title"), "artist": meta.get("artist")}
+        song = {"url": url, "name": meta.get("title"), "artist": meta.get("artist"),
+                "artists": meta.get("artists"), "album_name": meta.get("album"),
+                "album_artist": meta.get("album_artist"), "duration": meta.get("duration"),
+                "year": meta.get("year"), "track_number": meta.get("track_number"),
+                "tracks_count": meta.get("tracks_count"), "disc_number": meta.get("disc_number"),
+                "cover_url": meta.get("cover_url"), "isrc": meta.get("isrc")}
         started = time.time()
         outcome = self._download_tracks_safe([song], "track", meta.get("title"), title)
         if outcome is None:
@@ -961,10 +1328,27 @@ def _count_audio_files(folder: str) -> int:
     count = 0
     if not os.path.isdir(folder):
         return 0
-    for root, _, files in os.walk(folder):
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if not d.startswith(".linkcatty")]
         for f in files:
             if Path(f).suffix.lower() in exts:
                 count += 1
+    return count
+
+
+def _make_progress_counter(out_dir, ledger, song_urls, expected_total):
+    """Tracks finished IN THIS RUN, for the progress bar.
+
+    Counting every audio file in the folder is wrong: for a single track the folder is
+    the whole download folder (hundreds of songs), so the bar started at 100%, and an
+    album downloaded before started full too. Files already there are the baseline."""
+    baseline = _count_audio_files(out_dir)
+    already = sum(1 for u in song_urls if ledger.get(u, {}).get("status") == "success")
+
+    def count():
+        fresh = max(0, _count_audio_files(out_dir) - baseline)
+        done = sum(1 for u in song_urls if ledger.get(u, {}).get("status") == "success")
+        return min(expected_total, max(done, already + fresh))
     return count
 
 

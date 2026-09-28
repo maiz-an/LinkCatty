@@ -26,12 +26,16 @@
 
 ---
 
+> **Recommended: v1.1.0 or newer.** 1.1 makes Spotify downloads several times faster, gives every screen a live spinner and progress bar, and hardens the installer and updater (FFmpeg progress, `linkcatty` works right after install, safer downloads). Update with `linkcatty --update`.
+
+---
+
 ## ✨ Features
 
 | Area | Description |
 |------|-------------|
 | 📹 **YouTube** | Single videos, playlists, channels, custom format selection, MP3 conversion. Quality up to 4K / 1080p / 720p / best available. Video + auto‑mix links download just the video; channel links download the uploads. |
-| 🎵 **Spotify** | Tracks, albums, playlists. Downloads as MP3 (320k / 192k), FLAC, M4A, OPUS, OGG, or WAV. |
+| 🎵 **Spotify** | Tracks, albums, playlists. Downloads as MP3 (320k / 192k), FLAC, M4A, OPUS, OGG, or WAV, tagged with title, artist, album, track number, year and the Spotify cover art. A fast built-in engine finds each song on YouTube by duration and title; `spotdl` takes over automatically for anything it cannot match. |
 | 🌐 **Other Downloaders** | Paste a link from almost any other site that `yt-dlp` supports (1000+). Video quality comes from Settings; playlists get a folder, a resumable ledger and a failed‑items report. |
 | 🎨 **One clean look** | All three downloaders share the same minimal UI: header, info card, one live progress bar, and a result card. No walls of scrolling text. |
 | 🔁 **Silent auto‑retry** | Failed items are retried in the background with more patience each time. You never see "pass 1/3" or retry noise – only finished items and, at the end, what could not be downloaded and why. |
@@ -39,7 +43,8 @@
 | 💾 **Resumable** | A per‑folder ledger (`.linkcatty_state.json`) records every attempt. Re‑running a playlist only downloads what's still missing. |
 | 🌍 **Blocked network friendly** | Other Downloaders try a direct connection first and use your optional proxy only when it is blocked. If your network cuts the connection, LinkCatty asks you to turn on a VPN and retries on Enter. |
 | 🚦 **Rate‑limit aware** | Automatic cooldowns and fewer parallel workers when a site throttles; Spotify switches to non‑YouTube providers when needed. |
-| ⚡ **Parallel downloads** | 3 parallel workers for YouTube playlists, 3 batches × 2 threads for Spotify. |
+| ⚡ **Parallel downloads** | 3 parallel workers for YouTube playlists, 6 for Spotify. |
+| 🌀 **Live progress everywhere** | A spinner, one live bar with percentage, size and time left, and no blinking text cursor while something runs (the app, the installer, the launcher and the updater all look the same). |
 | 📝 **Tags inside the file** | Title, artist and more are embedded in the file itself. No extra thumbnail or `.info.json` files are left next to your downloads (you can turn them on in `settings.json`). |
 | 📂 **Easy folder** | Everything is saved to `Downloads/LinkCatty` inside your system Downloads folder (Windows, macOS and Linux). Change it in Settings. |
 | ⌨️ **Consistent keys** | `0` always goes back or cancels, a bare Enter skips or keeps the default. |
@@ -62,11 +67,12 @@
 
 ### 📦 What the installer does
 
-- Downloads the latest version from GitHub
+- Downloads the latest version from GitHub (with a live progress bar; the FFmpeg part shows how many MB have arrived)
 - Installs everything to `%LOCALAPPDATA%\LinkCatty` (Windows) or `~/.local/share/LinkCatty` (Unix)
 - Adds the folder to your **user PATH** (persistent). On macOS/Linux it writes to the startup file of *your* shell (`~/.zshrc` for zsh, the macOS default) and, when possible, also links `linkcatty` into a folder that is already on your PATH so it works right away
 - Downloads every file from one exact GitHub commit and installs nothing unless all files arrived; your `settings.json` and history survive a reinstall
 - Creates a **Start Menu / Desktop shortcut**
+- Makes `linkcatty` work **right away** in the terminal you installed from (a small launcher in a folder that is already on your PATH: `WindowsApps` on Windows, a link in `~/.local/bin`, `/usr/local/bin` or `/opt/homebrew/bin` on macOS/Linux)
 - Bundles FFmpeg (Windows x64, macOS Intel/ARM, Linux x64/ARM64)
 - Creates `sources/settings.json` with full defaults on first launch
 - Your downloads go to `Downloads/LinkCatty` (created on first launch)
@@ -95,7 +101,7 @@ Run `linkcatty` — you'll see the main menu:
 
 =============================================================
                         🎯 MAIN MENU
-                           v1.0.34
+                           v1.1.0
 =============================================================
 
 1. YouTube Downloader
@@ -139,9 +145,11 @@ Every download follows the same flow:
 
 - Select **playlist**, **single track**, or **album**
 - Paste the Spotify URL
-- The app resolves tracks via free/unauthenticated Spotify metadata, then downloads audio from YouTube Music / YouTube
-- **Parallel batches**: 3 spotdl processes × 2 threads = 6 concurrent downloads
-- **Adaptive retries** (silent): missing tracks are retried with progressively wider provider sets (`youtube-music` → `+youtube` → `+soundcloud +piped` → loosened matching)
+- LinkCatty reads the track list from Spotify (no account or API key needed), then finds every song on YouTube itself: it searches, scores the results by duration, title, artist and "Topic" (official audio) channels, and skips live, cover, remix and karaoke versions
+- It downloads and converts the audio with the bundled FFmpeg and writes the tags and the Spotify cover art into the file
+- **6 songs at a time**, one live progress bar that starts at 0% and follows the real download
+- Anything the fast engine cannot match goes to **spotdl** automatically, with progressively wider provider sets, so nothing is given up on early
+- Prefer spotdl only? Set `"engine": "spotdl"` under `spotify` in `settings.json`
 
 ### 🌐 Other Downloaders
 
@@ -185,13 +193,14 @@ Defaults are tuned for speed on a normal home connection:
 | YouTube `parallel_downloads` | 3 | Concurrent yt-dlp workers |
 | Spotify `max_retry_passes` | 4 | Silent retry rounds |
 | YouTube / Other `max_retry_passes` | 3 | Silent retry rounds |
-| `batch_size` (Spotify) | 10 | Tracks per spotdl subprocess |
+| `batch_size` (Spotify) | 10 | Tracks per spotdl subprocess (fallback engine) |
 
 Effective concurrency: **Spotify = 6 downloads**, **YouTube = 3 downloads**.
 
+**Spotify speed.** spotdl alone needs about 90 seconds of its own work per song (re-fetching metadata, lyrics, slow searching) before a byte is downloaded. The built-in fast engine skips that: in our test one track went from about **2 min 45 s to 36 s**, and three tracks together took **28 s**. What is left is mostly YouTube's own audio speed, which no program can change.
+
 If you see YouTube rate‑limiting (`Sign in to confirm you're not a bot`), lower `parallel_batches`/`parallel_downloads` to `1` or `2` in `sources/settings.json`. LinkCatty also eases off by itself when it detects rate limiting.
 
-A real‑world 222‑track Spotify playlist that used to take **~2 h 20 min** now completes in **~40 minutes**, with the same number of successful tracks.
 
 ---
 
@@ -246,6 +255,7 @@ Located at `sources/settings.json`. Created automatically on first launch. Notab
     "audio_format": "mp3",            // mp3 | flac | m4a | opus | ogg | wav
     "audio_quality": "320k",          // only for lossy formats
     "auto_retry": true,
+    "engine": "fast",                 // fast = LinkCatty finds and downloads, spotdl only as a fallback | spotdl = spotdl only
     "parallel_batches": 3,
     "threads": 2,
     "batch_size": 10,
@@ -266,7 +276,7 @@ Located at `sources/settings.json`. Created automatically on first launch. Notab
 
 You can edit it by hand, or use **Settings** in the app. Press **Enter** on any prompt to keep the current value, **0** to cancel.
 
-> **Note**: FLAC/WAV from spotdl re-encode the same ~256 kbps YouTube source into a lossless container — the file is ~4× larger with no quality gain. **MP3 @ 320k is the best trade-off** for Spotify tracks.
+> **Note**: FLAC/WAV re-encode the same ~256 kbps YouTube source into a lossless container — the file is ~4× larger with no quality gain. **MP3 @ 320k is the best trade-off** for Spotify tracks.
 
 ---
 
@@ -292,6 +302,8 @@ Your downloaded files (`Downloads/LinkCatty`) are never touched.
 | **"Could not connect – blocked by your network"** (Other Downloaders) | Your network is cutting the connection. Turn on a VPN and press Enter to retry, or set a proxy in **Settings → 7**. The proxy is only used when a direct connection is blocked, and is OFF by default. |
 | **"Nothing is running at your proxy address"** | A proxy address only works while a proxy/VPN app that provides it is running. Start it, fix the address, or clear it with `-` in Settings → 7. |
 | **YouTube "Sign in to confirm you're not a bot"** | LinkCatty offers to use your browser cookies (Chrome → Firefox → Edge → Brave) **once per session** — close your browser first. If no browser works, export cookies with the "Get cookies.txt LOCALLY" extension to `sources/cookies.txt`. |
+| **A Spotify song was not found / "No matching track"** | The fast engine could not match it, so spotdl already tried too. Check `failed_downloads.txt` in the folder for the real reason (the result card also names it). Some tracks simply are not on YouTube. |
+| **Spotify is still slow** | The remaining time is YouTube's audio speed (roughly 3 to 4 MB per song). More songs at once help: albums and playlists run 6 in parallel. |
 | **Rate limited** | LinkCatty waits and slows down by itself. You can also lower `parallel_downloads` (YouTube) or `parallel_batches` (Spotify) to `1`–`2`, wait an hour, or use a VPN. |
 | **Some tracks/videos are missing** | The result card lists the causes (removed, private, region‑locked, login required…). `failed_downloads.txt` in the playlist folder has the exact URLs. Removed/private videos cannot be downloaded; for the rest, run the same link again to retry only what is missing. |
 | **"That link belongs to the YouTube/Spotify Downloader"** | You pasted a YouTube or Spotify link into Other Downloaders. Use main menu option 1 or 2 instead. |
@@ -324,7 +336,7 @@ Key modules:
 |---|---|
 | `sources/LinkCatty.py` | Main menu, settings UI, entry point |
 | `sources/downloaders/youtube_downloader.py` | yt-dlp wrapper — parallel playlists, ledger, silent retries |
-| `sources/downloaders/spotify_downloader.py` | spotdl wrapper — parallel batches, provider fallback |
+| `sources/downloaders/spotify_downloader.py` | Spotify: fast built-in engine (YouTube search + match, yt-dlp, tagging) with spotdl as fallback |
 | `sources/downloaders/other_downloader.py` | Engine for every other site — progress, retries, ledger, report |
 | `sources/downloaders/universal.py` | Redirect hints (YouTube/Spotify links) and browser‑cookie login |
 | `sources/utils/config.py` | `settings.json` load/save/reset, default download folder, proxy fallback |
