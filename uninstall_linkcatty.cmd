@@ -67,6 +67,7 @@ if errorlevel 1 (
     call :ui_ok
 )
 
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\linkcatty.cmd" del "%LOCALAPPDATA%\Microsoft\WindowsApps\linkcatty.cmd" >nul 2>&1
 set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\LinkCatty.lnk"
 if exist "%SHORTCUT_PATH%" del "%SHORTCUT_PATH%" >nul 2>&1
 set "MSG=Shortcut removed"
@@ -191,6 +192,7 @@ if not defined G_DOT (
 set "RULE="
 for /l %%k in (1,1,58) do set "RULE=!RULE!!G_BAR2!"
 set "SPIN_I=0"
+set "BF_LAST=-1"
 set "CUR_HIDDEN="
 set "CUR_HIDE="
 set "CUR_SHOW="
@@ -255,10 +257,13 @@ if not defined CUR_HIDDEN (
     <nul set /p "=%CUR_HIDE%"
     set "CUR_HIDDEN=1"
 )
-set "BB1="
-set "BB2="
-for /l %%k in (1,1,28) do (
-    if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
+if not "!BF!"=="!BF_LAST!" (
+    set "BB1="
+    set "BB2="
+    for /l %%k in (1,1,28) do (
+        if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
+    )
+    set "BF_LAST=!BF!"
 )
 set "BT=!BAR_DONE!/!BAR_TOTAL!"
 if defined BAR_TEXT set "BT=!BAR_TEXT!"

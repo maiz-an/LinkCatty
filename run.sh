@@ -50,17 +50,55 @@ ui_fail()  { ui_line "$C_RD" "✖" "$1" "$2"; }
 ui_warn()  { ui_line "$C_YL" "⚠" "$1" "$2"; }
 ui_arrow() { ui_line "$C_CY" "›" "$1" "$2"; }
 ui_note()  { printf "  %s%s%s\n" "$C_DIM" "$1" "$C_RST"; }
-ui_bar() {      # label, done, total  (in place, only on a real terminal)
+SPIN=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+SPIN_I=0
+CUR_HIDDEN=0
+ui_cursor_hide() { if [ "$IS_TTY" = 1 ]; then printf '\033[?25l'; CUR_HIDDEN=1; fi; }
+ui_cursor_show() { if [ "$IS_TTY" = 1 ] && [ "$CUR_HIDDEN" = 1 ]; then printf '\033[?25h'; CUR_HIDDEN=0; fi; }
+trap 'ui_cursor_show' EXIT          # never leave the terminal without a cursor
+ui_bar() {      # label, done, total [, text]   (in place, only on a real terminal)
     [ "$IS_TTY" = 1 ] || return 0
-    local label="$1" n="$2" total="$3" w=24 pct filled b1="" b2="" k=0
+    local label="$1" n="$2" total="$3" text="${4:-}" w=24 pct filled b1="" b2="" k=0
+    [ "$CUR_HIDDEN" = 1 ] || ui_cursor_hide
     pct=$(( n * 100 / total )); filled=$(( n * w / total ))
     while [ $k -lt $w ]; do
         if [ $k -lt $filled ]; then b1="$b1━"; else b2="$b2─"; fi
         k=$((k + 1))
     done
-    printf "\r  %s%s%s  %s%s%s%s%s%s  %s%3d%%%s  %s%d/%d%s\033[K" \
-        "$C_CY" "$label" "$C_RST" "$C_CY" "$b1" "$C_RST" "$C_DIM" "$b2" "$C_RST" \
-        "$C_BOLD" "$pct" "$C_RST" "$C_DIM" "$n" "$total" "$C_RST"
+    [ -n "$text" ] || text="$n/$total"
+    SPIN_I=$(( (SPIN_I + 1) % 10 ))
+    printf "\r  %s%s%s %s  %s%s%s%s%s%s  %s%3d%%%s  %s%s%s\033[K" \
+        "$C_CY" "${SPIN[$SPIN_I]}" "$C_RST" "$label" "$C_CY" "$b1" "$C_RST" "$C_DIM" "$b2" "$C_RST" \
+        "$C_BOLD" "$pct" "$C_RST" "$C_DIM" "$text" "$C_RST"
+}
+tiny_sleep() { sleep 0.1 2>/dev/null || sleep 1; }
+# Run a command in the background and animate while it works.  usage: cmd & spin_wait $! "label" "text"
+spin_wait() {   # pid, label, text
+    local pid="$1"
+    while kill -0 "$pid" 2>/dev/null; do
+        ui_bar "$2" 100 100 "$3"
+        tiny_sleep
+    done
+    wait "$pid"
+}
+# Download with a live bar (MB and percent). usage: download_with_bar "label" url outfile
+download_with_bar() {
+    local label="$1" url="$2" out="$3" total=0 pid size pct mb tmb text
+    total="$(curl -sIL --max-time 15 "$url" 2>/dev/null | tr -d '\r' | awk 'tolower($1)=="content-length:" {v=$2} END {print v+0}')"
+    rm -f "$out"
+    curl -fsSL --retry 2 --connect-timeout 15 --max-time 1800 -o "$out" "$url" 2>/dev/null &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+        size="$(wc -c < "$out" 2>/dev/null | tr -d ' ')"; size=${size:-0}
+        mb=$(( size / 1048576 )); text="$mb MB"; pct=0
+        if [ "${total:-0}" -gt 0 ] 2>/dev/null; then
+            pct=$(( size * 100 / total )); [ $pct -gt 99 ] && pct=99
+            tmb=$(( total / 1048576 )); text="$mb / $tmb MB"
+        fi
+        ui_bar "$label" "$pct" 100 "$text"
+        tiny_sleep
+    done
+    wait "$pid"
 }
 
 # One file from GitHub. Tries the raw server, then a mirror (jsDelivr, only when the commit is
@@ -201,7 +239,7 @@ else
     # Everything goes to a staging folder first; the install is only touched when every
     # file arrived, so a dropped connection can never leave a half update.
     STAGE="$(mktemp -d "${TMPDIR:-/tmp}/linkcatty.XXXXXX")"
-    trap 'rm -rf "$STAGE"; exit 130' INT TERM
+    trap 'rm -rf "$STAGE"; ui_cursor_show; exit 130' INT TERM
     TOTAL=${#FILE_PATHS[@]}
     FAILED=0
     i=0
@@ -220,6 +258,7 @@ else
         i=$((i + 1))
     done
     ui_bar "Updating" "$i" "$TOTAL"
+    ui_cursor_show
     [ "$IS_TTY" = 1 ] && printf "\n"
     echo ""
 
@@ -250,6 +289,7 @@ else
         chmod +x "$SELF" 2>/dev/null
 
         sleep 1
+        ui_cursor_show
         exec "$SELF" --restarted
     fi
 fi
@@ -301,14 +341,17 @@ download_ffmpeg() {   # os-folder name, release asset name
     local dir="$SCRIPT_DIR/sources/FFmpeg/$1" zip found
     mkdir -p "$dir"
     zip="$dir/ffmpeg_dl.zip"
-    if curl -fsSL --retry 2 -o "$zip" "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/$2" \
-        && unzip -q -o "$zip" -d "$dir/extract" 2>/dev/null; then
+    if download_with_bar "FFmpeg" "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/$2" "$zip"; then
+        (unzip -q -o "$zip" -d "$dir/extract" 2>/dev/null) &
+        spin_wait $! "Unpacking FFmpeg" "almost there"
         found="$(find "$dir/extract" -name ffmpeg -type f 2>/dev/null | head -n1)"
         if [ -n "$found" ]; then
             mv -f "$found" "$dir/ffmpeg"
             chmod +x "$dir/ffmpeg" 2>/dev/null
         fi
     fi
+    ui_cursor_show
+    [ "$IS_TTY" = 1 ] && printf "\r\033[K"
     rm -rf "$dir/extract" "$zip"
     [ -x "$dir/ffmpeg" ]
 }

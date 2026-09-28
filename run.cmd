@@ -380,7 +380,7 @@ set "TRY=0"
 :FetchTry
 set /a TRY+=1
 del "!ERR_FILE!" 2>nul
-powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; $urls = @('!FILE_URL!', '!MIRROR_URL!') | Where-Object { $_ }; $err = ''; foreach ($u in $urls) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 45 -Uri $u -OutFile '!OUT_FILE!'; exit 0 } catch { $err = $_.Exception.Message } }; Set-Content -Path '!ERR_FILE!' -Value $err; exit 1 }" >nul 2>&1
+powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; $urls = @('!FILE_URL!', '!MIRROR_URL!') | Where-Object { $_ }; $err = ''; foreach ($u in $urls) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 45 -Uri $u -OutFile '!OUT_FILE!'; exit 0 } catch { if (-not $err) { $err = $_.Exception.Message } } }; Set-Content -Path '!ERR_FILE!' -Value $err; exit 1 }" >nul 2>&1
 if not errorlevel 1 goto :FetchCheck
 if exist "!ERR_FILE!" set /p DL_ERR=<"!ERR_FILE!"
 goto :FetchRetry
@@ -404,7 +404,7 @@ rem .cmd files must be CRLF + ASCII whatever the server sent
 if /i "!FILE_PATH:~-4!"==".cmd" powershell -NoProfile -Command "& { $p='!OUT_FILE!'; if (Test-Path $p) { $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p, ($t -replace '\r?\n', ([string][char]13 + [char]10)), [Text.Encoding]::ASCII) } }" >nul 2>&1
 exit /b 0
 :FetchRetry
-if !TRY! LSS 3 (
+if !TRY! LSS 5 (
     rem wait a little longer each time (a busy server or a scan of the new file usually clears)
     set /a WAIT=TRY*2
     set /a WAIT+=1
@@ -430,13 +430,15 @@ for /f "tokens=2 delims=: " %%L in ('curl -sIL --max-time 15 "%FF_URL%" 2^>nul ^
 > "%FF_HELPER%" (
     echo @echo off
     echo curl -fsSL --retry 2 --connect-timeout 15 --max-time 1800 -o "%FF_ZIP%" "%FF_URL%" 2^>nul
-    echo echo %%errorlevel%%^> "%FF_DONE%"
+    echo ^>"%FF_DONE%" echo %%errorlevel%%
 )
-start "" /b "%FF_HELPER%"
+start "" /b cmd /c "%FF_HELPER%" <nul >nul 2>&1
 set "BAR_LABEL=FFmpeg"
 set "BAR_TOTAL=100"
 :FF_Wait
-if exist "%FF_DONE%" goto :FF_Finished
+if not exist "%FF_DONE%" goto :FF_Progress
+for %%s in ("%FF_DONE%") do if %%~zs GTR 0 goto :FF_Finished
+:FF_Progress
 set "FF_KB=0"
 if exist "%FF_ZIP%" for %%s in ("%FF_ZIP%") do set /a FF_KB=%%~zs/1024
 set "BAR_DONE=0"
@@ -447,8 +449,12 @@ set "BAR_TEXT=%FF_MB% MB"
 if %FF_TOTAL_KB% GTR 0 set /a FF_TMB=FF_TOTAL_KB/1024
 if %FF_TOTAL_KB% GTR 0 set "BAR_TEXT=%FF_MB% / %FF_TMB% MB"
 call :ui_bar
-rem about a quarter of a second: an unreachable address, ping waits for its timeout
-ping 192.0.2.1 -n 1 -w 250 >nul
+rem pause between frames: a ping to this machine takes ~30 ms (an unreachable address always
+rem costs ~500 ms on Windows whatever -w says, which made the spinner crawl)
+rem three of them per frame = roughly 10 frames a second
+ping 127.0.0.1 -n 1 >nul
+ping 127.0.0.1 -n 1 >nul
+ping 127.0.0.1 -n 1 >nul
 goto :FF_Wait
 :FF_Finished
 set "FF_CODE=1"
@@ -469,7 +475,7 @@ mkdir "%FF_OUT%" 2>nul
 tar -xf "%FF_ZIP%" -C "%FF_OUT%" >nul 2>&1
 if errorlevel 1 powershell -NoProfile -Command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%FF_ZIP%', '%FF_OUT%') }" >nul 2>&1
 set "FF_FOUND="
-for /r "%FF_OUT%" %%f in (ffmpeg.exe) do if not defined FF_FOUND set "FF_FOUND=%%f"
+for /r "%FF_OUT%" %%f in (ffmpeg.exe) do if exist "%%f" if not defined FF_FOUND set "FF_FOUND=%%f"
 if not defined FF_FOUND goto :FF_Fail
 for %%d in ("%FF_DEST%") do if not exist "%%~dpd" mkdir "%%~dpd"
 copy /y "%FF_FOUND%" "%FF_DEST%" >nul
@@ -585,6 +591,7 @@ if not defined G_DOT (
 set "RULE="
 for /l %%k in (1,1,58) do set "RULE=!RULE!!G_BAR2!"
 set "SPIN_I=0"
+set "BF_LAST=-1"
 set "CUR_HIDDEN="
 set "CUR_HIDE="
 set "CUR_SHOW="
@@ -649,10 +656,13 @@ if not defined CUR_HIDDEN (
     <nul set /p "=%CUR_HIDE%"
     set "CUR_HIDDEN=1"
 )
-set "BB1="
-set "BB2="
-for /l %%k in (1,1,28) do (
-    if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
+if not "!BF!"=="!BF_LAST!" (
+    set "BB1="
+    set "BB2="
+    for /l %%k in (1,1,28) do (
+        if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
+    )
+    set "BF_LAST=!BF!"
 )
 set "BT=!BAR_DONE!/!BAR_TOTAL!"
 if defined BAR_TEXT set "BT=!BAR_TEXT!"

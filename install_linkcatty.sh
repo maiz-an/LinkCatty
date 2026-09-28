@@ -39,17 +39,55 @@ ui_warn()  { ui_line "$C_YL" "⚠" "$1" "$2"; }
 ui_arrow() { ui_line "$C_CY" "›" "$1" "$2"; }
 ui_note()  { printf "  %s%s%s\n" "$C_DIM" "$1" "$C_RST"; }
 ui_row()   { printf "  %s│%s  %s%-10s%s %s\n" "$C_GR" "$C_RST" "$C_DIM" "$1" "$C_RST" "$2"; }
-ui_bar() {      # label, done, total  (in place, only on a real terminal)
+SPIN=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+SPIN_I=0
+CUR_HIDDEN=0
+ui_cursor_hide() { if [ "$IS_TTY" = 1 ]; then printf '\033[?25l'; CUR_HIDDEN=1; fi; }
+ui_cursor_show() { if [ "$IS_TTY" = 1 ] && [ "$CUR_HIDDEN" = 1 ]; then printf '\033[?25h'; CUR_HIDDEN=0; fi; }
+trap 'ui_cursor_show' EXIT          # never leave the terminal without a cursor
+ui_bar() {      # label, done, total [, text]   (in place, only on a real terminal)
     [ "$IS_TTY" = 1 ] || return 0
-    local label="$1" n="$2" total="$3" w=24 pct filled b1="" b2="" k=0
+    local label="$1" n="$2" total="$3" text="${4:-}" w=24 pct filled b1="" b2="" k=0
+    [ "$CUR_HIDDEN" = 1 ] || ui_cursor_hide
     pct=$(( n * 100 / total )); filled=$(( n * w / total ))
     while [ $k -lt $w ]; do
         if [ $k -lt $filled ]; then b1="$b1━"; else b2="$b2─"; fi
         k=$((k + 1))
     done
-    printf "\r  %s%s%s  %s%s%s%s%s%s  %s%3d%%%s  %s%d/%d%s\033[K" \
-        "$C_CY" "$label" "$C_RST" "$C_CY" "$b1" "$C_RST" "$C_DIM" "$b2" "$C_RST" \
-        "$C_BOLD" "$pct" "$C_RST" "$C_DIM" "$n" "$total" "$C_RST"
+    [ -n "$text" ] || text="$n/$total"
+    SPIN_I=$(( (SPIN_I + 1) % 10 ))
+    printf "\r  %s%s%s %s  %s%s%s%s%s%s  %s%3d%%%s  %s%s%s\033[K" \
+        "$C_CY" "${SPIN[$SPIN_I]}" "$C_RST" "$label" "$C_CY" "$b1" "$C_RST" "$C_DIM" "$b2" "$C_RST" \
+        "$C_BOLD" "$pct" "$C_RST" "$C_DIM" "$text" "$C_RST"
+}
+tiny_sleep() { sleep 0.1 2>/dev/null || sleep 1; }
+# Run a command in the background and animate while it works.  usage: cmd & spin_wait $! "label" "text"
+spin_wait() {   # pid, label, text
+    local pid="$1"
+    while kill -0 "$pid" 2>/dev/null; do
+        ui_bar "$2" 100 100 "$3"
+        tiny_sleep
+    done
+    wait "$pid"
+}
+# Download with a live bar (MB and percent). usage: download_with_bar "label" url outfile
+download_with_bar() {
+    local label="$1" url="$2" out="$3" total=0 pid size pct mb tmb text
+    total="$(curl -sIL --max-time 15 "$url" 2>/dev/null | tr -d '\r' | awk 'tolower($1)=="content-length:" {v=$2} END {print v+0}')"
+    rm -f "$out"
+    curl -fsSL --retry 2 --connect-timeout 15 --max-time 1800 -o "$out" "$url" 2>/dev/null &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+        size="$(wc -c < "$out" 2>/dev/null | tr -d ' ')"; size=${size:-0}
+        mb=$(( size / 1048576 )); text="$mb MB"; pct=0
+        if [ "${total:-0}" -gt 0 ] 2>/dev/null; then
+            pct=$(( size * 100 / total )); [ $pct -gt 99 ] && pct=99
+            tmb=$(( total / 1048576 )); text="$mb / $tmb MB"
+        fi
+        ui_bar "$label" "$pct" 100 "$text"
+        tiny_sleep
+    done
+    wait "$pid"
 }
 
 ask() {         # prompt -> answer (empty when there is no terminal; LINKCATTY_YES=1 answers y)
@@ -120,7 +158,7 @@ fi
 RAW_BASE="https://raw.githubusercontent.com/maiz-an/LinkCatty/$REF"
 
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linkcatty_setup.XXXXXX")"
-trap 'rm -rf "$TEMP_DIR"; exit 130' INT TERM
+trap 'rm -rf "$TEMP_DIR"; ui_cursor_show; exit 130' INT TERM
 
 # Files to download (paths relative to the repository root)
 FILES=(
@@ -151,6 +189,9 @@ while [ $i -lt $TOTAL ]; do
     ui_bar "Downloading" "$i" "$STEPS"
     F="${FILES[$i]}"
     mkdir -p "$(dirname "$TEMP_DIR/$F")"
+    case "$F" in
+        */__init__.py) : > "$TEMP_DIR/$F"; i=$((i + 1)); continue ;;   # empty in the repository
+    esac
     if ! fetch_file "$F" "$TEMP_DIR/$F"; then
         FAILED_FILE="$F"
         break
@@ -162,6 +203,7 @@ while [ $i -lt $TOTAL ]; do
 done
 
 if [ -n "$FAILED_FILE" ]; then
+    ui_cursor_show
     [ "$IS_TTY" = 1 ] && printf "\n"
     echo ""
     ui_fail "Could not download $FAILED_FILE" "$FETCH_ERR"
@@ -174,7 +216,6 @@ if [ -n "$FAILED_FILE" ]; then
 fi
 
 # FFmpeg (a failure here is not fatal: audio downloads still work)
-ui_bar "Downloading" "$TOTAL" "$STEPS"
 case "$(uname -m)" in
     aarch64|arm64) ARCH_NAME="arm64" ;;
     x86_64|amd64) ARCH_NAME="x64" ;;
@@ -189,20 +230,22 @@ esac
 if [ -n "$FF_OS" ] && [ -n "$ARCH_NAME" ]; then
     FF_DIR="$TEMP_DIR/sources/FFmpeg/$FF_OS"
     mkdir -p "$FF_DIR"
-    if curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 -o "$TEMP_DIR/ffmpeg.zip" \
-            "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/$FF_OS-$ARCH_NAME.zip" \
-        && unzip_to "$TEMP_DIR/ffmpeg.zip" "$TEMP_DIR/ffmpeg_extract"; then
-        FOUND="$(find "$TEMP_DIR/ffmpeg_extract" -name ffmpeg -type f 2>/dev/null | head -n1)"
-        if [ -n "$FOUND" ]; then
-            # the app and the launcher look for  sources/FFmpeg/<macos|linux>/ffmpeg
-            cp "$FOUND" "$FF_DIR/ffmpeg"
-            chmod +x "$FF_DIR/ffmpeg"
-            FFMPEG_OK=1
+    if download_with_bar "FFmpeg" "https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/$FF_OS-$ARCH_NAME.zip" "$TEMP_DIR/ffmpeg.zip"; then
+        (unzip_to "$TEMP_DIR/ffmpeg.zip" "$TEMP_DIR/ffmpeg_extract") &
+        if spin_wait $! "Unpacking FFmpeg" "almost there"; then
+            FOUND="$(find "$TEMP_DIR/ffmpeg_extract" -name ffmpeg -type f 2>/dev/null | head -n1)"
+            if [ -n "$FOUND" ]; then
+                # the app and the launcher look for  sources/FFmpeg/<macos|linux>/ffmpeg
+                cp "$FOUND" "$FF_DIR/ffmpeg"
+                chmod +x "$FF_DIR/ffmpeg"
+                FFMPEG_OK=1
+            fi
         fi
     fi
     rm -rf "$TEMP_DIR/ffmpeg_extract" "$TEMP_DIR/ffmpeg.zip"
 fi
 ui_bar "Downloading" "$STEPS" "$STEPS"
+ui_cursor_show
 [ "$IS_TTY" = 1 ] && printf "\n"
 echo ""
 
