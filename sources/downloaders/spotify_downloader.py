@@ -534,6 +534,45 @@ def _download_fraction(data: dict) -> float | None:
     return None
 
 
+class _ByteTally:
+    """Bytes downloaded so far by the fast engine, and an estimate of the total, for the
+    size readout ('58.2MB/203.7MB'). Sizes are known one track at a time as each download
+    starts, so tracks that have not started are assumed to be as big as the average."""
+
+    def __init__(self, total_tracks: int):
+        self.total_tracks = max(int(total_tracks), 1)
+        self.active = False
+        self._lock = threading.Lock()
+        self._live, self._known, self._finished = {}, {}, {}
+
+    def update(self, key, done, total=None):
+        with self._lock:
+            self._live[key] = done or 0
+            if total:
+                self._known[key] = total
+
+    def finish(self, key, ok=True):
+        with self._lock:
+            got = self._live.pop(key, 0)
+            if ok:
+                self._finished[key] = self._known.get(key) or got
+            else:
+                self._known.pop(key, None)
+
+    def snapshot(self):
+        with self._lock:
+            if not self.active:
+                return 0, None
+            downloaded = sum(self._finished.values()) + sum(self._live.values())
+            sizes = list(self._finished.values()) + [v for k, v in self._known.items()
+                                                    if k not in self._finished]
+            if not sizes:
+                return downloaded, None
+            average = sum(sizes) / len(sizes)
+            total = sum(sizes) + max(self.total_tracks - len(sizes), 0) * average
+            return downloaded, max(total, downloaded)
+
+
 def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
                     ffmpeg, cover_cache: dict, cover_lock, on_progress=None) -> str:
     """Search, download, convert and tag one track. Returns the final file path.
@@ -579,7 +618,9 @@ def _fast_fetch_one(info: dict, out_dir: str, fmt: str, quality: str,
         def hook(data):
             fraction = _download_fraction(data)
             if fraction is not None:
-                on_progress(fraction)
+                # an exact total only for plain downloads (fragmented streams report estimates)
+                exact = None if data.get("fragment_count") else data.get("total_bytes")
+                on_progress(fraction, data.get("downloaded_bytes") or 0, exact)
         opts["progress_hooks"] = [hook]
     try:
         with YoutubeDL(opts) as ydl:
@@ -754,7 +795,7 @@ class SpotifyDownloader:
                 self.ffmpeg = None
         return self.ffmpeg
 
-    def _fast_pass(self, pending_urls, songs_by_url, out_dir, ledger, fmt, quality, reporter, inflight):
+    def _fast_pass(self, pending_urls, songs_by_url, out_dir, ledger, fmt, quality, reporter, inflight, tally=None):
         """Try every pending track with the fast engine (in parallel). Failures stay
         pending for spotdl. Returns True when YouTube looked rate-limited."""
         workers = max(1, self.parallel_batches * self.base_threads)
@@ -766,8 +807,12 @@ class SpotifyDownloader:
             # the audio download is ~90% of a track; converting and tagging is the rest
             return _fast_fetch_one(info, out_dir, fmt, quality, self.ffmpeg,
                                    cover_cache, cover_lock,
-                                   on_progress=lambda f: inflight.__setitem__(url, f * 0.9))
+                                   on_progress=lambda f, d=0, t=None: (
+                                       inflight.__setitem__(url, f * 0.9),
+                                       tally.update(url, d, t) if tally else None))
 
+        if tally:
+            tally.active = True
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(work, u): u for u in pending_urls}
             for future in as_completed(futures):
@@ -781,7 +826,11 @@ class SpotifyDownloader:
                 try:
                     future.result()
                     rec.update(status="success", last_error=None, error_type=None)
+                    if tally:
+                        tally.finish(url, ok=True)
                 except Exception as exc:
+                    if tally:
+                        tally.finish(url, ok=False)
                     message = strip_ansi(str(exc)).strip()
                     rec.update(status="failed", last_error=message,
                                error_type=_classify_error(message))
@@ -789,6 +838,8 @@ class SpotifyDownloader:
                         blocked = True
                 _save_ledger(out_dir, ledger)
                 reporter._render()
+        if tally:
+            tally.active = False              # back to the plain "n/total tracks" for the spotdl fallback
         return blocked
 
     def _download_tracks_safe(self, songs, item_type, meta_name, title):
@@ -1038,10 +1089,12 @@ class SpotifyDownloader:
             all(u.startswith("http") and "/track/" in u for u in songs_by_url)
 
         inflight = {}                        # url -> how far its download is (fast engine)
+        tally = _ByteTally(len([u for u in song_urls if ledger.get(u, {}).get("status") != "success"]))
         reporter = DownloadProgress(
             "Downloading", expected_total, unit="tracks",
             count_fn=_make_progress_counter(out_dir, ledger, song_urls, expected_total),
-            partial_fn=lambda: sum(list(inflight.values())))
+            partial_fn=lambda: sum(list(inflight.values())),
+            bytes_fn=tally.snapshot)
         reporter.start()
 
         try:
@@ -1057,7 +1110,7 @@ class SpotifyDownloader:
                     # the fast engine goes first; whatever it cannot do falls straight
                     # through to spotdl below, in this same pass
                     if self._fast_pass(pending_urls, songs_by_url, out_dir, ledger,
-                                       audio_format, quality, reporter, inflight):
+                                       audio_format, quality, reporter, inflight, tally):
                         youtube_blocked = True
                     pending_urls = [
                         u for u, rec in ledger.items()

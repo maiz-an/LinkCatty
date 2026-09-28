@@ -710,7 +710,7 @@ class DownloadProgress:
     Use .say() to print above the bar and .paused() around prompts.
     """
 
-    def __init__(self, label, total_items=1, unit="videos", count_fn=None, partial_fn=None):
+    def __init__(self, label, total_items=1, unit="videos", count_fn=None, partial_fn=None, bytes_fn=None):
         self.label = label
         self.total_items = max(int(total_items), 1)
         self.unit = unit
@@ -718,6 +718,7 @@ class DownloadProgress:
         self.final_path = None
         self._count_fn = count_fn
         self._partial_fn = partial_fn      # items currently in flight, as a fraction (e.g. 2.4 = two and a bit)
+        self._bytes_fn = bytes_fn          # (bytes downloaded, estimated total bytes or None) for the size readout
         self._count_val = None
         self._spin = 0
         self._tick = 0
@@ -962,7 +963,20 @@ class DownloadProgress:
                     partial = min(partial, max(self.total_items * 0.99 - self.done_items, 0.0))   # 100% only when items are done
                 progressed = self.done_items + partial
                 frac = progressed / self.total_items
-                parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
+                count_text = f"{self.done_items}/{self.total_items} {self.unit}"
+                size_text = None
+                if self._bytes_fn:
+                    try:
+                        got, want = self._bytes_fn()
+                    except Exception:
+                        got, want = 0, None
+                    if got or want:
+                        size_text = format_bytes(got) + (f"/{format_bytes(want)}" if want else "")
+                if size_text:
+                    parts["count"] = count_text        # dropped first when the console is narrow
+                    parts["size"] = size_text
+                else:
+                    parts["size"] = count_text
                 if progressed > 0 and remaining > 0:
                     rate = progressed / max(self.elapsed, 0.001)
                     if rate > 0:
@@ -997,9 +1011,9 @@ class DownloadProgress:
         head = f"  {frame} {self.label}  "          # plain text: used to measure the width
         pct = f"  {frac * 100:3.0f}%"
         cols = self._columns()
-        order = ("size", "speed", "eta")
+        order = ("count", "size", "speed", "eta")
         keep = [name for name in order if name in parts]
-        for drop in ("speed", "size"):
+        for drop in ("speed", "count", "size"):
             tail = "  " + " · ".join(parts[n] for n in keep) if keep else ""
             if cols - display_width(head) - len(pct) - display_width(tail) >= 14:
                 break

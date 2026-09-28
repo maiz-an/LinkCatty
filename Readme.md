@@ -147,7 +147,7 @@ Every download follows the same flow:
 - Paste the Spotify URL
 - LinkCatty reads the track list from Spotify (no account or API key needed), then finds every song on YouTube itself: it searches, scores the results by duration, title, artist and "Topic" (official audio) channels, and skips live, cover, remix and karaoke versions
 - It downloads and converts the audio with the bundled FFmpeg and writes the tags and the Spotify cover art into the file
-- **6 songs at a time**, one live progress bar that starts at 0% and follows the real download
+- **6 songs at a time**, one live progress bar that starts at 0% and follows the real download, with the size (`4.6MB/10.2MB`), the tracks done and the time left, like YouTube's bar (on a narrow console the track count is dropped first)
 - Anything the fast engine cannot match goes to **spotdl** automatically, with progressively wider provider sets, so nothing is given up on early
 - Prefer spotdl only? Set `"engine": "spotdl"` under `spotify` in `settings.json`
 
