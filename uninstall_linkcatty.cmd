@@ -128,6 +128,16 @@ set "GL=%TEMP%\linkcatty_glyphs_%RANDOM%"
     echo e294820d0a
     echo e294940d0a
     echo e280a20d0a
+    echo e2a08b0d0a
+    echo e2a0990d0a
+    echo e2a0b90d0a
+    echo e2a0b80d0a
+    echo e2a0bc0d0a
+    echo e2a0b40d0a
+    echo e2a0a60d0a
+    echo e2a0a70d0a
+    echo e2a0870d0a
+    echo e2a08f0d0a
 )
 certutil -f -decodehex "%GL%.hex" "%GL%.txt" >nul 2>&1
 if exist "%GL%.txt" (
@@ -142,6 +152,16 @@ if exist "%GL%.txt" (
         set /p G_V=
         set /p G_BL=
         set /p G_DOT=
+        set /p G_SP0=
+        set /p G_SP1=
+        set /p G_SP2=
+        set /p G_SP3=
+        set /p G_SP4=
+        set /p G_SP5=
+        set /p G_SP6=
+        set /p G_SP7=
+        set /p G_SP8=
+        set /p G_SP9=
     )
 )
 del "%GL%.hex" "%GL%.txt" 2>nul
@@ -157,9 +177,27 @@ if not defined G_DOT (
     set "G_V=|"
     set "G_BL=+"
     set "G_DOT=-"
+    set "G_SP0=-"
+    set "G_SP1=\"
+    set "G_SP2=|"
+    set "G_SP3=/"
+    set "G_SP4=-"
+    set "G_SP5=\"
+    set "G_SP6=|"
+    set "G_SP7=/"
+    set "G_SP8=-"
+    set "G_SP9=\"
 )
 set "RULE="
 for /l %%k in (1,1,58) do set "RULE=!RULE!!G_BAR2!"
+set "SPIN_I=0"
+set "CUR_HIDDEN="
+set "CUR_HIDE="
+set "CUR_SHOW="
+if defined ESC set "CUR_HIDE=%ESC%[?25l"
+if defined ESC set "CUR_SHOW=%ESC%[?25h"
+rem a run that was interrupted earlier may have left the cursor hidden
+if defined ESC <nul set /p "=%CUR_SHOW%"
 exit /b
 
 :ui_header
@@ -202,20 +240,37 @@ echo   %G%!G_BL!%R%
 exit /b
 
 :ui_bar
-rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL, same look as the app.
+rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL, same look as the app:
+rem a spinner frame, the label, the bar, the percent and BAR_TEXT (or done/total).
 rem It is redrawn with ANSI cursor codes (erase line + go to column 1); the old "carriage
-rem return in a variable" trick prints nothing on current Windows builds. Consoles without
-rem ANSI only get a final line.
+rem return in a variable" trick prints nothing on current Windows builds. The blinking text
+rem cursor is hidden while a bar is on screen (:ui_cursor_show brings it back).
+rem Consoles without ANSI only get a final line.
 set /a BP=BAR_DONE*100/BAR_TOTAL
 set /a BF=BAR_DONE*28/BAR_TOTAL
+set /a SPIN_I=(SPIN_I+1)%%10
+for %%n in (!SPIN_I!) do set "SPIN_CH=!G_SP%%n!"
 if not defined ESC goto :ui_bar_plain
+if not defined CUR_HIDDEN (
+    <nul set /p "=%CUR_HIDE%"
+    set "CUR_HIDDEN=1"
+)
 set "BB1="
 set "BB2="
 for /l %%k in (1,1,28) do (
     if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
 )
-<nul set /p "=%ESC%[2K%ESC%[1G  %C%!BAR_LABEL!%R%  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%"
+set "BT=!BAR_DONE!/!BAR_TOTAL!"
+if defined BAR_TEXT set "BT=!BAR_TEXT!"
+<nul set /p "=%ESC%[2K%ESC%[1G  %C%!SPIN_CH!%R% !BAR_LABEL!  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BT!%R%"
 exit /b
 :ui_bar_plain
-if "!BAR_DONE!"=="!BAR_TOTAL!" <nul set /p "=  !BAR_LABEL!  done (!BAR_DONE!/!BAR_TOTAL!)"
+if "!BAR_DONE!"=="!BAR_TOTAL!" <nul set /p "=  !BAR_LABEL!  done"
+exit /b
+
+:ui_cursor_show
+if defined CUR_HIDDEN (
+    <nul set /p "=%CUR_SHOW%"
+    set "CUR_HIDDEN="
+)
 exit /b

@@ -136,6 +136,7 @@ if "%NEED_UPDATE%"=="1" (
     )
     set "BAR_DONE=!BAR_TOTAL!"
     call :ui_bar
+    call :ui_cursor_show
     echo.
     echo.
 
@@ -275,13 +276,20 @@ if defined PYTHON_SCRIPTS (
     )
 )
 
-rem FFmpeg
+rem FFmpeg: fetched here when the installer could not get it (Spotify and MP3 need it)
 set "FFMPEG_DIR=%~dp0sources\FFmpeg\windows\ffmpeg\bin"
+if not exist "%FFMPEG_DIR%\ffmpeg.exe" (
+    set "FF_DEST=%FFMPEG_DIR%\ffmpeg.exe"
+    call :FetchFFmpeg
+    set "BAR_TEXT="
+    call :ui_cursor_show
+    echo.
+)
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     set "PATH=%FFMPEG_DIR%;%PATH%"
 ) else (
-    set "MSG=FFmpeg not found"
-    set "DET=video merging may not work"
+    set "MSG=FFmpeg could not be downloaded"
+    set "DET=Spotify and MP3 need it; start LinkCatty again to retry"
     call :ui_warn
 )
 
@@ -406,6 +414,74 @@ if !TRY! LSS 3 (
 if not defined DL_ERR set "DL_ERR=no answer from the server"
 exit /b 1
 
+:FetchFFmpeg
+rem in : FF_DEST = full path of the ffmpeg.exe to create.   out: errorlevel 0 = ok
+rem The 124 MB download runs in the background so the bar can show MB and a spinner; a
+rem silent wait at 94 percent looked like a hang.
+set "FF_URL=https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/win-x64.zip"
+set "FF_ZIP=%TEMP%\linkcatty_ffmpeg.zip"
+set "FF_OUT=%TEMP%\linkcatty_ffmpeg_extract"
+set "FF_DONE=%TEMP%\linkcatty_ffmpeg_done.txt"
+set "FF_HELPER=%TEMP%\linkcatty_ffmpeg_dl.cmd"
+del "%FF_ZIP%" "%FF_DONE%" 2>nul
+if exist "%FF_OUT%" rmdir /s /q "%FF_OUT%" 2>nul
+set "FF_TOTAL_KB=0"
+for /f "tokens=2 delims=: " %%L in ('curl -sIL --max-time 15 "%FF_URL%" 2^>nul ^| findstr /i /b "content-length"') do set /a FF_TOTAL_KB=%%L/1024
+> "%FF_HELPER%" (
+    echo @echo off
+    echo curl -fsSL --retry 2 --connect-timeout 15 --max-time 1800 -o "%FF_ZIP%" "%FF_URL%" 2^>nul
+    echo echo %%errorlevel%%^> "%FF_DONE%"
+)
+start "" /b "%FF_HELPER%"
+set "BAR_LABEL=FFmpeg"
+set "BAR_TOTAL=100"
+:FF_Wait
+if exist "%FF_DONE%" goto :FF_Finished
+set "FF_KB=0"
+if exist "%FF_ZIP%" for %%s in ("%FF_ZIP%") do set /a FF_KB=%%~zs/1024
+set "BAR_DONE=0"
+if %FF_TOTAL_KB% GTR 0 set /a BAR_DONE=FF_KB*100/FF_TOTAL_KB
+if %BAR_DONE% GTR 99 set "BAR_DONE=99"
+set /a FF_MB=FF_KB/1024
+set "BAR_TEXT=%FF_MB% MB"
+if %FF_TOTAL_KB% GTR 0 set /a FF_TMB=FF_TOTAL_KB/1024
+if %FF_TOTAL_KB% GTR 0 set "BAR_TEXT=%FF_MB% / %FF_TMB% MB"
+call :ui_bar
+rem about a quarter of a second: an unreachable address, ping waits for its timeout
+ping 192.0.2.1 -n 1 -w 250 >nul
+goto :FF_Wait
+:FF_Finished
+set "FF_CODE=1"
+set /p FF_CODE=<"%FF_DONE%"
+if "%FF_CODE%"=="0" goto :FF_Unpack
+rem curl is missing or failed: one more try with PowerShell
+set "BAR_TEXT=trying another way"
+set "BAR_DONE=0"
+call :ui_bar
+powershell -NoProfile -Command "& { $ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 900 -Uri '%FF_URL%' -OutFile '%FF_ZIP%'; exit 0 } catch { exit 1 } }" >nul 2>&1
+if errorlevel 1 goto :FF_Fail
+:FF_Unpack
+set "BAR_LABEL=Unpacking FFmpeg"
+set "BAR_DONE=100"
+set "BAR_TEXT=almost there"
+call :ui_bar
+mkdir "%FF_OUT%" 2>nul
+tar -xf "%FF_ZIP%" -C "%FF_OUT%" >nul 2>&1
+if errorlevel 1 powershell -NoProfile -Command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%FF_ZIP%', '%FF_OUT%') }" >nul 2>&1
+set "FF_FOUND="
+for /r "%FF_OUT%" %%f in (ffmpeg.exe) do if not defined FF_FOUND set "FF_FOUND=%%f"
+if not defined FF_FOUND goto :FF_Fail
+for %%d in ("%FF_DEST%") do if not exist "%%~dpd" mkdir "%%~dpd"
+copy /y "%FF_FOUND%" "%FF_DEST%" >nul
+if not exist "%FF_DEST%" goto :FF_Fail
+del "%FF_ZIP%" "%FF_DONE%" "%FF_HELPER%" 2>nul
+rmdir /s /q "%FF_OUT%" 2>nul
+exit /b 0
+:FF_Fail
+del "%FF_ZIP%" "%FF_DONE%" "%FF_HELPER%" 2>nul
+if exist "%FF_OUT%" rmdir /s /q "%FF_OUT%" 2>nul
+exit /b 1
+
 :ui_init
 rem Colors and real glyphs only where the console can show them (Windows 10 or newer).
 rem The glyphs are written as hex and decoded by certutil, so this file stays pure ASCII.
@@ -446,6 +522,16 @@ set "GL=%TEMP%\linkcatty_glyphs_%RANDOM%"
     echo e294820d0a
     echo e294940d0a
     echo e280a20d0a
+    echo e2a08b0d0a
+    echo e2a0990d0a
+    echo e2a0b90d0a
+    echo e2a0b80d0a
+    echo e2a0bc0d0a
+    echo e2a0b40d0a
+    echo e2a0a60d0a
+    echo e2a0a70d0a
+    echo e2a0870d0a
+    echo e2a08f0d0a
 )
 certutil -f -decodehex "%GL%.hex" "%GL%.txt" >nul 2>&1
 if exist "%GL%.txt" (
@@ -460,6 +546,16 @@ if exist "%GL%.txt" (
         set /p G_V=
         set /p G_BL=
         set /p G_DOT=
+        set /p G_SP0=
+        set /p G_SP1=
+        set /p G_SP2=
+        set /p G_SP3=
+        set /p G_SP4=
+        set /p G_SP5=
+        set /p G_SP6=
+        set /p G_SP7=
+        set /p G_SP8=
+        set /p G_SP9=
     )
 )
 del "%GL%.hex" "%GL%.txt" 2>nul
@@ -475,9 +571,27 @@ if not defined G_DOT (
     set "G_V=|"
     set "G_BL=+"
     set "G_DOT=-"
+    set "G_SP0=-"
+    set "G_SP1=\"
+    set "G_SP2=|"
+    set "G_SP3=/"
+    set "G_SP4=-"
+    set "G_SP5=\"
+    set "G_SP6=|"
+    set "G_SP7=/"
+    set "G_SP8=-"
+    set "G_SP9=\"
 )
 set "RULE="
 for /l %%k in (1,1,58) do set "RULE=!RULE!!G_BAR2!"
+set "SPIN_I=0"
+set "CUR_HIDDEN="
+set "CUR_HIDE="
+set "CUR_SHOW="
+if defined ESC set "CUR_HIDE=%ESC%[?25l"
+if defined ESC set "CUR_SHOW=%ESC%[?25h"
+rem a run that was interrupted earlier may have left the cursor hidden
+if defined ESC <nul set /p "=%CUR_SHOW%"
 exit /b
 
 :ui_header
@@ -520,20 +634,37 @@ echo   %G%!G_BL!%R%
 exit /b
 
 :ui_bar
-rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL, same look as the app.
+rem One in-place progress line from BAR_LABEL, BAR_DONE and BAR_TOTAL, same look as the app:
+rem a spinner frame, the label, the bar, the percent and BAR_TEXT (or done/total).
 rem It is redrawn with ANSI cursor codes (erase line + go to column 1); the old "carriage
-rem return in a variable" trick prints nothing on current Windows builds. Consoles without
-rem ANSI only get a final line.
+rem return in a variable" trick prints nothing on current Windows builds. The blinking text
+rem cursor is hidden while a bar is on screen (:ui_cursor_show brings it back).
+rem Consoles without ANSI only get a final line.
 set /a BP=BAR_DONE*100/BAR_TOTAL
 set /a BF=BAR_DONE*28/BAR_TOTAL
+set /a SPIN_I=(SPIN_I+1)%%10
+for %%n in (!SPIN_I!) do set "SPIN_CH=!G_SP%%n!"
 if not defined ESC goto :ui_bar_plain
+if not defined CUR_HIDDEN (
+    <nul set /p "=%CUR_HIDE%"
+    set "CUR_HIDDEN=1"
+)
 set "BB1="
 set "BB2="
 for /l %%k in (1,1,28) do (
     if %%k leq !BF! (set "BB1=!BB1!!G_BAR1!") else (set "BB2=!BB2!!G_BAR2!")
 )
-<nul set /p "=%ESC%[2K%ESC%[1G  %C%!BAR_LABEL!%R%  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BAR_DONE!/!BAR_TOTAL!%R%"
+set "BT=!BAR_DONE!/!BAR_TOTAL!"
+if defined BAR_TEXT set "BT=!BAR_TEXT!"
+<nul set /p "=%ESC%[2K%ESC%[1G  %C%!SPIN_CH!%R% !BAR_LABEL!  %C%!BB1!%R%%D%!BB2!%R%  %B%!BP!%%%R%  %D%!BT!%R%"
 exit /b
 :ui_bar_plain
-if "!BAR_DONE!"=="!BAR_TOTAL!" <nul set /p "=  !BAR_LABEL!  done (!BAR_DONE!/!BAR_TOTAL!)"
+if "!BAR_DONE!"=="!BAR_TOTAL!" <nul set /p "=  !BAR_LABEL!  done"
+exit /b
+
+:ui_cursor_show
+if defined CUR_HIDDEN (
+    <nul set /p "=%CUR_SHOW%"
+    set "CUR_HIDDEN="
+)
 exit /b

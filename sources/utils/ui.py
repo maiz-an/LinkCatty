@@ -1,3 +1,4 @@
+import atexit
 import contextlib
 import unicodedata
 import re
@@ -207,10 +208,27 @@ def confirm(prompt, default=False):
         print_error("Invalid answer", "Press y or n (0 to cancel)")
 
 
+_SPIN_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def _cursor(show):
+    """Hide the blinking text cursor while something animates (real terminals only)."""
+    try:
+        if sys.stdout.isatty():
+            sys.stdout.write("\x1b[?25h" if show else "\x1b[?25l")
+            sys.stdout.flush()
+    except Exception:
+        pass
+
+
+atexit.register(_cursor, True)          # never leave the user without a cursor
+
+
 def start_spinner(text="Processing"):
     global _spinner_running, _spinner_text
     _spinner_running = True
     _spinner_text = text
+    _cursor(False)
 
     def _spin():
         chars = "⣾⣽⣻⢿⡿⣟⣯⣷"
@@ -230,6 +248,7 @@ def stop_spinner():
     global _spinner_running
     _spinner_running = False
     time.sleep(0.2)
+    _cursor(True)
 
 
 def progress_bar(current, total, prefix="", suffix="", length=40):
@@ -698,7 +717,9 @@ class DownloadProgress:
         self.done_items = 0
         self.final_path = None
         self._count_fn = count_fn
-        self._icon = "⬇"
+        self._count_val = None
+        self._spin = 0
+        self._tick = 0
         self._run_done = 0
         self._start = time.time()
         self._stop = threading.Event()
@@ -780,6 +801,7 @@ class DownloadProgress:
         self._planned = True
 
     def start(self):
+        _cursor(False)
         self._render()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -792,6 +814,7 @@ class DownloadProgress:
         with self._lock:
             sys.stdout.write("\n")
             sys.stdout.flush()
+        _cursor(True)
 
     def set_label(self, label):
         with self._lock:
@@ -811,11 +834,13 @@ class DownloadProgress:
             sys.stdout.flush()
             self._last_len = 0
             self._paused = True
+        _cursor(True)                   # a prompt needs its cursor
         try:
             yield
         finally:
             with self._lock:
                 self._paused = False
+            _cursor(False)
             self._render()
 
     def item_done(self):
@@ -891,36 +916,40 @@ class DownloadProgress:
         with self._lock:
             if data.get("status") == "started":
                 if self._saved_label is None:
-                    self._saved_label = (self.label, self._icon)
+                    self._saved_label = self.label
                 self.label = "Merging" if "merg" in name else "Processing"
-                self._icon = "🔧"
             elif data.get("status") == "finished":
                 path = (data.get("info_dict") or {}).get("filepath")
                 if path:
                     self.final_path = path
                 if self._saved_label is not None:
-                    self.label, self._icon = self._saved_label
+                    self.label = self._saved_label
                     self._saved_label = None
 
     def _loop(self):
-        while not self._stop.wait(0.5):
-            self._render()
+        # ~8 frames a second for the spinner; disk-counting callbacks only twice a second
+        while not self._stop.wait(0.12):
+            self._spin += 1
+            self._tick += 1
+            self._render(refresh=self._tick % 4 == 0)
 
     @staticmethod
     def _columns():
         cols = shutil.get_terminal_size((100, 24)).columns
         return max(30, min(cols, 100) - 2)
 
-    def _render(self):
+    def _render(self, refresh=True):
         with self._lock:
             if self._paused:
                 return
             parts = {}
             if self._count_fn:
-                try:
-                    done = int(self._count_fn())
-                except Exception:
-                    done = self.done_items
+                if refresh or self._count_val is None:
+                    try:
+                        self._count_val = int(self._count_fn())
+                    except Exception:
+                        self._count_val = self.done_items
+                done = self._count_val
                 self.done_items = min(done, self.total_items)
                 frac = self.done_items / self.total_items
                 parts["size"] = f"{self.done_items}/{self.total_items} {self.unit}"
@@ -955,7 +984,8 @@ class DownloadProgress:
             self._last_len = visible
 
     def _compose(self, frac, parts):
-        head = f"  {self._icon} {self.label}  "
+        frame = _SPIN_FRAMES[self._spin % len(_SPIN_FRAMES)]
+        head = f"  {frame} {self.label}  "          # plain text: used to measure the width
         pct = f"  {frac * 100:3.0f}%"
         cols = self._columns()
         order = ("size", "speed", "eta")
@@ -971,7 +1001,8 @@ class DownloadProgress:
         bar_w = max(6, min(bar_w, 36))
         filled = int(bar_w * frac)
         bar = f"{CYAN}{'━' * filled}{RESET}{DIM}{'─' * (bar_w - filled)}{RESET}"
-        return f"{head}{bar}{BOLD}{pct}{RESET}{DIM}{tail}{RESET}"
+        return (f"  {CYAN}{frame}{RESET} {self.label}  "
+                f"{bar}{BOLD}{pct}{RESET}{DIM}{tail}{RESET}")
 
     def _estimate_eta(self):
         if self.total_items == 1:
