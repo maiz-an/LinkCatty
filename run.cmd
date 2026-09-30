@@ -76,7 +76,8 @@ set "FILE_LIST[10]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz
 set "FILE_LIST[11]=sources\LinkCatty.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/LinkCatty.py"
 set "FILE_LIST[12]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
 set "FILE_LIST[13]=sources\downloaders\universal.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
-set "TOTAL_FILES=14"
+set "FILE_LIST[14]=asset\linkcatty.ico|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/asset/linkcatty.ico"
+set "TOTAL_FILES=15"
 
 rem If a managed file is missing (e.g. a module added in a newer release), repair by
 rem re-downloading. The restart flag stops any update loop.
@@ -129,7 +130,7 @@ if "%NEED_UPDATE%"=="1" (
 
     set "BAR_LABEL=Updating"
     set "BAR_TOTAL=%TOTAL_FILES%"
-    for /l %%i in (0,1,13) do (
+    for /l %%i in (0,1,14) do (
         set /a BAR_DONE=%%i
         call :ui_bar
         if "!DL_FAILED!"=="0" call :DownloadFile %%i
@@ -159,6 +160,15 @@ if "%NEED_UPDATE%"=="1" (
 
     rem Deps are re-checked after an update
     del "%~dp0sources\.deps_installed" 2>nul
+
+    rem Existing Start Menu shortcut (made by the installer): point it at the icon too.
+    rem Only refreshed if it already exists, so a plain/portable run.cmd never creates one.
+    set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\LinkCatty.lnk"
+    if exist "!SHORTCUT_PATH!" if exist "%~dp0asset\linkcatty.ico" (
+        set "SHORTCUT_TARGET=%~dp0linkcatty.bat"
+        if not exist "!SHORTCUT_TARGET!" set "SHORTCUT_TARGET=%~f0"
+        powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('!SHORTCUT_PATH!'); $SC.TargetPath = '!SHORTCUT_TARGET!'; $SC.IconLocation = '%~dp0asset\linkcatty.ico'; $SC.Save()" >nul 2>&1
+    )
 
     set "MSG=Updated to %REMOTE_VER%"
     set "DET=restarting"

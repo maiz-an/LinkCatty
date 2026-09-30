@@ -179,6 +179,7 @@ FILES=(
     "sources/utils/__init__.py"
     "sources/requirements.txt"
     "sources/version.txt"
+    "asset/linkcatty.ico"
 )
 TOTAL=${#FILES[@]}
 STEPS=$((TOTAL + 1))
@@ -331,12 +332,14 @@ done
 # Desktop entry (Linux only)
 if [ "$UNAME" = "Linux" ]; then
     mkdir -p "$HOME/.local/share/applications"
+    ICON_LINE="Icon=utilities-terminal"
+    [ -f "$INSTALL_DIR/asset/linkcatty.ico" ] && ICON_LINE="Icon=$INSTALL_DIR/asset/linkcatty.ico"
     cat > "$HOME/.local/share/applications/LinkCatty.desktop" << EOF
 [Desktop Entry]
 Name=LinkCatty
 Comment=Universal Downloader
 Exec=$INSTALL_DIR/linkcatty
-Icon=utilities-terminal
+$ICON_LINE
 Terminal=true
 Type=Application
 Categories=Utility;

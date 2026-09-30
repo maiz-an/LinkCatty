@@ -57,7 +57,8 @@ set "FILE_LIST[14]=uninstall_linkcatty.sh|https://raw.githubusercontent.com/maiz
 set "FILE_LIST[15]=sources\downloaders\other_downloader.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/other_downloader.py"
 set "FILE_LIST[16]=sources\downloaders\universal.py|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/sources/downloaders/universal.py"
 set "FILE_LIST[17]=run.sh|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/run.sh"
-set "TOTAL=18"
+set "FILE_LIST[18]=asset\linkcatty.ico|https://raw.githubusercontent.com/maiz-an/LinkCatty/main/asset/linkcatty.ico"
+set "TOTAL=19"
 set /a STEPS=TOTAL+1
 
 set "FFMPEG_URL=https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/win-x64.zip"
@@ -65,7 +66,7 @@ set "FFMPEG_URL=https://github.com/maiz-an/LinkCatty/releases/download/FFmpeg/wi
 set "DL_FAILED=0"
 set "BAR_LABEL=Downloading"
 set "BAR_TOTAL=%STEPS%"
-for /l %%i in (0,1,17) do (
+for /l %%i in (0,1,18) do (
     set /a BAR_DONE=%%i
     call :ui_bar
     if "!DL_FAILED!"=="0" call :GetFile %%i
@@ -156,8 +157,11 @@ if /i not "!PCHK:\Microsoft\WindowsApps;=!"=="!PCHK!" if exist "!SHIM_DIR!" (
 )
 
 rem ---- Start Menu shortcut ---------------------------------------------
+rem Always (re)written, so a reinstall/repair also fixes an older shortcut's icon.
 set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\LinkCatty.lnk"
-if not exist "%SHORTCUT_PATH%" (
+if exist "%INSTALL_DIR%\asset\linkcatty.ico" (
+    powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%SHORTCUT_PATH%'); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.IconLocation = '%INSTALL_DIR%\asset\linkcatty.ico'; $SC.Save()" >nul 2>&1
+) else if not exist "%SHORTCUT_PATH%" (
     powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%SHORTCUT_PATH%'); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.Save()" >nul 2>&1
 )
 

@@ -205,6 +205,7 @@ FILE_PATHS=(
     "sources/LinkCatty.py"
     "sources/downloaders/other_downloader.py"
     "sources/downloaders/universal.py"
+    "asset/linkcatty.ico"
 )
 # If a managed file is missing (e.g. a module added in a newer release), repair by
 # re-downloading. The restart flag stops any update loop.
@@ -276,6 +277,15 @@ else
         chmod +x "$SCRIPT_DIR/uninstall_linkcatty.sh" 2>/dev/null
         printf "%s" "$REMOTE_VER" > "$LOCAL_VERSION_FILE"
         rm -f "$DEPS_MARKER"     # dependencies are re-checked after an update
+
+        # Existing Linux desktop entry (made by the installer): point its icon at the one
+        # just downloaded. Only refreshed if it already exists, so a plain/dev checkout
+        # never gets one created for it.
+        DESKTOP_FILE="$HOME/.local/share/applications/LinkCatty.desktop"
+        if [ -f "$DESKTOP_FILE" ] && [ -f "$SCRIPT_DIR/asset/linkcatty.ico" ]; then
+            sed -i.bak "s|^Icon=.*|Icon=$SCRIPT_DIR/asset/linkcatty.ico|" "$DESKTOP_FILE" 2>/dev/null
+            rm -f "$DESKTOP_FILE.bak"
+        fi
 
         ui_ok "Updated to $REMOTE_VER" "restarting"
 
