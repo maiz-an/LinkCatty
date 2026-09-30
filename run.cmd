@@ -161,13 +161,16 @@ if "%NEED_UPDATE%"=="1" (
     rem Deps are re-checked after an update
     del "%~dp0sources\.deps_installed" 2>nul
 
-    rem Existing Start Menu shortcut (made by the installer): point it at the icon too.
-    rem Only refreshed if it already exists, so a plain/portable run.cmd never creates one.
+    rem Existing Start Menu / Desktop shortcuts (made by the installer): point them at the
+    rem icon too. Only refreshed if they already exist, so a plain/portable run.cmd never
+    rem creates one.
     set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\LinkCatty.lnk"
-    if exist "!SHORTCUT_PATH!" if exist "%~dp0asset\linkcatty.ico" (
+    set "DESKTOP_SHORTCUT=%USERPROFILE%\Desktop\LinkCatty.lnk"
+    if exist "%~dp0asset\linkcatty.ico" (
         set "SHORTCUT_TARGET=%~dp0linkcatty.bat"
         if not exist "!SHORTCUT_TARGET!" set "SHORTCUT_TARGET=%~f0"
-        powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('!SHORTCUT_PATH!'); $SC.TargetPath = '!SHORTCUT_TARGET!'; $SC.IconLocation = '%~dp0asset\linkcatty.ico'; $SC.Save()" >nul 2>&1
+        if exist "!SHORTCUT_PATH!" powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('!SHORTCUT_PATH!'); $SC.TargetPath = '!SHORTCUT_TARGET!'; $SC.IconLocation = '%~dp0asset\linkcatty.ico'; $SC.Save()" >nul 2>&1
+        if exist "!DESKTOP_SHORTCUT!" powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('!DESKTOP_SHORTCUT!'); $SC.TargetPath = '!SHORTCUT_TARGET!'; $SC.IconLocation = '%~dp0asset\linkcatty.ico'; $SC.Save()" >nul 2>&1
     )
 
     set "MSG=Updated to %REMOTE_VER%"

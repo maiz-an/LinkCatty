@@ -156,13 +156,15 @@ if /i not "!PCHK:\Microsoft\WindowsApps;=!"=="!PCHK!" if exist "!SHIM_DIR!" (
     if exist "!SHIM_DIR!\linkcatty.cmd" set "SHIM_OK=1"
 )
 
-rem ---- Start Menu shortcut ---------------------------------------------
+rem ---- Start Menu + Desktop shortcuts ------------------------------------
 rem Always (re)written, so a reinstall/repair also fixes an older shortcut's icon.
 set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\LinkCatty.lnk"
+set "DESKTOP_SHORTCUT=%USERPROFILE%\Desktop\LinkCatty.lnk"
 if exist "%INSTALL_DIR%\asset\linkcatty.ico" (
-    powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%SHORTCUT_PATH%'); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.IconLocation = '%INSTALL_DIR%\asset\linkcatty.ico'; $SC.Save()" >nul 2>&1
-) else if not exist "%SHORTCUT_PATH%" (
-    powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%SHORTCUT_PATH%'); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.Save()" >nul 2>&1
+    powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; foreach ($p in @('%SHORTCUT_PATH%', '%DESKTOP_SHORTCUT%')) { $SC = $WS.CreateShortcut($p); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.IconLocation = '%INSTALL_DIR%\asset\linkcatty.ico'; $SC.Save() }" >nul 2>&1
+) else (
+    if not exist "%SHORTCUT_PATH%" powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%SHORTCUT_PATH%'); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.Save()" >nul 2>&1
+    if not exist "%DESKTOP_SHORTCUT%" powershell -NoProfile -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%DESKTOP_SHORTCUT%'); $SC.TargetPath = '%INSTALL_DIR%\linkcatty.bat'; $SC.Save()" >nul 2>&1
 )
 
 set "INSTALLED_VER=?"

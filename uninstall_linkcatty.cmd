@@ -34,7 +34,7 @@ echo.
 echo   %D%This will remove%R%
 echo   %D%!G_DOT!%R% the LinkCatty folder  %D%!INSTALL_DIR!%R%
 echo   %D%!G_DOT!%R% its entry in your PATH
-echo   %D%!G_DOT!%R% the Start Menu shortcut
+echo   %D%!G_DOT!%R% the Start Menu and Desktop shortcuts
 echo.
 echo   %D%Your downloaded files are not touched.%R%
 echo.
@@ -70,7 +70,8 @@ if errorlevel 1 (
 if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\linkcatty.cmd" del "%LOCALAPPDATA%\Microsoft\WindowsApps\linkcatty.cmd" >nul 2>&1
 set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\LinkCatty.lnk"
 if exist "%SHORTCUT_PATH%" del "%SHORTCUT_PATH%" >nul 2>&1
-set "MSG=Shortcut removed"
+if exist "%USERPROFILE%\Desktop\LinkCatty.lnk" del "%USERPROFILE%\Desktop\LinkCatty.lnk" >nul 2>&1
+set "MSG=Shortcuts removed"
 set "DET="
 call :ui_ok
 
